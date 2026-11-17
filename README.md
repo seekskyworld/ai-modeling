@@ -74,6 +74,8 @@ ai-modeling doctor --offline --json
 
 The 0.1.0 prerelease has a known native-dependency problem in global installations. Use the patched version above.
 
+The published npm version is 0.1.3. The [Unreleased fixes](CHANGELOG.md#unreleased), including the concurrent login-state read fix, are planned for the 0.1.4 source candidate and are not yet in this package. Installation examples stay on the available version until the new release passes its checks and is published.
+
 The npm package is **`@seekskyworld/ai-modeling`**; its command is **`ai-modeling`**. Choose [Skill](#use-with-a-skill) or [MCP](#use-with-mcp) below. Both use the same CLI and Studio account. An npm installation does not automatically add a Skill or configure an MCP client.
 
 For direct CLI use, connect your account and preview a request:

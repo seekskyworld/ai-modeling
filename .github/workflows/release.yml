@@ -30,15 +30,15 @@ jobs:
       version: ${{ steps.identity.outputs.version }}
       tag: ${{ steps.identity.outputs.tag }}
       source: ${{ steps.identity.outputs.source }}
-      npm_tag: ${{ steps.identity.outputs.npm_tag }}
+      upload_tag: ${{ steps.identity.outputs.upload_tag }}
       prerelease: ${{ steps.identity.outputs.prerelease }}
       action: ${{ steps.state.outputs.action || steps.preview.outputs.action }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
           cache: npm
@@ -46,6 +46,8 @@ jobs:
       - name: Pin the npm version used by every release job
         run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci
+      - name: Validate workflow definitions with checksum-pinned actionlint
+        run: node scripts/actionlint.ts
       - name: Bind package version, tag and source commit
         id: identity
         shell: bash
@@ -68,7 +70,7 @@ jobs:
           const prerelease = version.includes('-');
           appendFileSync(process.env.GITHUB_OUTPUT, [
             'version=' + version, 'tag=' + tag, 'source=' + source,
-            'npm_tag=' + (prerelease ? 'next' : 'latest'),
+            'upload_tag=release-' + tag,
             'prerelease=' + String(prerelease), '',
           ].join('\n'));
           NODE
@@ -119,7 +121,7 @@ jobs:
           NODE
       - name: Retain the read-only inspection result
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ai-modeling-inspection-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ai-modeling-inspection/*.json
@@ -133,11 +135,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.inspect.outputs.source }}
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
           cache: npm
@@ -165,7 +167,7 @@ jobs:
             throw new Error('The standard export must contain exactly the six expected files.');
           }
           NODE
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ai-modeling-release-distribution-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ai-modeling-distribution/*
@@ -188,11 +190,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.inspect.outputs.source }}
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
           cache: npm
@@ -200,8 +202,8 @@ jobs:
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci
       - name: Check native credential permissions and cancellation on this OS
-        run: node scripts/run-tests.ts tests/json-credentials.test.ts tests/config-platform.test.ts tests/hardening-auth-input.test.ts tests/login-lock-stall.test.ts tests/login-state-race.test.ts
-      - uses: actions/download-artifact@v4
+        run: node scripts/run-tests.ts tests/json-credentials.test.ts tests/config-platform.test.ts tests/hardening-auth-input.test.ts tests/login-lock-stall.test.ts tests/json-entry-race.test.ts tests/login-state-race.test.ts tests/login-state-race.test.ts
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ai-modeling-release-distribution-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ai-modeling-distribution
@@ -217,7 +219,7 @@ jobs:
           PACKAGE_ARCHIVE: ${{ runner.temp }}/ai-modeling-distribution/ai-modeling-${{ needs.inspect.outputs.version }}.tgz
           REPORT: ${{ runner.temp }}/consumer-${{ matrix.platform }}.json
         run: npm run package:consumer-smoke -- --archive "$PACKAGE_ARCHIVE" --report "$REPORT" --require-locked
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ai-modeling-release-smoke-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -232,22 +234,22 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.inspect.outputs.source }}
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ai-modeling-release-distribution-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ai-modeling-distribution
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: ai-modeling-release-smoke-*-${{ github.run_id }}-${{ github.run_attempt }}
           merge-multiple: true
@@ -302,13 +304,13 @@ jobs:
             reason: 'Manual preview only. A version tag must independently prepare and freeze its original release.',
           }, null, 2) + '\n', { flag: 'wx' });
           NODE
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ai-modeling-release-candidate-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ai-modeling-candidate/*
           if-no-files-found: error
           retention-days: 90
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ai-modeling-publication-preview-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ai-modeling-publication-preview.json
@@ -317,6 +319,8 @@ jobs:
 
   publish:
     name: Claim once, publish through OIDC, and verify public bytes
+    outputs:
+      verified: ${{ steps.public.outputs.verified }}
     needs: [inspect, build, smoke, candidate]
     if: >-
       ${{ always() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -334,21 +338,21 @@ jobs:
       RELEASE_TAG: ${{ needs.inspect.outputs.tag }}
       VERSION: ${{ needs.inspect.outputs.version }}
       SOURCE_COMMIT: ${{ needs.inspect.outputs.source }}
-      NPM_DIST_TAG: ${{ needs.inspect.outputs.npm_tag }}
+      NPM_UPLOAD_TAG: ${{ needs.inspect.outputs.upload_tag }}
       PRERELEASE: ${{ needs.inspect.outputs.prerelease }}
       PUBLICATION_RUN: ${{ github.run_id }}.${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.inspect.outputs.source }}
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - name: Initialize isolated publication paths
         shell: bash
         run: |
@@ -356,12 +360,12 @@ jobs:
           echo "RESTORE_DIR=$RUNNER_TEMP/ai-modeling-frozen-release" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/ai-modeling-publication"
       - if: needs.inspect.outputs.action == 'prepare'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ai-modeling-release-distribution-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ai-modeling-distribution
       - if: needs.inspect.outputs.action == 'prepare'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ai-modeling-release-candidate-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ai-modeling-candidate
@@ -431,7 +435,7 @@ jobs:
           ARCHIVE_PATH="$(node --input-type=module -e "import fs from 'node:fs'; import path from 'node:path'; process.stdout.write(JSON.parse(fs.readFileSync(path.join(process.env.STATE_DIR, 'claim.json'), 'utf8')).archive_path)")"
           set +e
           npm publish "$ARCHIVE_PATH" --access public --provenance --ignore-scripts \
-            --registry https://registry.npmjs.org/ --tag "$NPM_DIST_TAG"
+            --registry https://registry.npmjs.org/ --tag "$NPM_UPLOAD_TAG"
           npm_exit=$?
           set -e
           if [[ "$npm_exit" -eq 0 ]]; then outcome=accepted; else outcome=unknown; fi
@@ -487,52 +491,61 @@ jobs:
             fi
             sleep 30
           done
-      - name: Publish the GitHub Release only after exact public npm verification
-        if: steps.public.outputs.verified == 'true'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          is_draft="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')"
-          if [[ "$is_draft" == false ]]; then
-            echo "The GitHub Release is already public; the npm bytes were reverified."
-            exit 0
-          fi
-          if [[ "$is_draft" != true ]]; then
-            echo "::error::Could not establish GitHub Release visibility."
-            exit 1
-          fi
-          node --input-type=module <<'NODE'
-          import { readFileSync, writeFileSync } from 'node:fs';
-          import path from 'node:path';
-          const state = JSON.parse(readFileSync(path.join(process.env.STATE_DIR, 'verified.json'), 'utf8'));
-          const digest = state.verification.sha256;
-          const repository = 'https://github.com/' + process.env.GITHUB_REPOSITORY;
-          const notes = [
-            'Install the published runtime:', '',
-            '    npm install --global @seekskyworld/ai-modeling@' + process.env.VERSION, '',
-            'The CLI, MCP server and Agent Skill use this runtime. The attached Skill ZIP and MCP configuration provide the alternative entry points.', '',
-            'The public npm tarball was downloaded and matched against the original frozen archive.',
-            'Runtime TGZ SHA-256: ' + digest, '',
-            'Source commit: ' + repository + '/commit/' + process.env.SOURCE_COMMIT,
-            'Changes: ' + repository + '/blob/' + process.env.RELEASE_TAG + '/CHANGELOG.md', '',
-          ];
-          writeFileSync(path.join(process.env.STATE_DIR, 'release-notes.md'), notes.join('\n'));
-          NODE
-          if [[ "$PRERELEASE" == true ]]; then
-            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false \
-              --prerelease --latest=false --notes-file "$STATE_DIR/release-notes.md"
-          else
-            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false \
-              --prerelease=false --latest --notes-file "$STATE_DIR/release-notes.md"
-          fi
       - name: Retain local receipts even when publication is still pending
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ai-modeling-publication-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/ai-modeling-publication/*.json
-            ${{ runner.temp }}/ai-modeling-publication/release-notes.md
+          if-no-files-found: warn
+          retention-days: 90
+
+  promote:
+    name: Reconcile verified release channels
+    needs: [inspect, publish]
+    if: >-
+      ${{ always() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+          && needs.inspect.result == 'success' && needs.publish.result == 'success'
+          && needs.publish.outputs.verified == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: npm
+    # GitHub may replace a pending job. Each surviving run drains all durable
+    # published receipts, including versions whose promotion job was replaced.
+    concurrency:
+      group: ai-modeling-release-channels
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.inspect.outputs.source }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts
+      - name: Verify pending originals and advance default channels without rollback
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ''
+          NPM_TOKEN: ''
+          PROMOTION_REPORT: ${{ runner.temp }}/ai-modeling-promotion.json
+        run: |
+          node scripts/release-promotion.ts --repository "$GITHUB_REPOSITORY" --out "$PROMOTION_REPORT"
+      - name: Retain channel reconciliation results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ai-modeling-promotion-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ai-modeling-promotion.json
           if-no-files-found: warn
           retention-days: 90

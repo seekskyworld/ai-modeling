@@ -6,11 +6,17 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 ### Added
 
+- Verified publication notes include the pricing JSON's immutable source URL, original-file SHA-256, review/expiry dates and a copyable update command. The generator compares the original source with the frozen runtime and rejects missing or mismatched publication evidence; historical recovery preserves the original price validity.
+- Cross-version channel reconciliation separates version-specific npm uploads from `latest`/`next` and GitHub Latest promotion. Surviving promotion jobs inspect durable published receipts for the whole backlog, verify original public archives, and only advance channels to higher semantic versions.
+- Offline workflow-contract checks in `npm run check`, a separate checksum-verified actionlint job, and synthetic regression coverage for release ordering, coalesced pending jobs, unknown write results and recovery. Third-party Actions are pinned to full commit SHAs.
 - A version-tag npm release workflow using GitHub OIDC Trusted Publishing, Node.js 24 and npm 11.17.0. Manual dispatch previews checks without publishing; new submissions require the same standard-export archive to pass the Linux, macOS and Windows installation gates.
 - Durable archive identity and submission records that preserve accepted or unknown uploads across workflow retries. Publication verification downloads the exact public npm tarball and compares its bytes and registry digests with the frozen archive; legacy processing submissions reuse their original receipt and archive.
 
 ### Fixed
 
+- Bound default test-file parallelism to reduce CLI/MCP startup contention on machines with many reported CPUs, while preserving test timeouts and explicit concurrency overrides.
+- Retry private credential JSON reads after safe concurrent replacement or deletion. Repeated contention reports `CREDENTIAL_STORE_BUSY`; invalid ownership, links, permissions, size or content still fail, and reads never restore deleted credentials or replay writes. This is separate from the login-flow state-file fix below.
+- Keep publication-note failures free of raw JSON, private file paths and subprocess diagnostics; compare the complete original pricing object before schema normalization so extra fields cannot hide a source/runtime difference.
 - Retry private login-state reads when a concurrent login worker atomically replaces the file, while retaining ownership, permission, link and bounded-size checks.
 
 These source changes do not republish 0.1.3 or establish that npm Trusted Publisher configuration, OIDC uploads or native Windows validation have already completed.

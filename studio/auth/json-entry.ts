@@ -24,6 +24,8 @@ import { withJsonEntryLock } from './credential-lock.ts';
 import { protectPrivateWindowsPath, verifyPrivateWindowsPaths } from './windows-permissions.ts';
 
 export const jsonEntryLimit = 1024 * 1024;
+const jsonEntryReadAttempts = 5;
+class JsonEntryReplaced extends Error {}
 export const jsonStorageRecoveryMessage =
   'Private local JSON storage could not be accessed safely. Check its ownership, permissions, available disk space and JSON integrity, then retry the original action.';
 
@@ -35,26 +37,39 @@ const hash = (value: string): string => createHash('sha256').update(value).diges
 function sameFile(left: Stats, right: Stats): boolean {
   return left.dev === right.dev && left.ino === right.ino;
 }
-function privateFile(info: Stats): void {
+function privateFile(info: Stats, retryReplacement = false): void {
   const uid = process.getuid?.();
   if (
     !info.isFile() ||
     info.isSymbolicLink() ||
-    info.nlink !== 1 ||
+    (info.nlink !== 1 && !(retryReplacement && info.nlink === 0)) ||
     (uid !== undefined && info.uid !== uid) ||
     (process.platform !== 'win32' && (info.mode & 0o7777) !== 0o600)
   )
     throw jsonStorageUnavailable();
+  if (retryReplacement && info.size > jsonEntryLimit) throw jsonStorageUnavailable();
+  // A legal rename/clear can unlink a safe inode while another process reads it.
+  // Reject unsafe metadata above before treating that inode as retryable contention.
+  if (retryReplacement && info.nlink === 0) throw new JsonEntryReplaced();
 }
-function existingFile(location: string): Stats | undefined {
+function existingFile(location: string, retryReplacement = false): Stats | undefined {
   try {
     const info = lstatSync(location);
-    privateFile(info);
+    privateFile(info, retryReplacement);
     return info;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw error;
   }
+}
+function replaced(retryReplacement: boolean): never {
+  if (retryReplacement) throw new JsonEntryReplaced();
+  throw jsonStorageUnavailable();
+}
+function currentFile(location: string, expected: Stats, retryReplacement: boolean): Stats {
+  const current = existingFile(location, retryReplacement);
+  if (!current || !sameFile(current, expected)) replaced(retryReplacement);
+  return current;
 }
 function synchronizeDirectory(file: string): void {
   if (process.platform === 'win32') return;
@@ -87,7 +102,12 @@ export class JsonEntry {
     this.account = account;
     this.options = options;
   }
-  private location(): { file: string; directories: string[]; snapshots: Stats[]; existing?: Stats } {
+  private location(retryReplacement = false): {
+    file: string;
+    directories: string[];
+    snapshots: Stats[];
+    existing?: Stats;
+  } {
     const root = authRootDirectory(this.options.directory);
     const directories = [
       root,
@@ -95,8 +115,18 @@ export class JsonEntry {
       path.join(root, 'credentials', hash(this.service)),
     ];
     const file = path.join(directories[2]!, `${hash(this.account)}.json`);
-    const existing = existingFile(file);
-    ensurePrivateAuthDirectories(directories, existing ? [file] : []);
+    const existing = existingFile(file, retryReplacement);
+    try {
+      ensurePrivateAuthDirectories(directories, existing ? [file] : []);
+    } catch (error) {
+      // Windows checks ACLs by path: a clear during that check can report a missing leaf.
+      // Revalidate directories independently before classifying a changed leaf as contention.
+      if (retryReplacement && existing && process.platform === 'win32') {
+        ensurePrivateAuthDirectories(directories);
+        currentFile(file, existing, true);
+      }
+      throw error;
+    }
     return { file, directories, snapshots: directories.map((directory) => lstatSync(directory)), existing };
   }
   private unchangedDirectories(location: ReturnType<JsonEntry['location']>): void {
@@ -120,14 +150,62 @@ export class JsonEntry {
     )
       throw jsonStorageUnavailable('unknown');
   }
-  private read(location: ReturnType<JsonEntry['location']>): string | null {
+  private verifyRead(
+    location: ReturnType<JsonEntry['location']>,
+    after: Stats,
+    retryReplacement: boolean,
+  ): void {
+    this.unchangedDirectories(location);
+    const directories = location.directories.map((directory) => ({
+      path: directory,
+      kind: 'directory' as const,
+    }));
+    try {
+      verifyPrivateWindowsPaths([...directories, { path: location.file, kind: 'file' }]);
+    } catch (error) {
+      if (retryReplacement && process.platform === 'win32') {
+        this.unchangedDirectories(location);
+        verifyPrivateWindowsPaths(directories);
+        currentFile(location.file, after, true);
+      }
+      throw error;
+    }
+    const current = currentFile(location.file, after, retryReplacement);
+    if (current.size !== after.size || current.mtimeMs !== after.mtimeMs || current.ctimeMs !== after.ctimeMs)
+      throw jsonStorageUnavailable();
+  }
+  private decoded(bytes: Uint8Array): string {
+    const value: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw jsonStorageUnavailable();
+    const record = value as Record<string, unknown>;
+    if (
+      Object.keys(record).sort().join(',') !== 'account,schema_version,service,value' ||
+      record.schema_version !== 1 ||
+      record.service !== this.service ||
+      record.account !== this.account ||
+      typeof record.value !== 'string'
+    )
+      throw jsonStorageUnavailable();
+    return record.value;
+  }
+  private read(location: ReturnType<JsonEntry['location']>, retryReplacement = false): string | null {
     if (!location.existing) return null;
     if (location.existing.size > jsonEntryLimit) throw jsonStorageUnavailable();
-    const descriptor = openSync(location.file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    let descriptor: number;
+    try {
+      descriptor = openSync(
+        location.file,
+        constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0),
+      );
+    } catch (error) {
+      if (retryReplacement && (error as NodeJS.ErrnoException).code === 'ENOENT')
+        throw new JsonEntryReplaced();
+      throw error;
+    }
     try {
       const opened = fstatSync(descriptor);
-      privateFile(opened);
-      if (!sameFile(opened, location.existing)) throw jsonStorageUnavailable();
+      privateFile(opened, retryReplacement);
+      if (!sameFile(opened, location.existing)) replaced(retryReplacement);
       const bytes = Buffer.alloc(jsonEntryLimit + 1);
       let length = 0;
       while (length < bytes.length) {
@@ -137,39 +215,32 @@ export class JsonEntry {
       }
       if (length > jsonEntryLimit) throw jsonStorageUnavailable();
       const after = fstatSync(descriptor);
-      privateFile(after);
+      privateFile(after, retryReplacement);
       if (after.size !== length || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs)
         throw jsonStorageUnavailable();
-      this.unchangedDirectories(location);
-      verifyPrivateWindowsPaths([
-        ...location.directories.map((directory) => ({ path: directory, kind: 'directory' as const })),
-        { path: location.file, kind: 'file' },
-      ]);
-      const value: unknown = JSON.parse(
-        new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, length)),
-      );
-      if (!value || typeof value !== 'object' || Array.isArray(value)) throw jsonStorageUnavailable();
-      const record = value as Record<string, unknown>;
-      if (
-        Object.keys(record).sort().join(',') !== 'account,schema_version,service,value' ||
-        record.schema_version !== 1 ||
-        record.service !== this.service ||
-        record.account !== this.account ||
-        typeof record.value !== 'string'
-      )
-        throw jsonStorageUnavailable();
-      return record.value;
+      this.verifyRead(location, after, retryReplacement);
+      return this.decoded(bytes.subarray(0, length));
     } finally {
       closeSync(descriptor);
     }
   }
   getPassword(): string | null {
-    try {
-      return this.read(this.location());
-    } catch (error) {
-      if (error instanceof TripoError) throw error;
-      throw jsonStorageUnavailable();
+    // Read retries never run a mutation callback or restore an earlier value.
+    // A completed clear is observed as null; CAS/save/delete retain their existing lock.
+    for (let attempt = 0; attempt < jsonEntryReadAttempts; attempt++) {
+      try {
+        return this.read(this.location(true), true);
+      } catch (error) {
+        if (error instanceof JsonEntryReplaced) continue;
+        if (error instanceof TripoError) throw error;
+        throw jsonStorageUnavailable();
+      }
     }
+    throw new TripoError(
+      'CREDENTIAL_STORE_BUSY',
+      'The private JSON record is being updated by another process. Retry the original action.',
+      'read',
+    );
   }
   private encoded(value: string): string {
     if (typeof value !== 'string') throw jsonStorageUnavailable('not_submitted');

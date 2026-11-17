@@ -51,13 +51,23 @@ npm run check
 npm run package:check
 ```
 
-`check` 依次执行版本一致性、TypeScript、ESLint、Prettier、文档检查、Node.js 测试和构建。按变更范围也可单独运行 `typecheck`、`lint`、`format:check`、`test` 或 `build` 脚本。
+`check` 依次执行版本一致性、离线工作流合同检查、TypeScript、ESLint、Prettier、文档检查、Node.js 测试和构建。按变更范围也可单独运行 `workflow:check`、`typecheck`、`lint`、`format:check`、`test` 或 `build` 脚本。
+
+`npm run workflow:check` 解析仓库中的 workflow，检查权限、触发条件、归档门禁、提交占位与版本推进的编排合同，不下载工具。GitHub Actions 的语法与表达式另由 actionlint 检查；在 Linux/macOS 的 x64 或 arm64 环境显式执行：
+
+```sh
+node scripts/actionlint.ts
+```
+
+该命令会联网下载固定版本 actionlint，先核对仓库中固定的 SHA-256，再解压执行，结束后清理临时目录。它不属于离线 `check` 链，在 CI 中独立运行；没有联网条件时应记录未执行，不能把合同检查当作 actionlint 已通过。
 
 `npm run docs:check` 离线检查本地链接、标题锚点和 JSON 示例，不验证外部网站是否在线。`npm run package:check` 要求已有 `dist/`，读取 `npm pack --dry-run --ignore-scripts --json` 的实际清单，检查白名单、必需文件、许可、私有文件标记及包内链接；它不生成安装包或发布。
 
 `npm run --silent capabilities` 从当前命令树、四种工具集配置和模型注册表生成机器清单；`--out` 只接受源码之外、父目录已存在的新文件。它不接触账号或任务库。映射、支持条件和证据引用用于定位实现，未执行条目保留 `not_verified`；不要将测试文件路径当作已经通过的运行证据。该清单按需生成，不增加普通导出的六个文件。
 
 `npm test` 使用 `scripts/run-tests.ts`，为测试合成 OS home、内存会话或临时 JSON 存储、独立 profile/state，并将测试网络限制到回环地址；不修改用户 HOME，也不添加生产测试开关。定向用例用 `node scripts/run-tests.ts tests/guides.test.ts`，或 `npm test -- tests/guides.test.ts`，不要绕过该入口直接执行测试文件。
+
+测试文件默认最多 4 路并行，减少大量 CLI/MCP 子进程争抢资源造成的启动超时；单项超时与断言保持不变。需要调整时可显式传入 `npm test -- --test-concurrency=2`。
 
 部分几何集成测试需要 Blender **4.5+**，通过 `AI_MODELING_TEST_BLENDER` 或 `AI_MODELING_BLENDER` 指定。未设置时相关真实 Blender 用例会跳过，报告必须区分通过和跳过。涉及视频的本地处理另需带 libx264 的 FFmpeg。
 
@@ -81,11 +91,12 @@ AI_MODELING_TEST_BLENDER=/path/to/blender npm test
 ## CI 配置
 
 - `check` 在分支 push / pull request 上执行 Linux/Node.js 24 完整检查、构建与包清单验证；标签推送由 `release.yml` 执行发布所需检查。生产依赖审计单独执行 `npm audit --omit=dev`。
+- `check` 的独立 `workflows` job 执行 actionlint；各 workflow 的第三方 Actions 固定完整提交 SHA，升级时同步审阅版本注释和离线合同。合成发布回归覆盖版本排序、被替换的待执行任务、未知写入结果及恢复，不能替代托管发布验收。
 - 安装矩阵还会在各自操作系统执行 JSON 凭据、路径、受限文件导入及登录撤销回归；Windows 原生 DACL 用例只在 Windows 执行，其它系统明确跳过，不把模拟检查当作原生验收。
 - 安装冒烟矩阵覆盖 Ubuntu 24.04、macOS 15、Windows 2025 / Node.js 24。每个平台构建并解包 TGZ，在解包目录运行 `npm ci --omit=dev`，再用 `npm link --omit=dev --ignore-scripts` 链接到临时 npm prefix；验证唯一 bin、版本、CLI/MCP 帮助与指南、四种工具集配置和生产锁依赖。严格安装检查之后，对同一 TGZ 执行 `package:consumer-smoke`，分别检查本地 npm、真实全局 npm 安装、npm exec/npx 执行路径，并校验平台原生模块可加载；将依赖漂移单独记录。工具/指南发现还断言不创建任务状态。
 - `release-candidate`（`package.yml`）仅接受手动 `workflow_dispatch`。完成全检查、审计和六文件导出后，三个系统验证同一个 TGZ，分别保存 `smoke-{platform}.json` 与 `consumer-{platform}.json`。最后汇总 release notes、readiness 和带归档摘要的两类报告，保留 90 天。
 - 候选工作流从实际 GitHub 仓库上下文取得 repository。公开仓库变量 `SECURITY_CONTACT_URL` 使用 `https://github.com/seekskyworld/ai-modeling/security/advisories/new`；发布前确认私密报告入口启用且可用。缺项会记录为 blocker。
-- `check` 和 `release-candidate` 只有 `contents: read`，不创建 Release、不推标签、不发布 npm，也不使用 Studio 会话。另一个 `release.yml` 工作流响应版本标签；只有其正式发布 job 获得 `contents: write` 与 `id-token: write`，详见[自动 npm 发布](#自动-npm-发布)。`workflow_dispatch` 只运行检查与预演，不进入发布 job。Dependabot 更新仍需验证与审阅。
+- `check` 和 `release-candidate` 只有 `contents: read`，不创建 Release、不推标签、不发布 npm，也不使用 Studio 会话。另一个 `release.yml` 工作流响应版本标签；只有其正式 `publish` 与 `promote` job 获得 `contents: write` 与 `id-token: write`，详见[自动 npm 发布](#自动-npm-发布)。`workflow_dispatch` 只运行检查与预演，不进入这两个 job。Dependabot 更新仍需验证与审阅。
 
 这里说明的是配置，不能代替对应提交的托管运行记录。三平台矩阵只证明安装和离线入口，不证明私有 JSON 在所有系统上的真实 ACL 行为、浏览器登录、Blender/FFmpeg 或全部 Studio 业务已验收。候选产物有保留期限，不是稳定下载地址。
 
@@ -166,7 +177,7 @@ npm run release:prepare -- --distribution ../ai-modeling-export \
 
 `.github/workflows/release.yml` 对推送的版本标签执行发布流程。标签必须与 `package.json` 的版本一致，来源必须是该标签解析到的完整提交 SHA。发布使用 Node.js **24** 和 npm **11.17.0**，不是仅依赖 runner 预装的 npm。普通分支 push 不发布；手动 `workflow_dispatch` 对任意所选 ref 执行独立完整预演，不调用发布状态协调器。即使选择版本标签也不提交 npm、不写发布状态或创建公开 Release。预演报告不能当作真实 OIDC 上传回执。
 
-维护者先完成新版本的元数据、锁文件、安装说明和 CHANGELOG 更新，再推送对应 `vVERSION` 标签。npm 版本不可覆盖，不移动已发布标签；不要用重复推送、删除标签或重跑发布命令来处理索引延迟。当前安装示例继续固定 0.1.3；本轮自动发布改进记在 Unreleased，不表示已经重新发布 0.1.3。
+维护者先完成新版本的元数据、锁文件和 CHANGELOG 更新，再推送对应 `vVERSION` 标签。npm 版本不可覆盖，不移动已发布标签；不要用重复推送、删除标签或重跑发布命令来处理索引延迟。当前公开安装示例继续固定可用的 0.1.3；Unreleased 修复面向 0.1.4 源码候选，不能把未发布候选填进用户安装命令。新版本完成实际发布后再统一更新安装示例，不表示重新发布 0.1.3。
 
 ### Trusted Publisher 前提
 
@@ -183,6 +194,8 @@ npm trust github @seekskyworld/ai-modeling --file release.yml --repo seekskyworl
 只有实际核验 npm 侧的仓库、工作流、environment 与发布许可均正确后，才将 GitHub 仓库变量 `NPM_TRUSTED_PUBLISHER_CONFIGURED` 设为 `true`。该变量是正式 npm 提交的显式开关，不是配置证明本身；创建 GitHub environment、打开 npm 设置页或运行失败的 trust 命令都不足以开启它。变量未确认时保留发布阻塞，不提交 npm。
 
 发布 job 使用 GitHub OIDC 与最小所需权限，不将长期 npm Token 写入仓库、工作流、状态资产或日志。Trusted Publisher 必须由有权限的维护者在 npm 侧完成配置；新增 workflow 文件并不代表远端授权已经完成。缺少授权或 OIDC 上传尚未跑通时，应保留具体阻塞和原提交状态，不能自动退回其他身份或重复上传。
+
+npm 11.17.0 的 `publish` 会进行 OIDC 交换，`dist-tag` 不会自动完成这一步。独立 `promote` job 因此通过受限的 GitHub OIDC → npm 包级短时令牌交换来更新固定包的 `latest` / `next`，凭据只在内存中使用。该路径校验仓库、版本标签、工作流和 `npm` environment 身份，不读取本机 npm 登录或回退长期 Token。配置发布连接不等于已验证短时令牌可以更新 dist-tag；首次真实推进必须分别验收交换、写入与读回。当前 npm trust CLI 只有 publish/stage-publish 配置，不要求不存在的 dist-tag 开关。
 
 ### 同一归档、三平台门禁
 
@@ -207,6 +220,20 @@ npm trust github @seekskyworld/ai-modeling --file release.yml --repo seekskyworl
 
 自动发布完成必须同时确认精确包名和版本的 metadata、下载真实 `dist.tarball`，并比较原 TGZ 的 SHA-256、SHA-512 与 registry 摘要。metadata 200、网页显示版本、npm CLI 成功提示或另一个版本存在，都不能替代实际归档验证。通过后才将对应草稿 Release 设为公开。公共 npm 的干净安装及授权业务验收仍应单独记录；离线门禁不证明每个 AI 宿主、Windows 登录或所有 Studio 工作流已实测。
 
+首次上传使用各版本独立的 `release-vVERSION` 标签，上传本身不改动 `latest` / `next`。通过真实归档核验后，跨版本串行的 `promote` job 扫描持久 published 回执，补全待公开的 Release，再按语义版本提升默认渠道。GitHub 可能替换尚未执行的并发排队任务，所以每个获得执行机会的 job 都检查整个待办集合，不仅处理触发自己的版本。草稿先以 `make_latest: false` 公开，稳定版和预发布版分别对应 `latest` 与 `next`；确认 npm latest 后才推进 GitHub Latest。
+
+每次渠道写入前重新读取当前版本，已有相同或更高版本就跳过。写入响应丢失时读取实际结果，无法确认则保留失败阶段供恢复，不重新上传 npm。一个候选核验失败会保留该项并继续其他已核验候选；渠道查询失败时不猜测当前版本。协调器的串行与单调推进约束适用于该受控工作流，维护者直接修改渠道仍需避免与它并发。
+
+正式 Release 说明由 `scripts/publication-notes.ts` 生成，输入真实、非 dry-run 的 published 结果与恢复的原 TGZ。生成器再次核对包名、版本、归档大小和全部摘要，从该归档提取价格 JSON，并与原来源提交中的 JSON 全字段比较。TypeScript 编译可能改变 JSON 的排版，所以价格更新摘要始终取**原来源文件字节**，而非编译件或规范化对象的摘要。说明会包含固定提交 URL、原文件 SHA-256、审核/到期时间和可复制的 `pricing update` 命令；标准六文件分发不增加或替换文件。
+
+```sh
+node scripts/publication-notes.ts --verification ../npm-verified.json \
+  --archive ../frozen/distribution/ai-modeling-VERSION.tgz \
+  --source-dir . --out ../publication-notes.md
+```
+
+`--source-dir` 指有原提交对象的 Git 仓库；生成器从该提交读取文件，忽略当前工作树和 Git replacement refs，因此可用新协调器恢复旧版本。省略该参数时，只读原提交对应的公共 GitHub raw URL，不携带凭据、不跟随重定向，JSON 限制为 1 MiB。输入不匹配或读取失败时不生成说明；错误只保留固定诊断，不回显 JSON 内容、私有路径或子进程 stderr。输出必须是源码之外、父目录已存在的新文件。恢复旧发布不会延长原价格期限，已过期的快照仍明确保留原日期。
+
 从源码查询现有发布时，将 `vVERSION` 和 `FULL_TAG_COMMIT_SHA` 换成原标签与其完整提交，输出文件必须位于源码外且尚不存在：
 
 ```sh
@@ -229,6 +256,8 @@ The npm package is `@seekskyworld/ai-modeling`; its executable and Skill remain 
 Run full checks, the production audit, and standard export. Validate the same TGZ on Linux, macOS and Windows with both archive and npm consumer checks; inspect actual dependency versions/integrity as well as functional results. Prepare the candidate with `release:prepare --require-ready` immediately before publishing. Source metadata, price freshness and offline MCP discovery do not establish real-account or host-client compatibility.
 
 Push the matching version tag to use `release.yml`; manual dispatch runs a complete independent preview for the selected ref without invoking the publication coordinator. Configure the npm Trusted Publisher for this repository, `release.yml` and its matching environment before expecting OIDC publication. Release jobs use Node.js 24 and npm 11.17.0. The same standard-export TGZ must pass the three-platform archive and npm-consumer gates before a new submission.
+
+Uploads use a version-specific `release-vVERSION` tag. A separate serialized promotion job drains durable published receipts across versions, verifies original public archives, and advances `latest`, `next` and GitHub Latest without downgrading an observed version. npm's `dist-tag` command does not perform OIDC exchange itself; the promoter explicitly obtains a package-scoped short-lived token and keeps it in memory. Verify the first real token exchange, channel write and read-back separately; a configured publishing connection or an offline test is not proof that this permission works.
 
 The workflow persists the archive identity and a submission claim before invoking npm once. An accepted or unknown submission is only reconciled against the registry; missing metadata never authorizes a retry. Existing releases without state require an explicit history import. Recover legacy processing submissions, such as the original 0.1.3 submission, from their original receipt and archive without rebuilding or uploading again. Since the original tag has no coordinator, run `check` / `verify` from newer source while retaining the original tag, commit and TGZ identity; do not move or push the old tag again. If these Node.js 24 commands need the configured environment proxy, set `NODE_USE_ENV_PROXY=1` for their process without exposing proxy credentials.
 

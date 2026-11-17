@@ -49,6 +49,8 @@ Use the same pinned package when the Skill invokes CLI through npx. To upgrade, 
 
 Use `pricing status` to inspect price provenance and expiry offline. The maintained [pricing source](https://github.com/seekskyworld/ai-modeling/blob/main/studio/api/reviewed-prices.json) records review dates, prices and official evidence. For an update, use the reviewed commit or release tag and its published SHA-256 as described under [pricing maintenance](#价格快照更新). `pricing verify/import FILE --sha256 SHA256 --network` checks and installs a local snapshot; `pricing update HTTPS_URL --sha256 SHA256` downloads and validates one. These commands do not generate assets. Matching evidence hashes does not replace review of the formulas; expiry is never extended automatically.
 
+The Release's **Reviewed pricing snapshot** section supplies the immutable JSON URL, **Source JSON SHA-256**, review/expiry dates and a copyable update command. Use that original-file digest, not the runtime TGZ digest or `canonical_sha256` from status/readiness reports. An expired historical snapshot still requires a newer reviewed version.
+
 For optional features, run `doctor --offline --feature render`, `video`, or `frontend-export`. Blender 4.5+, FFmpeg/libx264 and the fixed conversion runtime are required only for their relevant operations. Review [capability status](compatibility.md#能力状态--capability-status) before relying on a particular effect.
 
 ## 安装
@@ -440,7 +442,9 @@ ai-modeling runtime install --source-dir /path/to/studio-runtime --json
 
 `ai-modeling pricing status` 离线显示当前快照来源、审核时间、到期时间与刷新需求。维护源是 [`studio/api/reviewed-prices.json`](https://github.com/seekskyworld/ai-modeling/blob/main/studio/api/reviewed-prices.json)，[main 的原始 JSON](https://raw.githubusercontent.com/seekskyworld/ai-modeling/main/studio/api/reviewed-prices.json)用于查找最新审核版本。程序不会自动读取 main、信任新价格或延长有效期。
 
-更新时从对应 [Release](https://github.com/seekskyworld/ai-modeling/releases) 的维护说明取得审核提交或标签及已发布的文件 SHA-256。把下例的 `REVIEWED_COMMIT` 和 `PUBLISHED_SHA256` 替换为该次审阅值；使用固定提交可确保地址内容不会随 main 变化：
+更新时从对应 [Release](https://github.com/seekskyworld/ai-modeling/releases) 的 **Reviewed pricing snapshot** 说明直接复制更新命令。该说明提供固定来源提交的 JSON URL、**Source JSON SHA-256**、`Reviewed at` 和 `Expires at`。摘要针对该来源文件的原始字节；不要使用运行包 TGZ 的摘要，也不要使用 `pricing status` / `readiness.json` 中的 `canonical_sha256`，后者针对解析后的 JSON，不能用于 `--sha256`。
+
+手动填写时，把下例的 `REVIEWED_COMMIT` 和 `PUBLISHED_SHA256` 替换为该次发布的来源提交与原文件摘要；固定提交确保地址内容不会随 main 变化：
 
 ```sh
 ai-modeling pricing update \
@@ -449,7 +453,7 @@ ai-modeling pricing update \
 ai-modeling pricing status
 ```
 
-也可以下载已审阅 JSON，再执行 `pricing verify FILE --sha256 SHA256 --network` 与 `pricing import FILE --sha256 SHA256 --network`。文件摘要须与维护者发布的值核对，不能把刚下载文件的自行计算值当成独立信任依据。远程更新仅接受直接 HTTPS、不跟随重定向，并核验官方证据摘要；本地导入采用原子写入，不登录账号或生成素材。
+也可以下载已审阅 JSON，再执行 `pricing verify FILE --sha256 SHA256 --network` 与 `pricing import FILE --sha256 SHA256 --network`。文件摘要须与维护者发布的值核对，不能把刚下载文件的自行计算值当成独立信任依据。远程更新仅接受直接 HTTPS、不跟随重定向，并核验官方证据摘要；本地导入采用原子写入，不登录账号或生成素材。历史 Release 保留原审核和到期时间；过期快照仍会被拒绝，应取得更新的审阅版本，不能只修改期限。MCP 用户保持原工具入口，由运行环境维护者完成需要的价格更新，不改用 shell 执行业务。
 
 `sha256` 是原文件字节摘要，`canonical_sha256` 是规范化内容摘要，两者不能混用。证据字节匹配不代替公式审核；过期、未来日期、摘要不符或证据不可读取时保留错误，不能自行只改日期来解锁提交。已有任务的查询和恢复沿用原任务，不因此重新生成。
 

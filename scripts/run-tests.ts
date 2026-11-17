@@ -1,7 +1,7 @@
 /** Run offline tests in disposable state; never inherit an operator's account or data directories. */
 import { spawn } from 'node:child_process';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { availableParallelism, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { offlineTestEnvironment } from './test-environment.ts';
@@ -11,6 +11,11 @@ const directory = await mkdtemp(path.join(tmpdir(), 'ai-modeling-offline-tests-'
 const hook = new URL('../tests/isolation-hook.ts', import.meta.url).href;
 const env = offlineTestEnvironment(process.env, directory, hook);
 const selected = process.argv.slice(2);
+// Many test files launch CLI/MCP subprocesses. Bound file-level parallelism so
+// machines with many reported CPUs do not exhaust their startup-time budgets.
+const concurrency = selected.some((arg) => /^--test-concurrency(?:=|$)/.test(arg))
+  ? []
+  : [`--test-concurrency=${Math.min(4, Math.max(1, availableParallelism() - 1))}`];
 const files = selected.some((arg) => !arg.startsWith('-') && /\.(?:test\.ts|test\.js)$/.test(arg))
   ? []
   : (await readdir(path.join(root, 'tests')))
@@ -18,7 +23,7 @@ const files = selected.some((arg) => !arg.startsWith('-') && /\.(?:test\.ts|test
       .sort()
       .map((name) => `tests/${name}`);
 try {
-  const child = spawn(process.execPath, ['--test', ...selected, ...files], {
+  const child = spawn(process.execPath, ['--test', ...concurrency, ...selected, ...files], {
     cwd: root,
     env,
     stdio: 'inherit',

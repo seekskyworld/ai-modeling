@@ -74,6 +74,8 @@ ai-modeling doctor --offline --json
 
 0.1.0 预发布版存在全局安装原生依赖缺失问题，请使用上方修补版本。
 
+当前已发布的 npm 版本是 0.1.3。[Unreleased 修复](CHANGELOG.md#unreleased)（包括并发读取登录状态的修复）面向 0.1.4 源码候选，尚未包含在此运行包内。新版本通过检查并正式发布前，安装示例继续指向已公开可用的版本。
+
 npm 包名是 **`@seekskyworld/ai-modeling`**，命令是 **`ai-modeling`**。接下来选择 [Skill](#使用-skill) 或 [MCP](#接入-mcp)，两者共用 CLI 和 Studio 账号。npm 安装不会自动导入 Skill 或修改客户端 MCP 配置。
 
 直接使用 CLI 时，先连接账号，再预览请求：

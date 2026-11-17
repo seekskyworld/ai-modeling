@@ -18,10 +18,10 @@ jobs:
     outputs:
       version: ${{ steps.export.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
           cache: npm
@@ -60,7 +60,7 @@ jobs:
           await appendFile(process.env.GITHUB_OUTPUT, `version=${version}\n`);
           NODE
       - name: Upload distributions for review
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ai-modeling-distribution-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -89,16 +89,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ai-modeling-distribution-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ai-modeling-distribution
@@ -114,7 +114,7 @@ jobs:
           PACKAGE_ARCHIVE: ${{ runner.temp }}/ai-modeling-distribution/ai-modeling-${{ needs.package.outputs.version }}.tgz
           CONSUMER_REPORT: ${{ runner.temp }}/consumer-${{ matrix.platform }}.json
         run: npm run package:consumer-smoke -- --archive "$PACKAGE_ARCHIVE" --report "$CONSUMER_REPORT" --require-locked
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ai-modeling-smoke-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -129,20 +129,20 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ai-modeling-distribution-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ai-modeling-distribution
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: ai-modeling-smoke-*-${{ github.run_id }}-${{ github.run_attempt }}
           merge-multiple: true
@@ -162,7 +162,7 @@ jobs:
           fi
           npm run release:prepare -- "${release_args[@]}"
       - name: Upload candidate notes and verification evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ai-modeling-candidate-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
