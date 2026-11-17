@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import sharp from 'sharp';
+import sharp from '../runtime/sharp.ts';
 import { readBoundedFile } from '../../studio/files.ts';
 import { fetchEnvironment, maximumHDRBytes, validateHDR } from '../../studio/api/preview-assets.ts';
 import { preparePreviewModel } from './preview-model.ts';

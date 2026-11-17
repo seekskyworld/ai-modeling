@@ -9,7 +9,7 @@ ai-modeling 通过你的 Tripo Studio 网页会话提供建模功能，使用网
 Install Node.js **24+** and npm, then install the single runtime package:
 
 ```sh
-npm install --global @seekskyworld/ai-modeling@0.1.0
+npm install --global @seekskyworld/ai-modeling@0.1.1
 ai-modeling --version
 ai-modeling doctor --offline --json
 ```
@@ -28,13 +28,15 @@ ai-modeling make "a small toy robot" --model tripo-p2 --dry-run --json
 
 Account operations need a working OS credential store: macOS Keychain, Windows Credential Manager, or unlocked Linux Secret Service with session D-Bus. WSL uses its Linux service. Browser login needs an installed Chrome/Edge and a visible desktop. `setup` reuses a valid saved session and guides login when needed. Passwords and verification stay in the browser; do not copy account tokens into configuration. For MCP, a missing session returns `AUTH_REQUIRED` and a login URL. The user completes that login; the agent reads `ai-modeling://auth/status`, then continues the original request through MCP with its returned request identity.
 
+If setup returns `CREDENTIAL_STORE_UNAVAILABLE`, unlock the OS credential store and allow ai-modeling (Node.js) access when the system prompts, then retry the original command. Each native credential call has a 10-second limit. A store permission error does not mean the Studio browser session expired; do not sign out or create a replacement task. A timed-out credential write can have an unknown outcome.
+
 The dry run checks local inputs and does not submit or quote a live task. Remove `--dry-run` only when ready to spend Studio web credits, which are separate from the developer API wallet. Use a stable `--request-id` for each new intended submission and retain the returned task identity. `task get TASK_ID` and `task watch TASK_ID --download --out ./assets` inspect or finish that task. `outcome_unknown` requires reconciliation of the original receipt; `needs_attention` requires checking the output mismatch. Neither is a reason to create a paid replacement automatically.
 
 To avoid a global installation, use the complete prefix for every command:
 
 ```sh
-npx --yes --package @seekskyworld/ai-modeling@0.1.0 ai-modeling --version
-npx --yes --package @seekskyworld/ai-modeling@0.1.0 ai-modeling skill install --target claude-code
+npx --yes --package @seekskyworld/ai-modeling@0.1.1 ai-modeling --version
+npx --yes --package @seekskyworld/ai-modeling@0.1.1 ai-modeling skill install --target claude-code
 ```
 
 Use the same pinned package when the Skill invokes CLI through npx. To upgrade, select a published version, update the runtime, then update the Skill in the same destination or the MCP configuration. Do not assume an existing client reloads automatically. Node/npm or the installed command must be on the client's PATH; GUI applications may need an absolute executable path.
@@ -58,14 +60,16 @@ For optional features, run `doctor --offline --feature render`, `video`, or `fro
 从 [npm](https://www.npmjs.com/package/@seekskyworld/ai-modeling) 安装固定版本：
 
 ```sh
-npm install --global @seekskyworld/ai-modeling@0.1.0
+npm install --global @seekskyworld/ai-modeling@0.1.1
 ai-modeling --version
 ai-modeling doctor --offline --json
 ```
 
-`@seekskyworld/ai-modeling` 是包名，`ai-modeling` 是唯一命令。一个包包含 CLI、MCP 和随包 Skill 指导，不需要分别安装三个运行引擎。发行包随附已审阅的可移植生产依赖，当前平台的原生可选包由 npm 按精确版本安装；保留 optional 依赖。CLI 用户直接继续；Skill 用户执行下一节的目标安装；MCP 用户按[客户端配置](#mcp-客户端配置)添加服务。
+0.1.0 预发布版可能在全局安装后缺少原生依赖；使用0.1.1修补版。执行安装后紧接着运行 `ai-modeling --version` 和离线诊断，不能仅凭 npm install 退出码判定程序可用。
 
-不做全局安装时，每次用 `npx --yes --package @seekskyworld/ai-modeling@0.1.0 ai-modeling` 替换命令前缀。比如 `npx --yes --package @seekskyworld/ai-modeling@0.1.0 ai-modeling skill install --target claude-code`；此时 Skill 的 CLI 调用也沿用同一完整前缀。MCP 可直接使用[npx 配置](../examples/mcp-npx.json)。
+`@seekskyworld/ai-modeling` 是包名，`ai-modeling` 是唯一命令。一个包包含 CLI、MCP 和随包 Skill 指导，不需要分别安装三个运行引擎。发行包随附已审阅的可移植生产依赖，原生包及其平台依赖交由 npm 安装；保留 optional 依赖，不手工拼装其它平台的原生包。CLI 用户直接继续；Skill 用户执行下一节的目标安装；MCP 用户按[客户端配置](#mcp-客户端配置)添加服务。
+
+不做全局安装时，每次用 `npx --yes --package @seekskyworld/ai-modeling@0.1.1 ai-modeling` 替换命令前缀。比如 `npx --yes --package @seekskyworld/ai-modeling@0.1.1 ai-modeling skill install --target claude-code`；此时 Skill 的 CLI 调用也沿用同一完整前缀。MCP 可直接使用[npx 配置](../examples/mcp-npx.json)。
 
 `ai-modeling update` 离线显示更新指引，`ai-modeling update --check` 查询 scoped npm 的最新版本；它们不自动安装。升级时选择已发布版本，重新安装运行包，并在原目标/范围执行 `skill install` 更新指导；MCP 固定版本配置也需更新并重启。多版本环境用 `command -v ai-modeling` 或 PowerShell `Get-Command ai-modeling -All` 检查实际入口，避免新 Skill 调用旧程序。首次账号操作用 `ai-modeling setup` 引导连接，不把 Token 放进 MCP 配置。
 
@@ -437,7 +441,7 @@ ai-modeling pricing status
 | --- | --- |
 | MCP 找不到命令、缺少依赖或 `dist` | 先确认配置选择 npm/npx、全局命令还是源码入口；检查 Node 24+、版本与客户端 PATH。归档安装要保留运行目录及依赖；源码入口必须先构建。`command` 只放可执行文件，参数放 `args`。 |
 | Skill 已导入但无法执行 | Skill 只提供操作说明；另装运行包，确认客户端允许调用 `ai-modeling`，并按原 profile 完成登录。 |
-| `CREDENTIAL_STORE_UNAVAILABLE` | 核对运行用户、原生依赖和凭据服务；macOS 解锁钥匙串，Linux 检查 D-Bus/Secret Service，不切换到明文存储。 |
+| `CREDENTIAL_STORE_UNAVAILABLE` | 每次原生凭据调用最多等待10秒。macOS 解锁钥匙串并在系统提示中允许 ai-modeling（Node.js）访问，Linux 检查 D-Bus/Secret Service，再重试原命令。系统凭据权限问题不等于网页登录失效，无需因此更换账号、退出或重新登录；写入超时不保证操作未发生，保留原请求与状态。不切换明文存储。 |
 | `BROWSER_NOT_FOUND` / `BROWSER_LOGIN_FAILED` | 核对 Chrome/Edge 绝对路径、可执行权限、可见桌面和浏览器自身网络；可使用上文备用导入。 |
 | `AUTH_REQUIRED` / `LOGIN_BROKER_UNAVAILABLE` | 在原 profile 完成或重新开始登录，再继续原业务请求；`ACCOUNT_MISMATCH` 要先恢复正确账号。 |
 | `AUTH_DIRECTORY_INVALID` / `LOGIN_STATE_INVALID` | 核对 `.ai-modeling-auth` 的所有者、私有权限与文件身份，不通过删其它活跃状态绕开检查。 |

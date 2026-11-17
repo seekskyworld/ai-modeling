@@ -90,12 +90,30 @@ export function productionLock(metadata: LockEntry, input: unknown): ProductionL
   };
 }
 
+function nativeRuntimeDependencies(lock: ProductionLock, dependencies: Record<string, string>) {
+  const nativeEntries = new Set<string>();
+  for (const name of Object.keys(dependencies)) {
+    const entry = lock.packages[`node_modules/${name}`];
+    if (!entry || !Object.keys(entry.optionalDependencies ?? {}).length) continue;
+    nativeEntries.add(name);
+    // Keep native loaders outside the bundle so npm reifies their optional platform packages globally.
+    for (const child of Object.keys(entry.dependencies ?? {})) {
+      const installed = lock.packages[`node_modules/${child}`];
+      if (!installed || externalRuntimeDependency(installed))
+        throw new Error(`Native runtime dependency is not a portable pinned package: ${child}`);
+      dependencies[child] = installed.version!;
+    }
+  }
+  return nativeEntries;
+}
+
 /** Bundle portable runtime dependencies; npm selects exact optional/native packages at install time. */
 export function publicationLock(input: ProductionLock): ProductionLock {
   const lock = structuredClone(input);
   const root = lock.packages['']!;
   const optional = { ...root.optionalDependencies };
   const dependencies = { ...root.dependencies };
+  const nativeEntries = nativeRuntimeDependencies(lock, dependencies);
   for (const [location, entry] of Object.entries(lock.packages))
     if (location && entry.peer === true && !externalRuntimeDependency(entry)) {
       const name = location.slice('node_modules/'.length);
@@ -112,13 +130,29 @@ export function publicationLock(input: ProductionLock): ProductionLock {
     optional[name] = entry.version!;
   }
   if (Object.keys(optional).length) root.optionalDependencies = Object.fromEntries(sorted(optional));
-  const bundled = Object.keys(root.dependencies ?? {}).sort();
+  const bundled = Object.keys(root.dependencies ?? {})
+    .filter((name) => !nativeEntries.has(name))
+    .sort();
   if (bundled.length) root.bundleDependencies = bundled;
   return lock;
 }
 
 export function externalRuntimeDependency(entry: LockEntry): boolean {
   return entry.optional === true || Boolean(entry.os || entry.cpu || entry.libc);
+}
+
+/** External optional packages and native loaders must be installed by npm, never treated as bundled. */
+export function unbundledRuntimeLocation(lock: ProductionLock, location: string): boolean {
+  const entry = lock.packages[location];
+  if (!entry || externalRuntimeDependency(entry)) return true;
+  const root = lock.packages['']!;
+  const name = location.slice('node_modules/'.length);
+  return (
+    !name.includes('/node_modules/') &&
+    Boolean(root.dependencies?.[name]) &&
+    Array.isArray(root.bundleDependencies) &&
+    !root.bundleDependencies.includes(name)
+  );
 }
 
 /** Every vendored path must belong to an exact, portable package in the reviewed lock. */
@@ -134,7 +168,7 @@ export function validateBundledPaths(lock: ProductionLock, files: string[]): voi
     if (parts.length <= count) throw new Error(`Invalid bundled package path: ${file}`);
     const location = prefix + parts.slice(0, count).join('/');
     const entry = lock.packages[location];
-    if (!entry || externalRuntimeDependency(entry))
+    if (!entry || unbundledRuntimeLocation(lock, location))
       throw new Error(`Unreviewed or platform-specific bundled dependency: ${location}`);
     if (file.endsWith('.node')) throw new Error(`Native binaries must use platform installation: ${file}`);
   }

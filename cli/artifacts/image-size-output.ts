@@ -1,7 +1,7 @@
 /** 逐张验证原生像素；失败也保留原图诊断，恢复只读取原资产，永不缩放或补生成。 */
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import sharp from 'sharp';
+import sharp from '../runtime/sharp.ts';
 import type { Artifact, Job } from '../../studio/contracts/types.ts';
 import type { Gateway } from '../../studio/api/gateway.ts';
 import type { Fetcher } from '../../studio/api/client.ts';
@@ -40,7 +40,8 @@ async function inspect(
     if ((metadata.pages ?? 1) !== 1) throw new Error('Multiple frames are unsupported.');
     const { info } = await image.raw().toBuffer({ resolveWithObject: true });
     return { format: format as 'png' | 'jpeg' | 'webp', width: info.width, height: info.height };
-  } catch {
+  } catch (error) {
+    if (error instanceof TripoError && error.code === 'IMAGE_RUNTIME_UNAVAILABLE') throw error;
     throw new TripoError(
       'IMAGE_SIZE_REQUIREMENT_FAILED',
       'The original image could not be fully decoded to verify exact dimensions.',

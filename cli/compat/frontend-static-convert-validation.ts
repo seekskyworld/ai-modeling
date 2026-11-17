@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import type { Accessor, Node, Primitive, Root } from '@gltf-transform/core';
 import { vec3 } from 'gl-matrix';
-import sharp from 'sharp';
+import sharp from '../runtime/sharp.ts';
 import { array, object, text, TripoError } from '../../studio/contracts/errors.ts';
 import { isStudioFrontendMetadata } from '../../studio/contracts/frontend-export.ts';
 import { readFrontendDocument } from '../artifacts/studio-assimp-normalize.ts';

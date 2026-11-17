@@ -1,5 +1,5 @@
 /** 原件验收只比较分区与原面；不本地重组、修补或替换远端结果。 */
-import sharp from 'sharp';
+import sharp from '../runtime/sharp.ts';
 import { createHash } from 'node:crypto';
 import { array, object, text, TripoError } from '../../studio/contracts/errors.ts';
 import { validateGlb } from '../../studio/files.ts';

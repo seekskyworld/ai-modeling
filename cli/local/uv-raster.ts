@@ -1,5 +1,5 @@
 /** 网页 UV 导出的像素中心覆盖率与线框；PNG 光栅化引擎不同，线条抗锯齿不宣称逐像素等价。 */
-import sharp from 'sharp';
+import sharp from '../runtime/sharp.ts';
 import { TripoError } from '../../studio/contracts/errors.ts';
 import type { UvGeometry } from './uv-geometry.ts';
 

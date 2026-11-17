@@ -6,7 +6,7 @@
       "args": [
         "--yes",
         "--package",
-        "@seekskyworld/ai-modeling@0.1.0",
+        "@seekskyworld/ai-modeling@0.1.1",
         "ai-modeling",
         "mcp"
       ],

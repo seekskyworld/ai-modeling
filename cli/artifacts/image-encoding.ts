@@ -1,5 +1,5 @@
 /** 显式本地CLI交付编码扩展；网页图片下载保原字节，不能把通用Canvas编码函数当作其真实下载分支。 */
-import sharp from 'sharp';
+import sharp from '../runtime/sharp.ts';
 import { detectFormat } from '../../studio/files.ts';
 import { TripoError } from '../../studio/contracts/errors.ts';
 import type { ImageOutputFormat } from '../core/image-output-policy.ts';
@@ -48,7 +48,8 @@ export async function encodeImageOutput(
       height,
       processing: `Studio original image followed by optional local CLI ${target.toUpperCase()} delivery encoding`,
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof TripoError && error.code === 'IMAGE_RUNTIME_UNAVAILABLE') throw error;
     throw new TripoError(
       'IMAGE_OUTPUT_REQUIREMENT_FAILED',
       'The original Studio image could not be decoded or encoded in the requested output format. Retry this original task; do not regenerate.',

@@ -1,6 +1,6 @@
 /** 笔刷共用的原始部件与像素读取；使用默认场景，拒绝无法与网页部件名称对应的输入。 */
 import type { Document, Node, Primitive } from '@gltf-transform/core';
-import sharp from 'sharp';
+import sharp from '../runtime/sharp.ts';
 import { TripoError } from '../../studio/contracts/errors.ts';
 import type { Pixels } from './brush-raster.ts';
 

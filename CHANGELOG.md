@@ -4,7 +4,17 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 ## Unreleased
 
-## 0.1.0 — 2026-11-17
+## 0.1.1 — 2026-11-17
+
+### Fixed
+
+- Correct global npm installations by allowing npm to install native entry packages with their platform dependencies. Local npm and npx success no longer substitutes for a real global-install smoke check.
+- Defer Sharp loading until image processing is needed, so version/help, Skill management and static MCP discovery can start independently of the image-processing native module.
+- Update npm/npx and MCP examples to the 0.1.1 patch version and document separate global-install validation and credential-store recovery.
+
+## 0.1.0 — 2026-11-17 (prerelease)
+
+The initial GitHub prerelease has a known global-install native-dependency defect. Use the patched release; successful archive/local-npm checks did not establish a working global npm installation.
 
 - Golutra Agent project Skill target and native MCP plugin export, with reviewed schemas split to 64 tools per package. Export reports the verified 0.3.9 host limitation that prevents MCP tools from reaching the model; registration alone is not working MCP execution.
 
@@ -37,6 +47,10 @@ This file records user-facing changes. Unreleased changes describe the source tr
 - Internal investigation reports, local account fixtures, caches and generated packages are excluded from the public source tree.
 - The bundled batch example uses `batch run` and distinguishes per-request planning from actual batch execution.
 - CLI and MCP versions now read the single package metadata source; version checks detect lockfile drift.
+
+### Fixed
+
+- Bound OS credential-store operations to 10 seconds in isolated helper processes. On permission or availability errors, report `CREDENTIAL_STORE_UNAVAILABLE` with instructions to unlock/authorize the OS store; keep unknown write outcomes and existing login/request identities.
 
 ### Included capabilities
 

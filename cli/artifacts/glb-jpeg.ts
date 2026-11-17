@@ -1,5 +1,5 @@
 /** GLB 只重编码嵌入图：追加图片，不经过模型导入/重导出，原网格、蒙皮及动作字节保持不变。 */
-import sharp from 'sharp';
+import sharp from '../runtime/sharp.ts';
 import { createHash } from 'node:crypto';
 import { array, object, TripoError } from '../../studio/contracts/errors.ts';
 import { verifyNativeMeshopt } from './native-meshopt.ts';

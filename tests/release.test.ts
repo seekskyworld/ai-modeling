@@ -6,7 +6,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { gzipSync } from 'node:zlib';
-import { productionLock, publicationLock, validateBundledPaths } from '../scripts/dependency-lock.ts';
+import {
+  productionLock,
+  publicationLock,
+  validateBundledPaths,
+  unbundledRuntimeLocation,
+} from '../scripts/dependency-lock.ts';
 import { archiveEntries, snapshotArchive } from '../scripts/archive-input.ts';
 import { sourceProvenance } from '../scripts/source-provenance.ts';
 import {
@@ -268,7 +273,24 @@ test('consumer evidence preserves dependency drift and rejects false success, du
       'no-runtime-state',
       'dependency-inspection',
       'bundled-file-integrity',
+      'global-install',
+      'global-bin',
+      'global-native-runtime',
+      'global-mcp',
+      'global-skill-management',
+      'global-dependency-bytes',
     ],
+    global_installation: {
+      functional_passed: true,
+      native_runtime: { sharp_encode_decode: true, keyring_module_loaded: true, credential_accessed: false },
+      dependency_lock: {
+        comparison: 'name-version-reviewed-local-bytes',
+        matches: true,
+        packages_verified: 4,
+        files_verified: 8,
+      },
+      bundled_files_verified: 8,
+    },
     dependency_lock: {
       matches: false,
       comparison: 'name-version-integrity',
@@ -302,6 +324,22 @@ test('consumer evidence preserves dependency drift and rejects false success, du
     { ...report, functional_passed: false },
     { ...report, archive_sha256: 'c'.repeat(64) },
     { ...report, checks: report.checks.filter((item) => item !== 'skill-uninstall') },
+    { ...report, global_installation: undefined },
+    { ...report, checks: report.checks.filter((item) => item !== 'global-native-runtime') },
+    ...['sharp_encode_decode', 'keyring_module_loaded'].map((check) => ({
+      ...report,
+      global_installation: {
+        ...report.global_installation,
+        native_runtime: { ...report.global_installation.native_runtime, [check]: false },
+      },
+    })),
+    {
+      ...report,
+      global_installation: {
+        ...report.global_installation,
+        native_runtime: { ...report.global_installation.native_runtime, credential_accessed: true },
+      },
+    },
     { ...report, dependency_lock: { ...report.dependency_lock, matches: true } },
     { ...report, dependency_lock: { ...report.dependency_lock, production_lock_sha256: 'd'.repeat(64) } },
     {
@@ -413,4 +451,30 @@ test('publication bundles portable code and selects exact optional binaries on t
     /platform-specific/,
   );
   assert.throws(() => validateBundledPaths(lock, ['node_modules/runtime/module.node']), /Native binaries/);
+});
+
+test('native runtime loaders stay outside bundles so global npm installs their platform dependencies', () => {
+  const lock = publicationLock({
+    name: '@seekskyworld/ai-modeling',
+    version: VERSION,
+    lockfileVersion: 3,
+    requires: true,
+    packages: {
+      '': { name: '@seekskyworld/ai-modeling', version: VERSION, dependencies: { loader: '1.0.0' } },
+      'node_modules/loader': {
+        version: '1.0.0',
+        dependencies: { helper: '^2.0.0' },
+        optionalDependencies: { native: '3.0.0' },
+      },
+      'node_modules/helper': { version: '2.1.0' },
+      'node_modules/native': { version: '3.0.0', optional: true, os: ['darwin'] },
+    },
+  });
+  assert.equal(lock.packages['']!.dependencies!.helper, '2.1.0');
+  assert.deepEqual(lock.packages['']!.bundleDependencies, ['helper']);
+  assert.equal(unbundledRuntimeLocation(lock, 'node_modules/loader'), true);
+  assert.equal(unbundledRuntimeLocation(lock, 'node_modules/native'), true);
+  assert.equal(unbundledRuntimeLocation(lock, 'node_modules/helper'), false);
+  assert.throws(() => validateBundledPaths(lock, ['node_modules/loader/index.js']), /bundled dependency/);
+  validateBundledPaths(lock, ['node_modules/helper/index.js']);
 });

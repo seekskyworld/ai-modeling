@@ -31,6 +31,8 @@ Golutra Agent 0.3.9 原生插件注册已实测通过，但客户端的 provider
 
 凭据保存于系统凭据库，SQLite、MCP 参数和日志只保留脱敏状态。可见浏览器登录先验证账号再保存会话；CDP 只接受调用方显式指定的回环地址，只清理工具自己创建的页面或连接。
 
+原生系统凭据访问在独立子进程执行，单次调用有10秒边界；系统授权未响应时返回 `CREDENTIAL_STORE_UNAVAILABLE`，避免把整个 CLI 无限挂起。读失败与写结果未知分别保留 certainty；终止等待不证明凭据写入绝对未发生。静态帮助、Skill 管理和 MCP 发现不应为此读取凭据或提前加载图像原生模块。
+
 登录协调器按 OS 用户和 profile 共享，独立于业务数据目录。取消、退出、迟到验证和凭据更新受锁及版本检查约束。交互 CLI 可在安全请求边界等待登录；非交互 CLI/MCP 返回可处理的登录状态。
 
 提交前固定请求意图、账号、输入身份和 `request_id`。新提交前核对账号、输入及有效报价；恢复保持原账号、请求和来源身份并查询原回执，不重新执行新任务的前置条件，修改意图应报告 `IDEMPOTENCY_CONFLICT`。认证失败、锁过期或响应丢失都不能成为重放已发送写请求的依据，结果未知时先核对原回执。
@@ -77,7 +79,7 @@ AI_MODELING_TEST_BLENDER=/path/to/blender npm test
 ## CI 配置
 
 - `check` 在 push / pull request 上执行 Linux/Node.js 24 完整检查、构建与包清单验证；生产依赖审计单独执行 `npm audit --omit=dev`。
-- 安装冒烟矩阵覆盖 Ubuntu 24.04、macOS 15、Windows 2025 / Node.js 24。每个平台构建并解包 TGZ，在解包目录运行 `npm ci --omit=dev`，再用 `npm link --omit=dev --ignore-scripts` 链接到临时 npm prefix；验证唯一 bin、版本、CLI/MCP 帮助与指南、四种工具集配置和生产锁依赖。严格安装检查之后，对同一 TGZ 执行 `package:consumer-smoke`，检查 npm 消费端安装和执行路径，将依赖漂移单独记录。工具/指南发现还断言不创建任务状态。
+- 安装冒烟矩阵覆盖 Ubuntu 24.04、macOS 15、Windows 2025 / Node.js 24。每个平台构建并解包 TGZ，在解包目录运行 `npm ci --omit=dev`，再用 `npm link --omit=dev --ignore-scripts` 链接到临时 npm prefix；验证唯一 bin、版本、CLI/MCP 帮助与指南、四种工具集配置和生产锁依赖。严格安装检查之后，对同一 TGZ 执行 `package:consumer-smoke`，分别检查本地 npm、真实全局 npm 安装、npm exec/npx 执行路径，并校验平台原生模块可加载；将依赖漂移单独记录。工具/指南发现还断言不创建任务状态。
 - `release-candidate`（`package.yml`）仅接受手动 `workflow_dispatch`。完成全检查、审计和六文件导出后，三个系统验证同一个 TGZ，分别保存 `smoke-{platform}.json` 与 `consumer-{platform}.json`。最后汇总 release notes、readiness 和带归档摘要的两类报告，保留 90 天。
 - 候选工作流从实际 GitHub 仓库上下文取得 repository。公开仓库变量 `SECURITY_CONTACT_URL` 使用 `https://github.com/seekskyworld/ai-modeling/security/advisories/new`；发布前确认私密报告入口启用且可用。缺项会记录为 blocker。
 - 工作流只有 `contents: read`，不创建 Release、不推标签、不发布 npm，也不使用 Studio 会话。Dependabot 更新仍需验证与审阅。
@@ -129,7 +131,7 @@ npm run export -- --out ../ai-modeling-export --target all
 
 包内容由 `package.json.files` 与 npm 必需元数据决定。应包含 `dist/`、程序所需资源、Skill、五份核心文档、公开根文档、示例和许可；排除真实 `.env`、MCP 本机配置、凭据、浏览器状态、数据库、调查记录、网页缓存、旧归档和用户资产。`.gitignore` 不能替代实际 TGZ 清单检查。
 
-源码 `package-lock.json` 锁定开发依赖。标准导出从已审阅的生产 shrinkwrap 在临时目录执行锁定安装，随 TGZ 绑定可移植生产依赖，并保留其许可证；不从可能被修改的开发 node_modules 复制发行依赖。原生平台与其它可选包不跨平台硬打包，以锁中的精确版本声明交给 npm 按当前平台安装。归档仍包含生产 `npm-shrinkwrap.json` 与来源记录。安装验收必须比较真实依赖树和随包依赖字节，不能只看到锁文件就断言 npm 按锁安装。直接 `npm pack` 不等于标准导出，不应跳过生产依赖和分发验证就用于发布。项目不分发无权再分发的 Studio 网页素材、浏览器、Blender、FFmpeg 或外部转换运行时；保留第三方许可声明。
+源码 `package-lock.json` 锁定开发依赖。标准导出从已审阅的生产 shrinkwrap 在临时目录执行锁定安装，随 TGZ 绑定可移植生产依赖，并保留其许可证；不从可能被修改的开发 node_modules 复制发行依赖。原生入口包及其平台可选依赖交由 npm 安装，不把外置平台依赖悬挂在已绑定的原生入口包下。平台包以精确版本声明，并在真实全局安装中核对模块可加载；不能以本地 npm 自动提升依赖后可运行的结果代替全局验证。归档仍包含生产 `npm-shrinkwrap.json` 与来源记录。安装验收必须比较真实依赖树和随包依赖字节，不能只看到锁文件就断言 npm 按锁安装。直接 `npm pack` 不等于标准导出，不应跳过生产依赖和分发验证就用于发布。项目不分发无权再分发的 Studio 网页素材、浏览器、Blender、FFmpeg 或外部转换运行时；保留第三方许可声明。
 
 ## 安装验证与发布候选
 
@@ -139,9 +141,9 @@ npm run package:consumer-smoke -- --archive ../ai-modeling-export/ai-modeling-VE
 npm run release:check
 ```
 
-`package:smoke` 解包归档、运行 `npm ci --omit=dev` 并链接全局入口，再启动 CLI/MCP，核对唯一 bin、版本、工具/指南与生产依赖。`package:consumer-smoke` 验证 npm 安装、npm exec/npx、MCP 发现和 Skill 管理，并比较实际依赖的名称、版本与完整性；功能和依赖锁结果分别记录，发布验收使用 `--require-locked` 将偏离审阅版本或完整性的情况视为失败。这些检查用临时配置与缓存，不登录账号或生成素材；不能代替发布后从公共 registry 的安装验证。
+`package:smoke` 解包归档、运行 `npm ci --omit=dev` 并链接全局入口，再启动 CLI/MCP，核对唯一 bin、版本、工具/指南与生产依赖。`package:consumer-smoke` 分别验证本地 npm 安装、真实全局 npm 安装、npm exec/npx、MCP 发现和 Skill 管理，并比较实际依赖的名称、版本与完整性；功能和依赖锁结果分别记录，发布验收使用 `--require-locked` 将偏离审阅版本或完整性的情况视为失败。这些检查用临时配置与缓存，不登录账号或生成素材；不能代替发布后从公共 registry 的安装验证。
 
-Linux、macOS、Windows 报告分别为 `smoke-{platform}.json` 与 `consumer-{platform}.json`，须对应同一 TGZ。缺少某平台或消费端功能报告，不能称候选通过三平台验收；消费端依赖偏离锁定版本或完整性会产生 `CONSUMER_DEPENDENCY_DRIFT` 阻塞，功能通过不能抵消它。三平台安装成功也不意味着全部浏览器、OS 凭据库、AI 宿主和真实业务都已验收。
+Linux、macOS、Windows 报告分别为 `smoke-{platform}.json` 与 `consumer-{platform}.json`，须对应同一 TGZ。缺少某平台或消费端功能报告，不能称候选通过三平台验收；消费端依赖偏离锁定版本或完整性会产生 `CONSUMER_DEPENDENCY_DRIFT` 阻塞，功能通过不能抵消它。本地已通过的报告与尚未执行的平台分别记录；Windows 等平台没有成功回执时保留未验收，不能称三平台全部通过。即使三平台安装成功，也不意味着全部浏览器、OS 凭据库、AI 宿主和真实业务都已验收。
 
 `release:check` 检查源码元数据、可追溯且干净的 Git 提交以及内置价格有效期；默认要求价格至少剩余24小时。它不访问账号、不自动续期，也不联网验证联系人或价格证据。`scope: source` 的 ready 仅表示源码前置条件满足。
 

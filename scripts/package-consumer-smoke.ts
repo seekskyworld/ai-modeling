@@ -12,6 +12,11 @@ import { PACKAGE_NAME, VERSION } from '../version.ts';
 import { archiveEntries, snapshotArchive } from './archive-input.ts';
 import { productionLock, type ProductionLock } from './dependency-lock.ts';
 import { readDistributionFile } from './package-validation.ts';
+import {
+  installGlobalConsumer,
+  probeGlobalNativeRuntime,
+  verifyGlobalDependencies,
+} from './global-consumer.ts';
 
 interface PackageMetadata {
   name: string;
@@ -343,7 +348,7 @@ export async function installConsumerRoutes(
   const cacheRoots = (await readdir(cache, { withFileTypes: true })).filter((entry) => entry.isDirectory());
   assert.equal(cacheRoots.length, 1, 'Expected one package-specific npx cache installation.');
   const cached = await inspectConsumer(path.join(cache, cacheRoots[0]!.name));
-  return { local, cached, npmPath, npxPath, packageArgs, empty, env: offlineEnv };
+  return { local, cached, npmPath, npxPath, packageArgs, empty, env: offlineEnv, installEnv: env };
 }
 
 async function checkInstalledSkill(
@@ -466,6 +471,13 @@ export async function smokePackageConsumer(archive: string, npmCli = process.env
     assert.deepEqual(metadata.bin, { 'ai-modeling': 'dist/cli/main.js' });
     const reviewed = productionLock(metadata, JSON.parse(lockEntry.bytes.toString('utf8')));
     const installed = await installConsumerRoutes(snapshot.filename, directory, npmCli);
+    const global = await installGlobalConsumer(
+      snapshot.filename,
+      directory,
+      installed.npmPath,
+      installed.installEnv,
+    );
+    const nativeRuntime = probeGlobalNativeRuntime(global.entry, directory, installed.env);
     const cli = (args: string[]) =>
       execute(process.execPath, [installed.local.entry, ...args], directory, installed.env);
     const definitions = JSON.parse(cli(['tools', '--toolset', 'studio'])) as { name: string }[];
@@ -475,6 +487,7 @@ export async function smokePackageConsumer(archive: string, npmCli = process.env
     assert.match(cli(['guides', 'read', 'commands/assets/list']), /next_offset/);
     for (const route of [
       { args: [installed.local.entry, 'mcp', '--toolset', 'studio'], cwd: directory },
+      { args: [global.entry, 'mcp', '--toolset', 'studio'], cwd: directory },
       {
         args: [installed.npxPath, ...installed.packageArgs, 'mcp', '--toolset', 'studio'],
         cwd: installed.empty,
@@ -501,6 +514,15 @@ export async function smokePackageConsumer(archive: string, npmCli = process.env
     }
     const skillParent = path.join(directory, 'skills');
     await checkInstalledSkill(cli, ['--dir', skillParent], path.join(skillParent, 'ai-modeling'), entries);
+    const globalCli = (args: string[]) =>
+      execute(process.execPath, [global.entry, ...args], directory, installed.env);
+    const globalSkillParent = path.join(directory, 'global-skills');
+    await checkInstalledSkill(
+      globalCli,
+      ['--dir', globalSkillParent],
+      path.join(globalSkillParent, 'ai-modeling'),
+      entries,
+    );
     const skillTargets = await checkSkillClientTargets(cli, directory, entries);
     const golutraExport = await checkGolutraExport(cli, directory, installed.local.entry, definitions);
     await assert.rejects(access(installed.env.AI_MODELING_DATA_DIR!), { code: 'ENOENT' });
@@ -533,6 +555,18 @@ export async function smokePackageConsumer(archive: string, npmCli = process.env
         bundled_files_verified: await verifyBundledFiles(consumer.installed, entries),
       });
     }
+    assert.ok(
+      routes.every((route) => route.matches),
+      'Global comparison requires a fully reviewed local dependency tree.',
+    );
+    const globalDependencies = await verifyGlobalDependencies(
+      global,
+      installed.local.directory,
+      installed.npmPath,
+      directory,
+      installed.env,
+    );
+    const globalBundledFiles = await verifyBundledFiles(global.installed, entries);
     return {
       schema_version: 1,
       install_method: 'npm-install-tgz-and-npx-offline',
@@ -561,10 +595,22 @@ export async function smokePackageConsumer(archive: string, npmCli = process.env
         'no-runtime-state',
         'dependency-inspection',
         'bundled-file-integrity',
+        'global-install',
+        'global-bin',
+        'global-native-runtime',
+        'global-mcp',
+        'global-skill-management',
+        'global-dependency-bytes',
       ],
       functional_passed: true,
       skill_targets: skillTargets,
       golutra_export: golutraExport,
+      global_installation: {
+        functional_passed: true,
+        native_runtime: nativeRuntime,
+        dependency_lock: globalDependencies,
+        bundled_files_verified: globalBundledFiles,
+      },
       dependency_lock: {
         matches: routes.every((route) => route.matches),
         production_lock_sha256: createHash('sha256').update(lockEntry.bytes).digest('hex'),

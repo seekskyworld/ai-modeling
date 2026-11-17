@@ -67,10 +67,12 @@ Use the [command reference](docs/commands.md) to find the right operation. Some 
 Install Node.js **24+**, then install the single runtime package from [npm](https://www.npmjs.com/package/@seekskyworld/ai-modeling):
 
 ```sh
-npm install --global @seekskyworld/ai-modeling@0.1.0
+npm install --global @seekskyworld/ai-modeling@0.1.1
 ai-modeling --version
 ai-modeling doctor --offline --json
 ```
+
+The 0.1.0 prerelease has a known native-dependency problem in global installations. Use the patched version above.
 
 The npm package is **`@seekskyworld/ai-modeling`**; its command is **`ai-modeling`**. Choose [Skill](#use-with-a-skill) or [MCP](#use-with-mcp) below. Both use the same CLI and Studio account. An npm installation does not automatically add a Skill or configure an MCP client.
 
@@ -83,7 +85,7 @@ ai-modeling make "a small blue robot" --model tripo-p2 --dry-run --json
 
 `setup` reuses a valid saved session. When login is needed, complete passwords and verification in the browser; no copied Token is required. Login needs Chrome/Edge and a working system credential store. The dry run is local and does not submit a generation task. To generate, run the reviewed request without `--dry-run`; it uses Studio credits. Use `ai-modeling task get @last` to inspect the task or `ai-modeling task watch @last --download --out ./assets` to download its result.
 
-Prefer no global install? Run a command with `npx --yes --package @seekskyworld/ai-modeling@0.1.0 ai-modeling --version`; use the same full prefix for subsequent CLI or Skill installation commands. The MCP configuration below can use npx directly.
+Prefer no global install? Run a command with `npx --yes --package @seekskyworld/ai-modeling@0.1.1 ai-modeling --version`; use the same full prefix for subsequent CLI or Skill installation commands. The MCP configuration below can use npx directly.
 
 [Installation and login](docs/usage.md#quick-start-in-english) covers npm, [release archives](https://github.com/seekskyworld/ai-modeling/releases), platform requirements and recovery. Source contributors run `npm ci` and `npm run build`, then use `node dist/cli/main.js` in place of `ai-modeling`; building alone does not install a global command. Use `ai-modeling pricing status` to check price provenance and expiry before a paid workflow.
 
@@ -97,7 +99,7 @@ Prefer no global install? Run a command with `npx --yes --package @seekskyworld/
 
 The CLI is the underlying execution interface. MCP exposes its operations as tools for an agent: the agent calls MCP, and MCP invokes the CLI internally. Skills provide usage guidance, examples, and pipeline organization for the selected entry point. An agent using MCP stays with MCP tools rather than switching to shell commands. The Skill needs the runtime installed separately; no fixed business workflow is required.
 
-Version 0.1.0 uses the `@seekskyworld/ai-modeling` package, the `ai-modeling` command, `AI_MODELING_*` settings, `ai_modeling_*` tools, and `ai-modeling://auth/status`. Configure clients with these names and complete login through your selected entry point.
+Version 0.1.1 uses the `@seekskyworld/ai-modeling` package, the `ai-modeling` command, `AI_MODELING_*` settings, `ai_modeling_*` tools, and `ai-modeling://auth/status`. Configure clients with these names and complete login through your selected entry point.
 
 ### Use with a Skill
 
@@ -125,7 +127,7 @@ Add this version-pinned configuration to a client that supports `mcpServers`. It
     "ai-modeling": {
       "type": "stdio",
       "command": "npx",
-      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.0", "ai-modeling", "mcp"],
+      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.1", "ai-modeling", "mcp"],
       "env": {"AI_MODELING_PROFILE": "default"}
     }
   }
@@ -157,7 +159,7 @@ npm run export:mcp -- --out ../ai-modeling-mcp
 
 The full export contains the Skill ZIP, runtime TGZ, `mcp.json`, `INSTALL.md`, `manifest.json`, and `SHA256SUMS`. Output directories must be outside the source tree, under an existing parent, and must not already exist. Skill-only exports still require a separately installed runtime.
 
-Runtime exports include reviewed portable runtime dependencies, a production shrinkwrap and dependency provenance. npm installs exact-version optional packages for the current platform. The manual release-candidate workflow checks the same TGZ on Linux, macOS and Windows through both the locked `npm ci` installation and npm consumer installation/execution paths. It records dependency integrity separately from functional results; dependency drift blocks release readiness. Missing repository/contact information, source identity, platform reports or valid prices block readiness. See the [distribution guide](docs/development.md#打包与分发). Public releases use the `@seekskyworld/ai-modeling` npm package; releases and source are maintained at [seekskyworld/ai-modeling](https://github.com/seekskyworld/ai-modeling). A local export alone does not publish anything.
+Runtime exports include reviewed portable runtime dependencies, a production shrinkwrap and dependency provenance. Native packages and their platform dependencies are installed by npm. The CI matrix targets Linux, macOS and Windows; each platform needs its own actual result. Archive installation, local npm installation, global npm installation and npm exec/npx are checked separately. A passing local or npx check does not establish a working global install. Dependency integrity is recorded separately from functionality; drift blocks release readiness. Missing repository/contact information, source identity, platform reports or valid prices block readiness. See the [distribution guide](docs/development.md#打包与分发). Public releases use the `@seekskyworld/ai-modeling` npm package; releases and source are maintained at [seekskyworld/ai-modeling](https://github.com/seekskyworld/ai-modeling). A local export alone does not publish anything.
 
 ## How it fits together
 

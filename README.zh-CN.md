@@ -67,10 +67,12 @@
 准备 Node.js **24+**，从 [npm](https://www.npmjs.com/package/@seekskyworld/ai-modeling) 安装统一运行包：
 
 ```sh
-npm install --global @seekskyworld/ai-modeling@0.1.0
+npm install --global @seekskyworld/ai-modeling@0.1.1
 ai-modeling --version
 ai-modeling doctor --offline --json
 ```
+
+0.1.0 预发布版存在全局安装原生依赖缺失问题，请使用上方修补版本。
 
 npm 包名是 **`@seekskyworld/ai-modeling`**，命令是 **`ai-modeling`**。接下来选择 [Skill](#使用-skill) 或 [MCP](#接入-mcp)，两者共用 CLI 和 Studio 账号。npm 安装不会自动导入 Skill 或修改客户端 MCP 配置。
 
@@ -83,7 +85,7 @@ ai-modeling make "a small blue robot" --model tripo-p2 --dry-run --json
 
 `setup` 会复用已保存的有效会话；需要登录时，由你在浏览器完成密码与验证，不需要复制 Token。登录需要 Chrome/Edge 和可用的系统凭据库。预览只在本地执行；确认后去掉 `--dry-run` 才会生成并消耗 Studio 积分。用 `ai-modeling task get @last` 查询任务，或用 `ai-modeling task watch @last --download --out ./assets` 下载结果。
 
-不想全局安装时，可运行 `npx --yes --package @seekskyworld/ai-modeling@0.1.0 ai-modeling --version`；后续 CLI 或 Skill 安装命令沿用这个完整前缀。下方 MCP 配置也可直接通过 npx 启动。
+不想全局安装时，可运行 `npx --yes --package @seekskyworld/ai-modeling@0.1.1 ai-modeling --version`；后续 CLI 或 Skill 安装命令沿用这个完整前缀。下方 MCP 配置也可直接通过 npx 启动。
 
 更多 npm、[Release 归档](https://github.com/seekskyworld/ai-modeling/releases)、平台条件与恢复方法见[安装与登录指南](docs/usage.md)。源码贡献者执行 `npm ci`、`npm run build`，再用 `node dist/cli/main.js` 替换文中的 `ai-modeling`；单纯构建不会安装全局命令。付费流程前可用 `ai-modeling pricing status` 检查价格来源与到期时间。
 
@@ -97,7 +99,7 @@ ai-modeling make "a small blue robot" --model tripo-p2 --dry-run --json
 
 CLI 是底层执行接口；MCP 是面向 Agent 的工具入口，Agent 调用 MCP 后，由 MCP 内部调用 CLI。Skills 提供使用说明、示例和面向具体目标的流程指导，沿用用户选定的入口。选择 MCP 时使用 MCP 工具，不擅自改成 shell CLI。Skill 需要另装运行包，运行层不强制固定业务流程。
 
-0.1.0 使用 `@seekskyworld/ai-modeling` 包名、`ai-modeling` 命令、`AI_MODELING_*` 配置、`ai_modeling_*` 工具及 `ai-modeling://auth/status` 资源。请按这些名称配置客户端，再通过所选入口完成登录。
+0.1.1 使用 `@seekskyworld/ai-modeling` 包名、`ai-modeling` 命令、`AI_MODELING_*` 配置、`ai_modeling_*` 工具及 `ai-modeling://auth/status` 资源。请按这些名称配置客户端，再通过所选入口完成登录。
 
 ### 使用 Skill
 
@@ -125,7 +127,7 @@ Golutra Agent 用户可执行 `ai-modeling skill install --target golutra-agent 
     "ai-modeling": {
       "type": "stdio",
       "command": "npx",
-      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.0", "ai-modeling", "mcp"],
+      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.1", "ai-modeling", "mcp"],
       "env": {"AI_MODELING_PROFILE": "default"}
     }
   }
@@ -157,7 +159,7 @@ npm run export:mcp -- --out ../ai-modeling-mcp
 
 全部导出包含 Skill ZIP、运行包 TGZ、`mcp.json`、`INSTALL.md`、`manifest.json` 和 `SHA256SUMS`。输出目录须位于源码之外、尚不存在，且父目录已存在。单独导出 Skill 后，使用者仍需另外安装运行包。
 
-运行包随附已审阅的可移植生产依赖、生产 shrinkwrap 和依赖溯源，当前平台的原生可选包由 npm 按精确版本安装；手动发布候选工作流在 Linux、macOS、Windows 对同一 TGZ 分别验证 `npm ci` 锁定安装和 npm 消费端安装、执行入口，依赖完整性与功能结果分别记录，依赖漂移会阻塞发布就绪；候选流程准备说明和报告，不自动发布。仓库地址、私密联系渠道、来源提交、平台报告或价格有效期不足时保留阻塞项。维护流程见[分发指南](docs/development.md#打包与分发)。公开 npm 包使用 `@seekskyworld/ai-modeling` 名称；源码与 Release 位于 [seekskyworld/ai-modeling](https://github.com/seekskyworld/ai-modeling)。本地导出本身不执行发布。
+运行包随附已审阅的可移植生产依赖、生产 shrinkwrap 和依赖溯源，原生包及其平台依赖由 npm 安装。CI 矩阵面向 Linux、macOS、Windows，各平台须有实际结果；归档安装、本地 npm 安装、全局 npm 安装和 npm exec/npx 分别验收，本地或 npx 通过不能代表全局安装可用。依赖完整性与功能结果分别记录，依赖漂移会阻塞发布就绪；候选流程准备说明和报告，不自动发布。仓库地址、私密联系渠道、来源提交、平台报告或价格有效期不足时保留阻塞项。维护流程见[分发指南](docs/development.md#打包与分发)。公开 npm 包使用 `@seekskyworld/ai-modeling` 名称；源码与 Release 位于 [seekskyworld/ai-modeling](https://github.com/seekskyworld/ai-modeling)。本地导出本身不执行发布。
 
 ## 它如何工作
 

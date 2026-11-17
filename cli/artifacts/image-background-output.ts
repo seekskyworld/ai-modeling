@@ -1,7 +1,7 @@
 /** 原生不透明效果逐像素验证；原图缓存与证明固定后，恢复只读原资产。 */
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import sharp from 'sharp';
+import sharp from '../runtime/sharp.ts';
 import type { Artifact, Job } from '../../studio/contracts/types.ts';
 import type { Gateway } from '../../studio/api/gateway.ts';
 import type { Fetcher } from '../../studio/api/client.ts';
@@ -46,7 +46,8 @@ async function inspect(
       height: info.height,
       nonopaque_pixels,
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof TripoError && error.code === 'IMAGE_RUNTIME_UNAVAILABLE') throw error;
     throw new TripoError(
       'IMAGE_BACKGROUND_REQUIREMENT_FAILED',
       'The original image could not be fully decoded to verify every alpha value.',

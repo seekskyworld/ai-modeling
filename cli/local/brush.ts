@@ -1,6 +1,6 @@
 /** Magic Brush 的本地投影、笔刷选择和 UV 烘焙；提交仍由独立 retexture/retexture-apply 命令负责。 */
 import { z } from 'zod';
-import sharp from 'sharp';
+import sharp from '../runtime/sharp.ts';
 import path from 'node:path';
 import { mkdir, rm } from 'node:fs/promises';
 import type { Config } from '../core/config.ts';

@@ -20,7 +20,7 @@ import { checkDocumentation } from './documentation-check.ts';
 import { createZip, type ZipEntry } from './distribution-zip.ts';
 import {
   dependencyProvenance,
-  externalRuntimeDependency,
+  unbundledRuntimeLocation,
   provenanceFields,
   readProductionLock,
 } from './dependency-lock.ts';
@@ -190,8 +190,8 @@ async function makeRuntime(root: string, stage: string, version: string, npmCli?
   if (runtimeMetadata.bundleDependencies?.length) {
     // Build this tree from the integrity-checked lock, never copy a developer's node_modules.
     runNpm(snapshot, ['ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'], npmCli);
-    for (const [location, entry] of Object.entries(lock.packages))
-      if (location && externalRuntimeDependency(entry))
+    for (const location of Object.keys(lock.packages))
+      if (location && unbundledRuntimeLocation(lock, location))
         await rm(path.join(snapshot, location), { recursive: true, force: true });
     await rm(path.join(snapshot, 'node_modules/.package-lock.json'), { force: true });
   }

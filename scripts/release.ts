@@ -38,6 +38,12 @@ const consumerChecks = [
   'no-runtime-state',
   'dependency-inspection',
   'bundled-file-integrity',
+  'global-install',
+  'global-bin',
+  'global-native-runtime',
+  'global-mcp',
+  'global-skill-management',
+  'global-dependency-bytes',
 ];
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 type Provenance = Awaited<ReturnType<typeof dependencyProvenance>>;
@@ -387,6 +393,29 @@ function consumerLockValid(value: unknown, expectedDigest?: string): boolean {
   );
 }
 
+function globalConsumerValid(value: unknown): boolean {
+  const global = record(value);
+  const native = record(global.native_runtime);
+  const dependencies = record(global.dependency_lock);
+  return (
+    global.functional_passed === true &&
+    native.sharp_encode_decode === true &&
+    native.keyring_module_loaded === true &&
+    native.credential_accessed === false &&
+    dependencies.comparison === 'name-version-reviewed-local-bytes' &&
+    dependencies.matches === true &&
+    typeof dependencies.packages_verified === 'number' &&
+    Number.isSafeInteger(dependencies.packages_verified) &&
+    dependencies.packages_verified > 0 &&
+    typeof dependencies.files_verified === 'number' &&
+    Number.isSafeInteger(dependencies.files_verified) &&
+    dependencies.files_verified > 0 &&
+    typeof global.bundled_files_verified === 'number' &&
+    Number.isSafeInteger(global.bundled_files_verified) &&
+    global.bundled_files_verified >= 0
+  );
+}
+
 function reportMatches(
   report: Record<string, unknown>,
   kind: 'smoke' | 'consumer',
@@ -443,7 +472,8 @@ export async function readSmokeReports(
       if (kind === 'consumer') {
         if (
           report.functional_passed !== true ||
-          !consumerLockValid(report.dependency_lock, productionLockSha256)
+          !consumerLockValid(report.dependency_lock, productionLockSha256) ||
+          !globalConsumerValid(report.global_installation)
         )
           throw new Error(`Consumer report does not verify this archive: ${name}`);
         consumerVerified.push(platform);

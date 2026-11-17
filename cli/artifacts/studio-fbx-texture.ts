@@ -1,6 +1,7 @@
 /** FBX 的嵌入底色贴图只取原 R 属性；磁盘路径仅作来源标签，绝不读取外部依赖。 */
-import sharp from 'sharp';
+import sharp from '../runtime/sharp.ts';
 import { crc32 } from 'node:zlib';
+import { TripoError } from '../../studio/contracts/errors.ts';
 import { singleNode, type FbxNode, type FbxValue } from '../../studio/fbx/structure.ts';
 import { frontendFail as fail } from './studio-assimp-normalize.ts';
 import { studioAssimpHash } from './studio-assimp-assets.ts';
@@ -266,7 +267,8 @@ export async function verifyFbxTextureDecoding(materials: StaticFbxMaterial[]): 
       if (texture.mime_type === 'image/png')
         await verifyOpaquePng(texture.bytes, metadata.width * metadata.height);
       else await image.stats();
-    } catch {
+    } catch (error) {
+      if (error instanceof TripoError && error.code === 'IMAGE_RUNTIME_UNAVAILABLE') throw error;
       return fail('FBX embedded image did not decode completely as its verified opaque format.');
     }
   }

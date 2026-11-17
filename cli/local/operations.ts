@@ -1,6 +1,7 @@
 /** 浏览器本地操作的 CLI 实现：裁剪、模型转换、截图、分享图和 MP4；不消耗生成额度。 */
 import { z } from 'zod';
-import sharp, { type OverlayOptions } from 'sharp';
+import type { OverlayOptions } from 'sharp';
+import sharp from '../runtime/sharp.ts';
 import QRCode from 'qrcode';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

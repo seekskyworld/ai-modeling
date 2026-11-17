@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import path from 'node:path';
 import { mkdir, rm } from 'node:fs/promises';
-import sharp from 'sharp';
+import sharp from '../runtime/sharp.ts';
 import { readBoundedFile, readInput } from '../../studio/files.ts';
 import { TripoError } from '../../studio/contracts/errors.ts';
 import type { Config } from '../core/config.ts';
