@@ -89,6 +89,22 @@ Prefer no global install? Run a command with `npx --yes --package @seekskyworld/
 
 [Installation and login](docs/usage.md#quick-start-in-english) covers npm, [release archives](https://github.com/seekskyworld/ai-modeling/releases), platform requirements and recovery. Source contributors run `npm ci` and `npm run build`, then use `node dist/cli/main.js` in place of `ai-modeling`; building alone does not install a global command. Use `ai-modeling pricing status` to check price provenance and expiry before a paid workflow.
 
+### Preview image and model parameters
+
+The repeatable `-p key=value` option sets generation parameters. For an exact image size, use `size=WIDTHxHEIGHT`; the default GPT Image 2.5 model accepts this square example:
+
+```sh
+ai-modeling generate text-to-image "a small blue toy robot" -p size=1024x1024 --dry-run --json
+```
+
+For image-to-model, replace `./reference.png` with your input image. These explicit parameters request 8,000 faces and textures without PBR:
+
+```sh
+ai-modeling generate image-to-model ./reference.png --model tripo-v3.1 -p face_limit=8000 -p texture=true -p pbr=false --dry-run --json
+```
+
+Both commands only validate and show the plan; they do not upload or generate. An unknown dry-run price is not a free quote. Read the [image parameters](docs/commands.md#ai-modeling-studio-image) and [model parameters](docs/commands.md#ai-modeling-studio-model), or use `ai-modeling guides read commands/studio/model` for the installed guide. Verify the selected model's parameters and preserve each real task's identity when connecting image generation to modeling.
+
 ## Choose your interface
 
 | Interface | Best for | What to install |

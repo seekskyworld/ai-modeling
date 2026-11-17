@@ -89,6 +89,22 @@ ai-modeling make "a small blue robot" --model tripo-p2 --dry-run --json
 
 更多 npm、[Release 归档](https://github.com/seekskyworld/ai-modeling/releases)、平台条件与恢复方法见[安装与登录指南](docs/usage.md)。源码贡献者执行 `npm ci`、`npm run build`，再用 `node dist/cli/main.js` 替换文中的 `ai-modeling`；单纯构建不会安装全局命令。付费流程前可用 `ai-modeling pricing status` 检查价格来源与到期时间。
 
+### 预览生图和建模参数
+
+使用可重复的 `-p key=value` 指定生成参数。固定图片像素尺寸的键是 `size=宽x高`；默认 GPT Image 2.5 支持下面的正方形尺寸：
+
+```sh
+ai-modeling generate text-to-image "a small blue toy robot" -p size=1024x1024 --dry-run --json
+```
+
+图片建模时，把 `./reference.png` 换成你的输入图片。以下参数明确指定 8,000 面、生成纹理、不追加 PBR：
+
+```sh
+ai-modeling generate image-to-model ./reference.png --model tripo-v3.1 -p face_limit=8000 -p texture=true -p pbr=false --dry-run --json
+```
+
+两条命令只校验并展示计划，不上传或提交生成；离线报价未知不代表免费。更多键名见[图片参数](docs/commands.md#ai-modeling-studio-image)和[模型参数](docs/commands.md#ai-modeling-studio-model)，也可运行 `ai-modeling guides read commands/studio/model` 按需阅读已安装指南。根据所选模型校验参数，串联生图与建模时保留每一步真实任务的身份。
+
 ## 选择使用方式
 
 | 入口 | 适合场景 | 需要安装 |
