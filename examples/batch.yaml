@@ -1,0 +1,14 @@
+# Offline previews and the exact supported fields are documented in examples/README.md.
+# `ai-modeling batch run` submits real Studio tasks. It has no --dry-run option.
+# This manifest contains no credentials, paths to private assets, or existing task IDs.
+concurrency: 1
+defaults:
+  model: tripo-v3.1
+  params:
+    texture: false
+    pbr: false
+jobs:
+  - name: robot-blockout
+    input: A small toy robot with simple rounded shapes
+  - name: chair-blockout
+    input: A compact wooden chair with four legs

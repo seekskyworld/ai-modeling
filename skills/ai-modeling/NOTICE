@@ -1,0 +1,11 @@
+ai-modeling Agent Skill
+Copyright 2026 ai-modeling contributors
+
+This distribution contains instructions, examples and workflow guidance
+for ai-modeling. CLI is the execution interface; MCP exposes tools that
+invoke it internally. The runtime and its third-party notices are
+distributed in the ai-modeling package.
+
+Tripo product names identify interoperability and do not imply affiliation
+or endorsement. External services and assets are not relicensed by this
+Skill's Apache-2.0 license.

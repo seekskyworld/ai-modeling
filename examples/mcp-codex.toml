@@ -1,0 +1,6 @@
+[mcp_servers.ai-modeling]
+command = "ai-modeling"
+args = ["mcp"]
+
+[mcp_servers.ai-modeling.env]
+AI_MODELING_PROFILE = "default"

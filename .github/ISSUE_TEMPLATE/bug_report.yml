@@ -1,0 +1,82 @@
+name: 错误报告
+description: 报告可复现的 CLI、MCP、网页映射或文档问题。
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先查看仓库的 SUPPORT.md 和 docs/compatibility.md，并搜索已有问题。
+        安全漏洞请按 SECURITY.md 私密报告；不要在此填写 Token、Cookie、签名 URL、真实账号/任务标识、个人路径或原始数据库。
+        不要为了填写表单重新提交付费操作或结果不明的请求。
+  - type: dropdown
+    id: area
+    attributes:
+      label: 问题范围
+      options:
+        - CLI 命令或兼容行为
+        - MCP 接入或工具合同
+        - Studio 或 Canvas 映射
+        - 登录、安装或运行时
+        - 本地处理或产物验证
+        - 文档
+        - 其它
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 版本与环境
+      description: 写明项目版本或提交、安装方式、操作系统、Node.js/npm；相关时补充 MCP 客户端、工具集和可选程序版本。无需账号信息。
+      placeholder: |
+        ai-modeling 版本或提交：
+        安装方式：源码 / 本地安装包
+        操作系统：
+        Node.js / npm：
+        MCP 客户端与工具集（如适用）：
+        浏览器、Blender、FFmpeg（如适用）：
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 最小复现步骤
+      description: 提供脱敏命令或工具输入、合成样本特征和前置状态；没有安全复现方式时说明原因，不重复未知提交。
+      placeholder: |
+        1. 准备的输入与状态：
+        2. 执行的命令或工具输入：
+        3. 观察到的问题：
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+      description: 描述应该发生的可观察结果，以及依据的文档或命令合同。
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 给出错误码、脱敏输出和影响。标明 outcome_unknown、needs_attention 或失败发生在哪一步；不要粘贴完整响应。
+    validations:
+      required: true
+  - type: textarea
+    id: comparison
+    attributes:
+      label: 兼容与网页比较（如适用）
+      description: 写明官方 CLI 版本/命令、网页对应入口、是否使用相同来源与参数；区分命令解析、服务成功、产物验证和实际网页比较，未验证的直接注明。
+  - type: textarea
+    id: additional
+    attributes:
+      label: 已有排查与最小证据（可选）
+      description: 说明已完成的离线检查、是否稳定复现及跳过项。只附有权公开且已脱敏的片段或合成文件。
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 我已查看已知限制并搜索已有问题。
+          required: true
+        - label: 这不是公开漏洞报告，内容不含凭据、私人账号数据或无权公开的资产。
+          required: true

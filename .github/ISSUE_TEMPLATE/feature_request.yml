@@ -1,0 +1,62 @@
+name: 功能请求
+description: 提出新的兼容映射、网页功能或使用体验改进。
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先查看 docs/compatibility.md 和已有功能请求。
+        项目优先使用网页接口；网页自身的前端计算可有明确披露的本地对应实现。
+        无需为提交请求执行收费实验，也不要附上凭据、账号数据、签名链接或私有抓包。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决的问题
+      description: 描述实际使用场景、当前遇到的限制和需要达到的结果。
+    validations:
+      required: true
+  - type: dropdown
+    id: capability
+    attributes:
+      label: 能力来源
+      options:
+        - 官方 CLI 兼容差异
+        - Studio 网页已有操作
+        - 网页前端计算的本地对应
+        - CLI 或 MCP 使用体验
+        - 文档或其它改进
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议行为
+      description: 描述希望提供的命令或工具、输入、输出及失败时的行为。涉及兼容时写明官方 CLI 版本和命令；涉及网页时写明入口与前置条件。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 如何判断完成
+      description: 给出可观察的验收条件及适用范围，区分语法兼容、网页请求映射、真实产物和语义效果；不要用“任务成功”代替所有效果验证。
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 已有资料或观察（可选）
+      description: 可提供公开文档、脱敏的网页操作说明或合成样例。注明已确认与尚未验证的部分；没有接口证据也可以提交请求。
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 现有替代方式与影响（可选）
+      description: 说明当前绕行方法、可能的兼容变化，以及是否涉及多个独立计费步骤。
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 我已查看当前支持范围并搜索相同请求。
+          required: true
+        - label: 内容不含凭据、私人账号数据或无权公开的资产。
+          required: true

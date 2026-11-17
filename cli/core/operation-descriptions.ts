@@ -1,0 +1,35 @@
+/** CLI 与 MCP 共享操作含义；服务申请、授权计次与产物生成不能使用同一笼统描述。 */
+import type { Operation } from '../../studio/contracts/types.ts';
+
+export const operationDescriptions: Record<Operation, string> = {
+  image: 'text / reference images → generated images; defaults to GPT Image 2.5',
+  model: 'text / image / multiview / native image batch → 3D models; P2 supports face-count variations',
+  texture: 'generate model textures, PBR maps or higher-resolution textures',
+  rig: 'bind a supported skeleton to a model',
+  animate: 'apply a preset or generated motion to a rigged model',
+  export: 'export a model or animation in a supported Studio format',
+  export_batch: 'export owned projects in one native batch, preserving individual receipts',
+  export_lite: 'record lightweight export authorization/counting; creates no file (use local-convert)',
+  refine_submit: 'submit a human refinement request; receipt is not delivery, and payment is not automatic',
+  remesh: 'retopologize a model with triangle, quad or Smart Mesh settings',
+  segment: 'split a model into generated parts',
+  resegment: 'resegment the current model using a level or custom prompt',
+  project_edit: 'save project metadata as a recoverable task against the expected model version',
+  complete: 'complete or cap selected model parts',
+  local_edit: 'refine a bounded region of a P2 model',
+  import_model: 'import an external model into the Studio workspace',
+  uv_generate: 'generate or retry a UV candidate without applying it',
+  uv_commit: 'apply a generated UV candidate after checking the current model version',
+  retexture: 'generate a Magic Brush image preview from a camera-aligned snapshot',
+  retexture_apply: 'apply baked per-part Magic Brush textures to the current model (may consume credits)',
+  motion: 'generate an animation from a motion description',
+  copy: 'save a model version as a new Studio project',
+  image_process: 'generate multiviews, split, upscale or regenerate an existing image',
+  modification:
+    'save per-triangle segment labels and names from inline arrays or a bound segmentation state file',
+  retry: 'request a free project generation retry only when Studio reports retry_info.can_retry=true',
+  canvas_run: 'run selected Canvas nodes with explicit inputs and a checked graph revision',
+  canvas_turn: 'start a Canvas agent turn with explicitly accepted variable cost',
+  canvas_continue: 'continue a Canvas agent turn using the requested user choice',
+  canvas_lab: 'run a 3D Lab instruction against explicitly attached assets',
+};

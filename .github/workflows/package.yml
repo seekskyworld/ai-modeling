@@ -1,0 +1,179 @@
+name: release-candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Export Skill and MCP distributions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.export.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Check types, lint, formatting, docs, tests and build
+        run: npm run check
+      - name: Check package inventory
+        run: npm run package:check
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
+      - name: Export Skill and MCP artifacts
+        id: export
+        shell: bash
+        env:
+          DISTRIBUTION_OUTPUT_DIR: ${{ runner.temp }}/ai-modeling-distribution
+        run: |
+          npm run export -- --out "$DISTRIBUTION_OUTPUT_DIR" --target all
+          node --input-type=module <<'NODE'
+          import { appendFile, readFile, readdir } from 'node:fs/promises';
+
+          const { version } = JSON.parse(await readFile('package.json', 'utf8'));
+          if (typeof version !== 'string' || version.match(/^[0-9][0-9A-Za-z.+-]*$/)?.[0] !== version) {
+            throw new Error('Unexpected package version.');
+          }
+          const expected = [
+            `ai-modeling-skill-${version}.zip`,
+            `ai-modeling-${version}.tgz`,
+            'mcp.json', 'INSTALL.md', 'manifest.json', 'SHA256SUMS',
+          ].sort();
+          const entries = await readdir(process.env.DISTRIBUTION_OUTPUT_DIR, { withFileTypes: true });
+          const actual = entries.map((entry) => entry.name).sort();
+          if (entries.some((entry) => !entry.isFile()) || JSON.stringify(actual) !== JSON.stringify(expected)) {
+            throw new Error('Expected exactly six distribution files.');
+          }
+          await appendFile(process.env.GITHUB_OUTPUT, `version=${version}\n`);
+          NODE
+      - name: Upload distributions for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-modeling-distribution-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ai-modeling-distribution/ai-modeling-skill-${{ steps.export.outputs.version }}.zip
+            ${{ runner.temp }}/ai-modeling-distribution/ai-modeling-${{ steps.export.outputs.version }}.tgz
+            ${{ runner.temp }}/ai-modeling-distribution/mcp.json
+            ${{ runner.temp }}/ai-modeling-distribution/INSTALL.md
+            ${{ runner.temp }}/ai-modeling-distribution/manifest.json
+            ${{ runner.temp }}/ai-modeling-distribution/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 90
+
+  smoke:
+    name: Verify candidate installation (${{ matrix.platform }})
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+          - os: macos-15
+            platform: darwin
+          - os: windows-2025
+            platform: win32
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: ai-modeling-distribution-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ai-modeling-distribution
+      - name: Verify the exact exported TGZ
+        shell: bash
+        env:
+          PACKAGE_ARCHIVE: ${{ runner.temp }}/ai-modeling-distribution/ai-modeling-${{ needs.package.outputs.version }}.tgz
+          SMOKE_REPORT: ${{ runner.temp }}/smoke-${{ matrix.platform }}.json
+        run: npm run package:smoke -- --archive "$PACKAGE_ARCHIVE" --report "$SMOKE_REPORT"
+      - name: Verify consumer installation of the same TGZ
+        shell: bash
+        env:
+          PACKAGE_ARCHIVE: ${{ runner.temp }}/ai-modeling-distribution/ai-modeling-${{ needs.package.outputs.version }}.tgz
+          CONSUMER_REPORT: ${{ runner.temp }}/consumer-${{ matrix.platform }}.json
+        run: npm run package:consumer-smoke -- --archive "$PACKAGE_ARCHIVE" --report "$CONSUMER_REPORT" --require-locked
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-modeling-smoke-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/smoke-${{ matrix.platform }}.json
+            ${{ runner.temp }}/consumer-${{ matrix.platform }}.json
+          if-no-files-found: error
+          retention-days: 90
+
+  candidate:
+    name: Assemble review evidence without publishing
+    needs: [package, smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: ai-modeling-distribution-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ai-modeling-distribution
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ai-modeling-smoke-*-${{ github.run_id }}-${{ github.run_attempt }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/ai-modeling-smoke-reports
+      - name: Report readiness and prepare release notes
+        shell: bash
+        env:
+          RELEASE_REPOSITORY: ${{ github.server_url }}/${{ github.repository }}
+          RELEASE_SECURITY_CONTACT: ${{ vars.SECURITY_CONTACT_URL }}
+          DISTRIBUTION_OUTPUT_DIR: ${{ runner.temp }}/ai-modeling-distribution
+          SMOKE_REPORT_DIR: ${{ runner.temp }}/ai-modeling-smoke-reports
+          CANDIDATE_OUTPUT_DIR: ${{ runner.temp }}/ai-modeling-candidate
+        run: |
+          release_args=(--distribution "$DISTRIBUTION_OUTPUT_DIR" --smoke-dir "$SMOKE_REPORT_DIR" --out "$CANDIDATE_OUTPUT_DIR" --repository "$RELEASE_REPOSITORY")
+          if [[ -n "$RELEASE_SECURITY_CONTACT" ]]; then
+            release_args+=(--security-contact "$RELEASE_SECURITY_CONTACT")
+          fi
+          npm run release:prepare -- "${release_args[@]}"
+      - name: Upload candidate notes and verification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-modeling-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ai-modeling-candidate/RELEASE.md
+            ${{ runner.temp }}/ai-modeling-candidate/readiness.json
+            ${{ runner.temp }}/ai-modeling-candidate/smoke-linux.json
+            ${{ runner.temp }}/ai-modeling-candidate/smoke-darwin.json
+            ${{ runner.temp }}/ai-modeling-candidate/smoke-win32.json
+            ${{ runner.temp }}/ai-modeling-candidate/consumer-linux.json
+            ${{ runner.temp }}/ai-modeling-candidate/consumer-darwin.json
+            ${{ runner.temp }}/ai-modeling-candidate/consumer-win32.json
+            ${{ runner.temp }}/ai-modeling-candidate/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 90

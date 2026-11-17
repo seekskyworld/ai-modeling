@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "ai-modeling": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "--yes",
+        "--package",
+        "@seekskyworld/ai-modeling@0.1.0",
+        "ai-modeling",
+        "mcp"
+      ],
+      "env": {
+        "AI_MODELING_PROFILE": "default"
+      }
+    }
+  }
+}

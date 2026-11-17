@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "ai-modeling": {
+        "type": "local",
+        "command": ["ai-modeling", "mcp"],
+        "environment": {
+          "AI_MODELING_PROFILE": "default"
+        }
+      }
+    }
+  }
+}

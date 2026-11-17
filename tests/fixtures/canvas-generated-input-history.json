@@ -1,0 +1,56 @@
+{
+  "turn": {
+    "turnId": "10000000-0000-4000-8000-000000000001",
+    "sessionId": "10000000-0000-4000-8000-000000000002",
+    "status": "TURN_STATUS_DONE",
+    "requestId": "10000000-0000-4000-8000-000000000003",
+    "autoBudgetMin": 0,
+    "autoBudgetMax": 0,
+    "autoSpent": 0,
+    "stopLoopTime": null,
+    "createTime": "2000-01-01T00:00:00.000Z"
+  },
+  "messages": [
+    {
+      "messageId": "10000000-0000-4000-8000-000000000004",
+      "turnId": "10000000-0000-4000-8000-000000000001",
+      "role": "MESSAGE_ROLE_USER",
+      "content": "Describe this synthetic sample image in one sentence. Do not generate or modify any assets. [Attachment: 10000000-0000-4000-8000-000000000005]",
+      "cardType": "CARD_TYPE_UNSPECIFIED",
+      "cardJson": "{\"turnRefs\": [{\"kind\": \"image/png\", \"order\": 0, \"nodeId\": \"10000000-0000-4000-8000-000000000006\", \"assetId\": \"10000000-0000-4000-8000-000000000005\", \"inputAssetId\": \"10000000-0000-4000-8000-000000000007\"}]}",
+      "status": "MESSAGE_STATUS_DONE",
+      "createTime": "2000-01-01T00:00:00.000Z",
+      "attachments": [
+        {
+          "assetId": "10000000-0000-4000-8000-000000000007",
+          "kind": "ASSET_KIND_IMAGE",
+          "filename": "",
+          "sizeBytes": "1024",
+          "mime": ""
+        }
+      ],
+      "failCode": "",
+      "pendingTurnId": "",
+      "pendingMessageId": "",
+      "retryable": false,
+      "failCategory": "FAIL_CATEGORY_UNSPECIFIED"
+    },
+    {
+      "messageId": "10000000-0000-4000-8000-000000000008",
+      "turnId": "10000000-0000-4000-8000-000000000001",
+      "role": "MESSAGE_ROLE_AGENT",
+      "content": "A synthetic test object appears on a plain background.",
+      "cardType": "CARD_TYPE_UNSPECIFIED",
+      "cardJson": "",
+      "status": "MESSAGE_STATUS_DONE",
+      "createTime": "2000-01-01T00:00:30.000Z",
+      "attachments": [],
+      "failCode": "",
+      "pendingTurnId": "",
+      "pendingMessageId": "",
+      "retryable": false,
+      "failCategory": "FAIL_CATEGORY_UNSPECIFIED"
+    }
+  ],
+  "evidence_source": "Synthetic offline fixture. All identifiers, timestamps and text are fabricated; no private evidence files are required."
+}

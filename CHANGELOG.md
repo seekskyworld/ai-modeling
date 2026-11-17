@@ -1,0 +1,45 @@
+# Changelog
+
+This file records user-facing changes. Unreleased changes describe the source tree and do not imply an npm or hosted release. Run `ai-modeling --version` or read `package.json` for the current version.
+
+## Unreleased
+
+## 0.1.0 — 2026-11-17
+
+- Golutra Agent project Skill target and native MCP plugin export, with reviewed schemas split to 64 tools per package. Export reports the verified 0.3.9 host limitation that prevents MCP tools from reaching the model; registration alone is not working MCP execution.
+
+### Added
+
+- Version-pinned npm and npx onboarding for `@seekskyworld/ai-modeling`, with separate complete Skill and MCP setup paths, client reload checks, and default-toolset browser login recovery.
+- Standalone image generation/editing in the default MCP toolset, sharing the complete Studio image schema and CLI execution. New image requests default to GPT Image 2.5 across CLI, MCP and Skill examples. Existing jobs retain their recorded model and conflicting request reuse is rejected.
+- Local Skill installation management through `ai-modeling skill targets/install/status/uninstall`, with explicit client or custom-directory selection, user/project scopes, and preservation of modified or unmanaged files. No client is selected implicitly. The runtime package still includes its guidance and the standalone Skill ZIP remains available.
+- Native MCP configuration examples for Codex and VS Code editor compatibility, alongside the portable `mcpServers` example for clients such as Claude Code, Cursor and current VS Code Copilot.
+- `ai-modeling assets list` exposes account model/image inventory, including website-created assets, with bounded pagination and safe summaries shared with the structured asset-list tool.
+- Separate npm consumer smoke checks and release-candidate evidence for archive installation/execution, with dependency drift reported independently from the locked installation checks. No npm package is published by these checks.
+- Read-only public npm version and archive-integrity checks through `package:registry-check`, with optional post-publication existence enforcement and no registry credentials or publication.
+- Apache-2.0 project licensing with retained third-party notices.
+- Public installation, configuration, troubleshooting and contributor guides; an English README and reusable CLI/MCP examples.
+- Community standards, support and security reporting guidance, issue forms and a pull request template.
+- Local documentation and package-content checks, plus CI and a manual package-validation workflow.
+- A standalone ai-modeling Skill and a shared export command for Skill ZIPs and CLI/MCP installation packages, with installation instructions, MCP configuration and SHA-256 checksums.
+- Reviewed portable production dependencies bundled in runtime exports, with exact-version optional platform packages, production shrinkwrap and source/lock/toolchain provenance. Real TGZ and npm consumer installation checks compare functionality and dependency integrity on three platforms.
+- Offline release readiness checks for confirmed repository/contact metadata, source identity and bundled pricing lifetime; missing information remains an explicit blocker.
+- Guided setup, feature-specific offline diagnostics and reviewed price verification/import/update commands; price expiry is never silently extended.
+- A public, versionable price snapshot shared with the runtime, with current Studio price evidence and credential-free source verification.
+- Focused command-guide resources, offline tool discovery and bilingual installation/recovery/capability guidance.
+
+### Changed
+
+- The npm package is `@seekskyworld/ai-modeling`; the executable remains `ai-modeling`. MCP starts with `ai-modeling mcp` and the six-tool default set, with `--toolset studio` for asset/editing extensions. Runtime archives use `ai-modeling-VERSION.tgz`.
+- Configuration uses `AI_MODELING_*`, directory context uses `.ai-modeling`, tools use `ai_modeling_*`, and authentication status uses `ai-modeling://auth/status`. State and credentials use this namespace without legacy aliases or fallback. The npm scope does not change the CLI name or invalidate a saved session.
+- CLI is the execution interface. MCP provides agent-facing tools that invoke it internally, while Skills provide instructions, examples and workflow guidance for the selected entry point.
+- Public documentation separates supported functionality from incomplete or unverified Studio mappings.
+- Internal investigation reports, local account fixtures, caches and generated packages are excluded from the public source tree.
+- The bundled batch example uses `batch run` and distinguishes per-request planning from actual batch execution.
+- CLI and MCP versions now read the single package metadata source; version checks detect lockfile drift.
+
+### Included capabilities
+
+The initial version includes visible browser login, shared profile-level login state, safe CLI continuation and MCP authentication status. Creative operations remain subject to the [current compatibility limits](docs/compatibility.md).
+
+A release maintainer should move the relevant entries into a dated version section when a release is actually published. See [release preparation](docs/development.md).

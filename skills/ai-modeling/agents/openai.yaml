@@ -1,0 +1,4 @@
+interface:
+  display_name: "ai-modeling"
+  short_description: "按需调用 ai-modeling CLI，沿用所选入口指导可恢复的资产流程"
+  default_prompt: "使用 $ai-modeling，按我的输入和授权组织所需资产步骤；默认按需调用 CLI，已选 MCP 时通过 MCP 完成并保留恢复信息。"

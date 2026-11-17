@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "ai-modeling": {
+      "type": "stdio",
+      "command": "/absolute/path/to/node",
+      "args": [
+        "/absolute/path/to/ai-modeling/dist/cli/main.js",
+        "mcp"
+      ],
+      "env": {
+        "AI_MODELING_PROFILE": "default"
+      }
+    }
+  }
+}

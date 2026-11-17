@@ -1,0 +1,105 @@
+name: check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Offline checks (Linux, Node 24)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Check types, lint, formatting, docs, tests and build
+        run: npm run check
+      - name: Check package inventory
+        run: npm run package:check
+
+  audit:
+    name: Production dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm audit --omit=dev
+
+  installed-package:
+    name: Installed TGZ (${{ matrix.platform }}, Node 24)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+          - os: macos-15
+            platform: darwin
+          - os: windows-2025
+            platform: win32
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Export the real runtime package
+        id: export
+        shell: bash
+        env:
+          DISTRIBUTION_OUTPUT_DIR: ${{ runner.temp }}/ai-modeling-install-distribution
+        run: |
+          npm run export:mcp -- --out "$DISTRIBUTION_OUTPUT_DIR"
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+          import { VERSION } from './version.ts';
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${VERSION}\n`);
+          NODE
+      - name: Install into a temporary prefix and check offline entrypoints
+        shell: bash
+        env:
+          PACKAGE_ARCHIVE: ${{ runner.temp }}/ai-modeling-install-distribution/ai-modeling-${{ steps.export.outputs.version }}.tgz
+          SMOKE_REPORT: ${{ runner.temp }}/smoke-${{ matrix.platform }}.json
+        run: npm run package:smoke -- --archive "$PACKAGE_ARCHIVE" --report "$SMOKE_REPORT"
+      - name: Verify npm install and offline npm exec/npx consumption
+        shell: bash
+        env:
+          PACKAGE_ARCHIVE: ${{ runner.temp }}/ai-modeling-install-distribution/ai-modeling-${{ steps.export.outputs.version }}.tgz
+          CONSUMER_REPORT: ${{ runner.temp }}/consumer-${{ matrix.platform }}.json
+        run: npm run package:consumer-smoke -- --archive "$PACKAGE_ARCHIVE" --report "$CONSUMER_REPORT" --require-locked
+      - uses: actions/upload-artifact@v4
+        with:
+          name: install-smoke-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/smoke-${{ matrix.platform }}.json
+            ${{ runner.temp }}/consumer-${{ matrix.platform }}.json
+          if-no-files-found: error
+          retention-days: 14

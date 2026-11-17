@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "ai-modeling": {
+      "type": "stdio",
+      "command": "ai-modeling",
+      "args": [
+        "mcp"
+      ],
+      "env": {
+        "AI_MODELING_PROFILE": "default"
+      }
+    }
+  }
+}
