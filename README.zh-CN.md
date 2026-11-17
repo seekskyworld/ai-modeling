@@ -67,7 +67,7 @@
 准备 Node.js **24+**，从 [npm](https://www.npmjs.com/package/@seekskyworld/ai-modeling) 安装统一运行包：
 
 ```sh
-npm install --global @seekskyworld/ai-modeling@0.1.1
+npm install --global @seekskyworld/ai-modeling@0.1.2
 ai-modeling --version
 ai-modeling doctor --offline --json
 ```
@@ -85,7 +85,7 @@ ai-modeling make "a small blue robot" --model tripo-p2 --dry-run --json
 
 `setup` 会复用已保存的有效会话；需要登录时，由你在浏览器完成密码与验证，不需要复制 Token。登录需要 Chrome/Edge 和可用的系统凭据库。预览只在本地执行；确认后去掉 `--dry-run` 才会生成并消耗 Studio 积分。用 `ai-modeling task get @last` 查询任务，或用 `ai-modeling task watch @last --download --out ./assets` 下载结果。
 
-不想全局安装时，可运行 `npx --yes --package @seekskyworld/ai-modeling@0.1.1 ai-modeling --version`；后续 CLI 或 Skill 安装命令沿用这个完整前缀。下方 MCP 配置也可直接通过 npx 启动。
+不想全局安装时，可运行 `npx --yes --package @seekskyworld/ai-modeling@0.1.2 ai-modeling --version`；后续 CLI 或 Skill 安装命令沿用这个完整前缀。下方 MCP 配置也可直接通过 npx 启动。
 
 更多 npm、[Release 归档](https://github.com/seekskyworld/ai-modeling/releases)、平台条件与恢复方法见[安装与登录指南](docs/usage.md)。源码贡献者执行 `npm ci`、`npm run build`，再用 `node dist/cli/main.js` 替换文中的 `ai-modeling`；单纯构建不会安装全局命令。付费流程前可用 `ai-modeling pricing status` 检查价格来源与到期时间。
 
@@ -115,7 +115,7 @@ ai-modeling generate image-to-model ./reference.png --model tripo-v3.1 -p face_l
 
 CLI 是底层执行接口；MCP 是面向 Agent 的工具入口，Agent 调用 MCP 后，由 MCP 内部调用 CLI。Skills 提供使用说明、示例和面向具体目标的流程指导，沿用用户选定的入口。选择 MCP 时使用 MCP 工具，不擅自改成 shell CLI。Skill 需要另装运行包，运行层不强制固定业务流程。
 
-0.1.1 使用 `@seekskyworld/ai-modeling` 包名、`ai-modeling` 命令、`AI_MODELING_*` 配置、`ai_modeling_*` 工具及 `ai-modeling://auth/status` 资源。请按这些名称配置客户端，再通过所选入口完成登录。
+0.1.2 使用 `@seekskyworld/ai-modeling` 包名、`ai-modeling` 命令、`AI_MODELING_*` 配置、`ai_modeling_*` 工具及 `ai-modeling://auth/status` 资源。请按这些名称配置客户端，再通过所选入口完成登录。
 
 ### 使用 Skill
 
@@ -143,7 +143,7 @@ Golutra Agent 用户可执行 `ai-modeling skill install --target golutra-agent 
     "ai-modeling": {
       "type": "stdio",
       "command": "npx",
-      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.1", "ai-modeling", "mcp"],
+      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.2", "ai-modeling", "mcp"],
       "env": {"AI_MODELING_PROFILE": "default"}
     }
   }
@@ -154,7 +154,7 @@ Golutra Agent 用户可执行 `ai-modeling skill install --target golutra-agent 
 
 `ai-modeling mcp` 默认启动包含6个工具的 `default` 集，已提供独立生图/图像编辑，默认模型为 GPT Image 2.5；日常生图和建模使用默认集；需要完整资产与编辑入口时，在 MCP `args` 末尾追加 `"--toolset", "studio"` 并重启服务。`full` 提供官方风格的 MCP 合同。MCP 调用同包 CLI，无需把 Token 写进配置；更多说明见[示例目录](examples/README.md)。
 
-首次账号操作缺少会话时，工具返回 `AUTH_REQUIRED` 和登录 URL。由你打开该链接并完成登录，Agent 读取 `ai-modeling://auth/status` 确认认证后，用返回的原请求身份继续操作。整个过程沿用 MCP，不要求 Agent 改跑 shell 或复制 Token。
+首次账号操作缺少会话时，工具返回 `AUTH_REQUIRED`、登录 URL 和 `login_id`。由你打开该链接并完成登录，Agent 读取 `ai-modeling://auth/status`，核对同一个 `login_id` 的流程已完成，再用返回的原请求身份继续操作。该资源只是登录流程快照，`authenticated: true` 不代表当前凭据可读或远端会话仍可用；接续工具会检查认证并返回实际问题。整个过程沿用 MCP，不要求 Agent 改跑 shell 或复制 Token。
 
 MCP 同时通过 `ai-modeling://guides/usage`、`ai-modeling://guides/commands` 和 `ai-modeling://guides/pipelines` 提供使用说明、命令参考与流程示例，内容与 Skill 和公开命令文档同源。Agent 按需读取主题并调用 MCP 工具，CLI 调用由 MCP 内部完成。CLI 用户可通过 `ai-modeling guides list` 和 `ai-modeling guides read usage` 获取相同的离线 JSON 指南。
 

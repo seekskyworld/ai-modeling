@@ -66,10 +66,10 @@ jobs:
 
 ## 使用 MCP 执行同一计划
 
-MCP 提供同源的 `ai-modeling://guides/usage`、`ai-modeling://guides/commands` 和 `ai-modeling://guides/pipelines`。按需读取相关主题，保留上述步骤选择和身份记录，通过当前客户端的 `ai_modeling_*` 工具执行。先读取相关工具 schema，不根据 CLI 参数名称拼猜 JSON 字段，也不调用 shell 代替 MCP。登录状态通过 `ai-modeling://auth/status` 获取；需要用户交互时返回登录入口，完成后继续原任务。
+MCP 提供同源的 `ai-modeling://guides/usage`、`ai-modeling://guides/commands` 和 `ai-modeling://guides/pipelines`。按需读取相关主题，保留上述步骤选择和身份记录，通过当前客户端的 `ai_modeling_*` 工具执行。先读取相关工具 schema，不根据 CLI 参数名称拼猜 JSON 字段，也不调用 shell 代替 MCP。`ai-modeling://auth/status` 提供登录流程快照；需要用户交互时返回登录入口，完成匹配的流程后继续原任务。
 
 默认6工具集可以完成“图片 → 模型”：先用 `ai_modeling_image_generate`，其图片参数位于 `parameters`，并提供当前意图的 `request_id` 和已授权 `max_estimated_credits`；使用返回的真实任务身份调用 `ai_modeling_task_wait`，取得下载的实际图片路径。确认图片后，把该路径传入 `ai_modeling_make.input`，为模型步骤选择独立请求身份，再通过返回的任务身份等待/下载。`ai_modeling_image_generate` 默认 GPT Image 2.5；不要把 CLI 的 `--model` 字段名直接套入原生工具 schema。
 
-首次缺会话时，把工具返回的登录 URL 交给用户，读取 `ai-modeling://auth/status` 确认认证后继续原请求。图片或模型需要较长时间时保留原任务，通过 `ai_modeling_task_get` / `ai_modeling_task_wait` 查询；客户端超时不意味着需要再生成。此流程是用户同时要求图片和模型时的示例，已有图片直接使用模型步骤。
+首次缺会话时，把工具返回的登录 URL 交给用户并保留 `login_id`，读取 `ai-modeling://auth/status`，确认相同 ID 的流程 `authenticated: true` 后继续原请求。`scope: login_flow` 的历史成功不证明当前凭据和会话可用；接续工具仍会检查认证，按其实际结果处理。图片或模型需要较长时间时保留原任务，通过 `ai_modeling_task_get` / `ai_modeling_task_wait` 查询；客户端超时不意味着需要再生成。此流程是用户同时要求图片和模型时的示例，已有图片直接使用模型步骤。
 
 CLI 执行所选操作，MCP 提供指导资源并代理工具调用；是否需要下一步、如何连接产物和何时停止由 Skill 根据用户目标指导。已经授权的范围内继续推进；新增收费意图、发布或删除不从示例中自动取得授权。

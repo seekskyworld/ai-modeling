@@ -10,6 +10,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { CliBridge } from '../mcp/cli-bridge.ts';
 import { object } from '../studio/contracts/errors.ts';
+import { loginStateFile, withLoginLock, writeState } from '../cli/auth/state.ts';
+import type { Config } from '../cli/core/config.ts';
 
 const loginId = '22222222-2222-4222-8222-222222222222';
 async function context(toolset = 'studio', mode = '', experimental = false) {
@@ -128,7 +130,11 @@ test(
       const resource = await f.client.readResource({ uri: 'ai-modeling://auth/status' });
       const content = resource.contents[0]!;
       assert.ok('text' in content);
-      assert.equal(object(JSON.parse(content.text)).login_id, loginId);
+      const status = object(JSON.parse(content.text));
+      assert.equal(status.login_id, loginId);
+      assert.equal(status.scope, 'login_flow');
+      assert.equal(status.credential_store_check, 'not_checked');
+      assert.equal(status.studio_session_check, 'not_checked');
       for (const [name, args] of [
         ['ai_modeling_auth_begin', {}],
         ['ai_modeling_auth_status', { login_id: loginId }],
@@ -152,6 +158,67 @@ test(
       assert.equal(records.find((row) => row.kind === 'begin-login')?.open, false);
       assert.equal(records.find((row) => row.kind === 'wait-login')?.timeoutMs, 1000);
     } finally {
+      await f.close();
+    }
+  },
+);
+
+test(
+  'MCP reads a completed historical flow without claiming current credential or session availability',
+  { timeout: 30000 },
+  async () => {
+    const f = await context('default', 'flow_snapshot');
+    const config: Config = {
+      dataDir: f.env.AI_MODELING_DATA_DIR!,
+      keyringAccount: f.env.AI_MODELING_PROFILE!,
+      outputDir: '',
+      inputRoots: [],
+    };
+    const file = await loginStateFile(config);
+    try {
+      // The production coordinator is used here; the loader rejects any real credential/network use.
+      for (const sessionExpiresAt of ['2000-01-01T00:00:00Z', '2999-01-01T00:00:00Z']) {
+        await withLoginLock(config, () =>
+          writeState(config, {
+            version: 1,
+            profile: config.keyringAccount,
+            login_id: loginId,
+            status: 'authenticated',
+            started_at: '2000-01-01T00:00:00Z',
+            expires_at: '2000-01-01T00:15:00Z',
+            session_expires_at: sessionExpiresAt,
+            pid: process.pid,
+            nonce: 'a'.repeat(64),
+            control: 'b'.repeat(64),
+            account_ref: 'historical-test-account',
+            balance: 123,
+          }),
+        );
+        const before = await readFile(file, 'utf8');
+        const response = await f.client.readResource({ uri: 'ai-modeling://auth/status' });
+        const content = response.contents[0]!;
+        assert.ok('text' in content);
+        const status = object(JSON.parse(content.text));
+        assert.equal(status.login_id, loginId);
+        assert.equal(status.status, 'authenticated');
+        assert.equal(status.authenticated, true);
+        assert.equal(status.login_required, false);
+        assert.equal(status.scope, 'login_flow');
+        assert.equal(status.credential_store_check, 'not_checked');
+        assert.equal(status.studio_session_check, 'not_checked');
+        assert.equal(status.session_expires_at, sessionExpiresAt);
+        assert.equal(status.balance, 123);
+        assert.equal(await readFile(file, 'utf8'), before);
+      }
+      const records = await f.records();
+      assert.equal(records.filter((row) => row.kind === 'cli-process').length, 2);
+      assert.equal(
+        records.some((row) => row.kind !== 'cli-process'),
+        false,
+      );
+      assert.equal(f.stderr(), '');
+    } finally {
+      await rm(file, { force: true });
       await f.close();
     }
   },

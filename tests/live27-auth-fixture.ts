@@ -17,6 +17,9 @@ function loginComplete(): boolean {
 }
 export function pending(): LoginStatus {
   return {
+    scope: 'login_flow',
+    credential_store_check: 'not_checked',
+    studio_session_check: 'not_checked',
     login_id: loginId,
     profile: 'live27-isolated',
     status: 'waiting_for_login',

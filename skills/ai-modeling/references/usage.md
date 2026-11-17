@@ -11,9 +11,9 @@ CLI 是底层执行接口，MCP 提供同源指导资源并通过工具适配调
 - 账号操作需要当前 OS 用户可用的系统凭据库；Linux 需要会话 D-Bus 和已解锁的 Secret Service，WSL 不自动借用 Windows 凭据库。自动网页登录另需已安装、可见的 Chrome/Edge。离线发现和 Skill 安装管理不需要登录。
 - 只在具体功能需要时检查 Blender 4.5+、FFmpeg 或固定网页转换运行时。未获用户相应授权时，不自动安装依赖、全局安装/升级程序或修改 MCP 配置；缺少条件时指出具体缺项。用户明确要求这些操作时，确认本项目来源后按授权执行。
 - 使用用户已安装的本项目运行包；有多个版本时核对可执行文件目标与版本。配置使用 `AI_MODELING_*`，结构化工具使用 `ai_modeling_*`，认证资源为 `ai-modeling://auth/status`；旧项目名称不作为别名。更新程序后保留有效会话，按实际认证状态决定是否需要登录，不因 npm 包名带 scope 而更换 profile 或重新认证。
-- 入口不明确时核对已安装版本与路径；源码入口为 `node /absolute/path/to/installation/dist/cli/main.js`。用户选择 npx 路线时，每次沿用同一完整、固定版本前缀，例如 `npx --yes --package @seekskyworld/ai-modeling@0.1.1 ai-modeling`，不能误用无 scope 的同名包或静默升级。
+- 入口不明确时核对已安装版本与路径；源码入口为 `node /absolute/path/to/installation/dist/cli/main.js`。用户选择 npx 路线时，每次沿用同一完整、固定版本前缀，例如 `npx --yes --package @seekskyworld/ai-modeling@0.1.2 ai-modeling`，不能误用无 scope 的同名包或静默升级。
 
-用户已授权安装时，使用 `npm install --global @seekskyworld/ai-modeling@0.1.1`，再核对 `ai-modeling --version`。可按用户选择使用同版本 npx 前缀，无需全局安装。保留平台可选依赖。npm 安装不会自动导入 Skill 或配置 MCP。发布版本与来源以 npm 和指定 GitHub 仓库为准，不使用无 scope 的 `ai-modeling` 包。
+用户已授权安装时，使用 `npm install --global @seekskyworld/ai-modeling@0.1.2`，再核对 `ai-modeling --version`。可按用户选择使用同版本 npx 前缀，无需全局安装。保留平台可选依赖。npm 安装不会自动导入 Skill 或配置 MCP。发布版本与来源以 npm 和指定 GitHub 仓库为准，不使用无 scope 的 `ai-modeling` 包。
 
 归档是独立替代路线：从同仓库 Releases 取得 `ai-modeling-VERSION.tgz` 并核对 `SHA256SUMS`，解包到选定的新持久目录，在其中执行 `npm ci --omit=dev --no-audit --no-fund`，再执行 `npm link --omit=dev --ignore-scripts`。链接仍依赖该目录及其依赖，不把它当临时文件清理。
 
@@ -46,11 +46,11 @@ Skill 可直接调用 CLI，不要求安装 MCP。用户已选择 MCP 时保持�
 
 交互环境可用 `ai-modeling login`；需要返回登录入口时用 `ai-modeling login --no-wait --no-open`。密码、验证码、第三方登录和双重验证由用户在浏览器完成；CLI 验证会话后保存到系统凭据库。
 
-初次安装可用 `doctor --offline --json` 检查本机条件，再用 `setup` 引导连接；已有有效会话不重复询问。`setup --check` 或 `--offline` 不启动登录，非交互 `setup --no-wait --no-open` 返回有界状态。MCP 用户继续使用当前客户端的认证资源和工具。default 集首次账号操作缺会话时返回 `AUTH_REQUIRED` 及登录 URL；由用户完成浏览器交互，Agent 读取 `ai-modeling://auth/status`，确认 authenticated 后按返回的原请求身份接续。default 不需要先切换 Studio 工具集或调用 shell 登录。
+初次安装可用 `doctor --offline --json` 检查本机条件，再用 `setup` 引导连接；已有有效会话不重复询问。`setup --check` 或 `--offline` 不启动登录，非交互 `setup --no-wait --no-open` 返回有界状态。MCP 用户继续使用当前客户端的认证资源和工具。default 集首次账号操作缺会话时返回 `AUTH_REQUIRED`、登录 URL 和 `login_id`；由用户完成浏览器交互，Agent 读取 `ai-modeling://auth/status`，确认同一个 `login_id` 的流程 `authenticated: true` 后按返回的原请求身份接续。ID 不同的历史流程不能当作本次完成。default 不需要先切换 Studio 工具集或调用 shell 登录。
 
-用 `ai-modeling auth session status` 查询短时流程，或 `ai-modeling auth session wait LOGIN_ID --timeout 30` 作有界等待。`LOGIN_ID` 使用真实返回值；单次等待超时不代表流程取消。没有流程的 `LOGIN_NOT_FOUND` 不等于保存的会话失效；`auth status` 才是联网账号验证。
+用 `ai-modeling auth session status LOGIN_ID` 查询原流程，或 `ai-modeling auth session wait LOGIN_ID --timeout 30` 作有界等待。`LOGIN_ID` 使用真实返回值；单次等待超时不代表流程取消。流程查询返回 `scope: login_flow`，`credential_store_check` 和 `studio_session_check` 均为 `not_checked`：本次没有读取系统凭据或检查远端会话。`authenticated`、`login_required`、余额及到期时间只是该流程的快照，已完成记录也可能长期保留；不能据此忽略后续工具的认证错误。没有流程的 `LOGIN_NOT_FOUND` 也不等于保存的会话失效。需要当前账号验证时使用 CLI 的 `auth status` 或当前 MCP 工具集的 `ai_modeling_balance`；否则以原任务接续工具的实际结果为准。
 
-`CREDENTIAL_STORE_UNAVAILABLE` 表示系统凭据服务不可用或单次调用超过10秒；由用户解锁凭据库、允许 ai-modeling（Node.js）访问后重试原命令。这不等于网页登录失效，不因此退出或重登录。凭据写入超时仍保留结果未知，不能断言未写入或自动重提原业务。
+`CREDENTIAL_STORE_UNAVAILABLE` 表示系统凭据服务不可用或单次调用超过10秒；由用户在系统界面确认凭据库已解锁，并处理 ai-modeling（Node.js）对原 profile 条目的访问提示后重试原命令。整个钥匙串已解锁也不保证具体条目可读。这不等于网页登录失效，不因此退出或重登录。凭据写入超时仍保留结果未知，不能断言未写入或自动重提原业务。
 
 登录页回环地址属于 CLI 所在主机；无桌面的 SSH/容器不因此获得本机浏览器或凭据服务。不能默默换 profile、系统用户或数据目录解决问题。HTTP 403、额度不足和普通网络错误也不自动判为登录过期。
 

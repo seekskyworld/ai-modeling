@@ -98,6 +98,9 @@ test('verified current credentials renew by CAS without opening a window or crea
     };
     const result = await ensureLogin({ config: f.config }, f.runtime);
     assert.equal(result.authenticated, true);
+    assert.equal(result.scope, 'verified_session');
+    assert.equal(result.credential_store_check, 'verified');
+    assert.equal(result.studio_session_check, 'verified');
     assert.equal(result.login_id, undefined);
     assert.equal(result.balance, 5);
     assert.equal(f.store.load()!.bearer, 'renewed-test-bearer');

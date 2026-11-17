@@ -254,6 +254,9 @@ async function verifiedExisting(
   });
   const now = new Date().toISOString();
   return {
+    scope: 'verified_session',
+    credential_store_check: 'verified',
+    studio_session_check: 'verified',
     profile: config.keyringAccount,
     status: 'authenticated',
     authenticated: true,

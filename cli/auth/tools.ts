@@ -19,7 +19,8 @@ export function authenticationTools(config: Dependency<Config>): ToolSpec[] {
     },
     {
       name: 'ai_modeling_auth_status',
-      description: 'Read the current browser login flow status without returning credentials.',
+      description:
+        'Read a browser login flow snapshot without checking current credentials or the remote session. Match login_id to the original AUTH_REQUIRED response.',
       schema: z.object({ login_id: loginId }).strict(),
       readOnly: true,
       run: async (input) =>
@@ -28,7 +29,7 @@ export function authenticationTools(config: Dependency<Config>): ToolSpec[] {
     {
       name: 'ai_modeling_auth_wait',
       description:
-        'Wait briefly for browser login. Resume the original request ID or job after authentication; never resubmit an unknown outcome.',
+        'Wait briefly for the specified login flow. This does not recheck current session availability. Resume the original request ID or job after authentication; never resubmit an unknown outcome.',
       schema: z
         .object({ login_id: z.string().uuid(), timeout_seconds: z.number().int().min(1).max(60).default(30) })
         .strict(),

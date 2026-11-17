@@ -81,6 +81,9 @@ export async function withLoginLock<T>(config: Config, action: () => Promise<T>)
 }
 export function loginStatus(state: LoginState): LoginStatus {
   return {
+    scope: 'login_flow',
+    credential_store_check: 'not_checked',
+    studio_session_check: 'not_checked',
     login_id: state.login_id,
     profile: state.profile,
     status: state.status,

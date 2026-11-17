@@ -4,6 +4,14 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 ## Unreleased
 
+## 0.1.2 — 2026-11-17
+
+### Fixed
+
+- Distinguish a completed browser login flow from a currently verified Studio session in authentication status. Reading an MCP login-status resource remains a local operation and does not imply that the OS credential store is accessible.
+- Bind login recovery guidance to the returned login ID and preserve the original task identity when current credential access fails.
+- Include explicit image-size and model-parameter examples in the published first-use documentation.
+
 ## 0.1.1 — 2026-11-17
 
 ### Fixed

@@ -3,9 +3,10 @@ import { registerHooks } from 'node:module';
 import { appendFileSync } from 'node:fs';
 
 const replacement = new URL('./live27-auth-fixture.ts', import.meta.url).href;
-const targets = ['../cli/core/application.ts', '../cli/auth/coordinator.ts'].map(
-  (file) => new URL(file, import.meta.url).href,
-);
+const targets = [
+  '../cli/core/application.ts',
+  ...(process.env.LIVE27_CASE === 'flow_snapshot' ? [] : ['../cli/auth/coordinator.ts']),
+].map((file) => new URL(file, import.meta.url).href);
 const blocked = (name: string) =>
   'data:text/javascript,' +
   encodeURIComponent(

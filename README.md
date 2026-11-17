@@ -67,7 +67,7 @@ Use the [command reference](docs/commands.md) to find the right operation. Some 
 Install Node.js **24+**, then install the single runtime package from [npm](https://www.npmjs.com/package/@seekskyworld/ai-modeling):
 
 ```sh
-npm install --global @seekskyworld/ai-modeling@0.1.1
+npm install --global @seekskyworld/ai-modeling@0.1.2
 ai-modeling --version
 ai-modeling doctor --offline --json
 ```
@@ -85,7 +85,7 @@ ai-modeling make "a small blue robot" --model tripo-p2 --dry-run --json
 
 `setup` reuses a valid saved session. When login is needed, complete passwords and verification in the browser; no copied Token is required. Login needs Chrome/Edge and a working system credential store. The dry run is local and does not submit a generation task. To generate, run the reviewed request without `--dry-run`; it uses Studio credits. Use `ai-modeling task get @last` to inspect the task or `ai-modeling task watch @last --download --out ./assets` to download its result.
 
-Prefer no global install? Run a command with `npx --yes --package @seekskyworld/ai-modeling@0.1.1 ai-modeling --version`; use the same full prefix for subsequent CLI or Skill installation commands. The MCP configuration below can use npx directly.
+Prefer no global install? Run a command with `npx --yes --package @seekskyworld/ai-modeling@0.1.2 ai-modeling --version`; use the same full prefix for subsequent CLI or Skill installation commands. The MCP configuration below can use npx directly.
 
 [Installation and login](docs/usage.md#quick-start-in-english) covers npm, [release archives](https://github.com/seekskyworld/ai-modeling/releases), platform requirements and recovery. Source contributors run `npm ci` and `npm run build`, then use `node dist/cli/main.js` in place of `ai-modeling`; building alone does not install a global command. Use `ai-modeling pricing status` to check price provenance and expiry before a paid workflow.
 
@@ -115,7 +115,7 @@ Both commands only validate and show the plan; they do not upload or generate. A
 
 The CLI is the underlying execution interface. MCP exposes its operations as tools for an agent: the agent calls MCP, and MCP invokes the CLI internally. Skills provide usage guidance, examples, and pipeline organization for the selected entry point. An agent using MCP stays with MCP tools rather than switching to shell commands. The Skill needs the runtime installed separately; no fixed business workflow is required.
 
-Version 0.1.1 uses the `@seekskyworld/ai-modeling` package, the `ai-modeling` command, `AI_MODELING_*` settings, `ai_modeling_*` tools, and `ai-modeling://auth/status`. Configure clients with these names and complete login through your selected entry point.
+Version 0.1.2 uses the `@seekskyworld/ai-modeling` package, the `ai-modeling` command, `AI_MODELING_*` settings, `ai_modeling_*` tools, and `ai-modeling://auth/status`. Configure clients with these names and complete login through your selected entry point.
 
 ### Use with a Skill
 
@@ -143,7 +143,7 @@ Add this version-pinned configuration to a client that supports `mcpServers`. It
     "ai-modeling": {
       "type": "stdio",
       "command": "npx",
-      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.1", "ai-modeling", "mcp"],
+      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.2", "ai-modeling", "mcp"],
       "env": {"AI_MODELING_PROFILE": "default"}
     }
   }
@@ -154,7 +154,7 @@ Reload the MCP client and confirm that it lists six tools and the `ai-modeling:/
 
 `ai-modeling mcp` starts the six-tool `default` set, including standalone image generation/editing with GPT Image 2.5 by default. Use the default for everyday image and model creation. For broader Studio asset/editing operations, append `"--toolset", "studio"` to the MCP `args` and restart the server. `full` exposes official-style MCP contracts. MCP invokes the bundled CLI and does not need tokens in its configuration. More [examples and setup notes](examples/README.md) are available.
 
-For the first account operation, a missing session returns `AUTH_REQUIRED` with a login URL. Open that URL, complete login yourself, and let the agent read `ai-modeling://auth/status` until authenticated. It can then continue the original request with its returned request identity. The agent stays with MCP tools; it does not need to copy a Token or run shell commands.
+For the first account operation, a missing session returns `AUTH_REQUIRED` with a login URL and `login_id`. Open that URL and complete login yourself. The agent reads `ai-modeling://auth/status` until the same `login_id` reports `authenticated: true`, then continues the original request with its returned request identity. This resource reports a login flow snapshot: even `authenticated: true` does not verify current credential access or session availability. The resumed tool checks authentication and reports any remaining problem. The agent stays with MCP tools; it does not need to copy a Token or run shell commands.
 
 MCP also supplies usage, command and pipeline guidance through `ai-modeling://guides/usage`, `ai-modeling://guides/commands` and `ai-modeling://guides/pipelines`. These resources share their source with the Skill and public command reference. Read the relevant topic and call MCP tools; MCP performs the CLI invocation internally. CLI users can discover the same offline JSON guides with `ai-modeling guides list` and `ai-modeling guides read usage`.
 

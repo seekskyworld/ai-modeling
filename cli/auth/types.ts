@@ -15,6 +15,10 @@ export const loginStates = [
 ] as const;
 export type LoginPhase = (typeof loginStates)[number];
 export interface LoginStatus {
+  /** Flow snapshots do not recheck the saved credential or the remote session. */
+  scope: 'login_flow' | 'verified_session';
+  credential_store_check: 'not_checked' | 'verified';
+  studio_session_check: 'not_checked' | 'verified';
   login_id?: string;
   profile: string;
   status: LoginPhase;

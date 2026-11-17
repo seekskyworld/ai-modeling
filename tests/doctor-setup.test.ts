@@ -32,6 +32,9 @@ async function fixture(t: test.TestContext) {
 }
 function loginStatus(authenticated = false): LoginStatus {
   return {
+    scope: 'login_flow',
+    credential_store_check: 'not_checked',
+    studio_session_check: 'not_checked',
     profile: 'synthetic-diagnostics',
     status: authenticated ? 'authenticated' : 'waiting_for_login',
     authenticated,

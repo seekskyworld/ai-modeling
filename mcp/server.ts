@@ -28,7 +28,7 @@ export async function serve(
     {
       capabilities: { tools: {}, resources: {} },
       instructions:
-        "Use ai-modeling://guides/usage for usage and recovery, ai-modeling://guides/pipelines for examples, and ai-modeling://guides/commands/index to find focused command guides such as ai-modeling://guides/commands/model/convert. Read the full ai-modeling://guides/commands reference only when necessary. Call this server's tools to execute: MCP invokes the bundled CLI internally, so a separate shell invocation is not required. If a tool returns AUTH_REQUIRED, show its login.login_url to the user to open on the server's machine and complete browser sign-in. Read ai-modeling://auth/status to check progress; do not request tokens or passwords. After authentication, resume the same request_id only when the original request was not submitted; query the original task when it was submitted or its outcome is unknown. Reuse the original task identity when recovering uncertain results.",
+        "Use ai-modeling://guides/usage for usage and recovery, ai-modeling://guides/pipelines for examples, and ai-modeling://guides/commands/index to find focused command guides such as ai-modeling://guides/commands/model/convert. Read the full ai-modeling://guides/commands reference only when necessary. Call this server's tools to execute: MCP invokes the bundled CLI internally, so a separate shell invocation is not required. If a tool returns AUTH_REQUIRED, retain its login.login_id and show login.login_url to the user to open on the server's machine and complete browser sign-in. Read ai-modeling://auth/status to check that same login_id; scope=login_flow reports a flow snapshot, and authenticated=true does not recheck the current credential store or remote session. Ignore an unrelated historical login; do not request tokens or passwords. After the matching flow completes, resume the same request_id only when the original request was not submitted; query the original task when it was submitted or its outcome is unknown. The resumed tool still checks authentication; handle its actual result. Reuse the original task identity when recovering uncertain results.",
     },
   );
   server.setRequestHandler(ListResourcesRequestSchema, async (_request, extra) => {
@@ -41,7 +41,8 @@ export async function serve(
           uri: 'ai-modeling://auth/status',
           name: 'Studio browser login status',
           mimeType: 'application/json',
-          description: 'Read the bundled CLI login flow status. No credentials are returned.',
+          description:
+            'Read the bundled CLI login flow snapshot. Match login_id to the original AUTH_REQUIRED response; authenticated reflects that flow, not current credential or session availability. No credentials are read or returned.',
         },
         ...guides.resources,
       ],

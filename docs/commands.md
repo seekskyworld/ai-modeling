@@ -1,6 +1,6 @@
 # CLI 命令参考
 
-版本 0.1.1。以下保留实际 Commander 命令树的 233 条路径（含分组）、参数与选项。CLI 是底层执行接口，MCP 工具在内部调用 CLI，Skills 为所选入口提供流程指导。命令存在不等于所有官方 API 效果均已实现，支持条件见[兼容与限制](compatibility.md)。安装、登录、MCP 和恢复流程见[使用指南](usage.md)。
+版本 0.1.2。以下保留实际 Commander 命令树的 233 条路径（含分组）、参数与选项。CLI 是底层执行接口，MCP 工具在内部调用 CLI，Skills 为所选入口提供流程指导。命令存在不等于所有官方 API 效果均已实现，支持条件见[兼容与限制](compatibility.md)。安装、登录、MCP 和恢复流程见[使用指南](usage.md)。
 
 ## 查找命令
 
@@ -31,7 +31,7 @@ ai-modeling tools --toolset studio
 | --- | --- |
 | `ai-modeling auth login` | 检查已有会话，必要时启动浏览器登录；支持 `--no-wait`、`--wait`、`--no-open`、`--force`、`--timeout <seconds>`、`--browser-executable <path>`、`--cdp-endpoint <url>`。 |
 | `ai-modeling auth begin` | 启动或复用当前 profile 的登录流程并立即返回 login_id、login_url 与期限；`--no-open` 时使用本机页面按钮打开受控浏览器。 |
-| `ai-modeling auth session status [login_id]` | 查询短时登录流程状态；省略 ID 查询当前 profile 流程。 |
+| `ai-modeling auth session status [login_id]` | 查询登录流程快照，不读取凭据或验证远端会话；省略 ID 查询当前 profile 流程，接续时须核对原 login_id。 |
 | `ai-modeling auth session wait [login_id]` | 等待当前流程；`--timeout <seconds>` 只限定本次等待，不延长登录流程。也接受 `ai-modeling auth wait`。 |
 | `ai-modeling auth session cancel [login_id]` | 取消当前流程，不删除已保存会话。也接受 `ai-modeling auth cancel`。 |
 | `ai-modeling auth status` | 保留账号会话及余额查询语义；与短时流程状态不同。 |
@@ -54,7 +54,9 @@ ai-modeling tools --toolset studio
 
 MCP 用户优先读取 `ai-modeling://guides/commands/index` 与相关命令分片，仍可读取同源的 `usage`、`commands`、`pipelines` 资源，并通过 MCP 工具执行；无需自行启动 CLI。
 
-MCP 的 Studio 工具集新增 `ai_modeling_auth_begin`、`ai_modeling_auth_status`、`ai_modeling_auth_wait`、`ai_modeling_auth_cancel`，共 176 项；官方 default 仍为 5 项，full 为 26 项（启用实验 mesh edit 后 27 项）。三个工具集均可读取 `ai-modeling://auth/status` 资源，资源经同包 CLI 查询且不返回凭据。单次 MCP 等待最多 60 秒，完整登录流程最多 15 分钟。
+MCP 的 Studio 工具集新增 `ai_modeling_auth_begin`、`ai_modeling_auth_status`、`ai_modeling_auth_wait`、`ai_modeling_auth_cancel`，共 176 项；default 为 6 项（含独立生图），full 为 26 项（启用实验 mesh edit 后 27 项）。三个工具集均可读取 `ai-modeling://auth/status` 资源，资源经同包 CLI 查询且不读取或返回凭据。单次 MCP 等待最多 60 秒，完整登录流程最多 15 分钟。
+
+流程结果标记 `scope: login_flow`，`credential_store_check` 和 `studio_session_check` 均为 `not_checked`。`authenticated`、`login_required`、余额与到期时间仅属于该流程记录；已完成记录可在流程期限后继续存在。接续时必须匹配原 `AUTH_REQUIRED` 返回的 `login_id`，不能把任意历史成功当作当前认证可用。`auth login` 直接验证已有会话成功时返回 `scope: verified_session` 及两项 `verified`；实时账号查询使用 `auth status` 或 MCP 的 `ai_modeling_balance`。
 
 ## `ai-modeling make <input...>`
 
