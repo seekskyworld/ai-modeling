@@ -9,7 +9,7 @@
         "npx.cmd",
         "--yes",
         "--package",
-        "@seekskyworld/ai-modeling@0.1.3",
+        "@seekskyworld/ai-modeling@0.1.4",
         "ai-modeling",
         "mcp"
       ],

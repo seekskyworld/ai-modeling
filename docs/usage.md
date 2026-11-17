@@ -9,7 +9,7 @@ ai-modeling 通过你的 Tripo Studio 网页会话提供建模功能，使用网
 Install Node.js **24+** and npm, then install the single runtime package:
 
 ```sh
-npm install --global @seekskyworld/ai-modeling@0.1.3
+npm install --global @seekskyworld/ai-modeling@0.1.4
 ai-modeling --version
 ai-modeling doctor --offline --json
 ```
@@ -37,8 +37,8 @@ The dry run checks local inputs and does not submit or quote a live task. Remove
 To avoid a global installation, use the complete prefix for every command:
 
 ```sh
-npx --yes --package @seekskyworld/ai-modeling@0.1.3 ai-modeling --version
-npx --yes --package @seekskyworld/ai-modeling@0.1.3 ai-modeling skill install --target claude-code
+npx --yes --package @seekskyworld/ai-modeling@0.1.4 ai-modeling --version
+npx --yes --package @seekskyworld/ai-modeling@0.1.4 ai-modeling skill install --target claude-code
 ```
 
 Use the same pinned package when the Skill invokes CLI through npx. To upgrade, select a published version, update the runtime, then update the Skill in the same destination or the MCP configuration. Do not assume an existing client reloads automatically. Node/npm or the installed command must be on the client's PATH; GUI applications may need an absolute executable path.
@@ -64,16 +64,16 @@ For optional features, run `doctor --offline --feature render`, `video`, or `fro
 从 [npm](https://www.npmjs.com/package/@seekskyworld/ai-modeling) 安装固定版本：
 
 ```sh
-npm install --global @seekskyworld/ai-modeling@0.1.3
+npm install --global @seekskyworld/ai-modeling@0.1.4
 ai-modeling --version
 ai-modeling doctor --offline --json
 ```
 
-0.1.0 预发布版可能在全局安装后缺少原生依赖；使用0.1.3修补版。执行安装后紧接着运行 `ai-modeling --version` 和离线诊断，不能仅凭 npm install 退出码判定程序可用。
+0.1.0 预发布版可能在全局安装后缺少原生依赖；使用0.1.4修补版。执行安装后紧接着运行 `ai-modeling --version` 和离线诊断，不能仅凭 npm install 退出码判定程序可用。
 
 `@seekskyworld/ai-modeling` 是包名，`ai-modeling` 是唯一命令。一个包包含 CLI、MCP 和随包 Skill 指导，不需要分别安装三个运行引擎。发行包随附已审阅的可移植生产依赖，原生包及其平台依赖交由 npm 安装；保留 optional 依赖，不手工拼装其它平台的原生包。CLI 用户直接继续；Skill 用户执行下一节的目标安装；MCP 用户按[客户端配置](#mcp-客户端配置)添加服务。
 
-不做全局安装时，每次用 `npx --yes --package @seekskyworld/ai-modeling@0.1.3 ai-modeling` 替换命令前缀。比如 `npx --yes --package @seekskyworld/ai-modeling@0.1.3 ai-modeling skill install --target claude-code`；此时 Skill 的 CLI 调用也沿用同一完整前缀。MCP 可直接使用[npx 配置](../examples/mcp-npx.json)。
+不做全局安装时，每次用 `npx --yes --package @seekskyworld/ai-modeling@0.1.4 ai-modeling` 替换命令前缀。比如 `npx --yes --package @seekskyworld/ai-modeling@0.1.4 ai-modeling skill install --target claude-code`；此时 Skill 的 CLI 调用也沿用同一完整前缀。MCP 可直接使用[npx 配置](../examples/mcp-npx.json)。
 
 `ai-modeling update` 离线显示更新指引，`ai-modeling update --check` 查询 scoped npm 的最新版本；它们不自动安装。升级时选择已发布版本，重新安装运行包，并在原目标/范围执行 `skill install` 更新指导；MCP 固定版本配置也需更新并重启。多版本环境用 `command -v ai-modeling` 或 PowerShell `Get-Command ai-modeling -All` 检查实际入口，避免新 Skill 调用旧程序。首次账号操作用 `ai-modeling setup` 引导连接，不把 Token 放进 MCP 配置。
 

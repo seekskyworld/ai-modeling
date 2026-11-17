@@ -2,7 +2,7 @@
 
 This file records user-facing changes. Unreleased changes describe the source tree and do not imply an npm or hosted release. Run `ai-modeling --version` or read `package.json` for the current version.
 
-## Unreleased
+## 0.1.4 — 2026-11-17
 
 ### Added
 
@@ -19,7 +19,7 @@ This file records user-facing changes. Unreleased changes describe the source tr
 - Keep publication-note failures free of raw JSON, private file paths and subprocess diagnostics; compare the complete original pricing object before schema normalization so extra fields cannot hide a source/runtime difference.
 - Retry private login-state reads when a concurrent login worker atomically replaces the file, while retaining ownership, permission, link and bounded-size checks.
 
-These source changes do not republish 0.1.3 or establish that npm Trusted Publisher configuration, OIDC uploads or native Windows validation have already completed.
+Version 0.1.4 is prepared for maintainer-authorized manual publication while GitHub hosted checks are blocked. Native Windows validation and the first GitHub OIDC upload remain unverified. Existing 0.1.3 artifacts and version tags are unchanged.
 
 ## 0.1.3 — 2026-11-17
 

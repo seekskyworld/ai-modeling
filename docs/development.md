@@ -177,7 +177,7 @@ npm run release:prepare -- --distribution ../ai-modeling-export \
 
 `.github/workflows/release.yml` 对推送的版本标签执行发布流程。标签必须与 `package.json` 的版本一致，来源必须是该标签解析到的完整提交 SHA。发布使用 Node.js **24** 和 npm **11.17.0**，不是仅依赖 runner 预装的 npm。普通分支 push 不发布；手动 `workflow_dispatch` 对任意所选 ref 执行独立完整预演，不调用发布状态协调器。即使选择版本标签也不提交 npm、不写发布状态或创建公开 Release。预演报告不能当作真实 OIDC 上传回执。
 
-维护者先完成新版本的元数据、锁文件和 CHANGELOG 更新，再推送对应 `vVERSION` 标签。npm 版本不可覆盖，不移动已发布标签；不要用重复推送、删除标签或重跑发布命令来处理索引延迟。当前公开安装示例继续固定可用的 0.1.3；Unreleased 修复面向 0.1.4 源码候选，不能把未发布候选填进用户安装命令。新版本完成实际发布后再统一更新安装示例，不表示重新发布 0.1.3。
+维护者先完成新版本的元数据、锁文件和 CHANGELOG 更新，再推送对应 `vVERSION` 标签。npm 版本不可覆盖，不移动已发布标签；不要用重复推送、删除标签或重跑发布命令来处理索引延迟。安装示例与发布版本保持一致，并在新版本公开后实际验证 registry 安装。0.1.4 按维护者明确授权从本机手动发布；Windows 原生验收与首次 GitHub OIDC 上传仍未验证，不能把本次手动发布当作三平台工作流通过。标准自动发布门禁保持不变。
 
 ### Trusted Publisher 前提
 
