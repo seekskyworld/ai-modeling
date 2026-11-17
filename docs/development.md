@@ -189,13 +189,15 @@ npm 11.17.0 支持原生配置命令，也可在 npm 网站的包设置中完成
 npm trust github @seekskyworld/ai-modeling --file release.yml --repo seekskyworld/ai-modeling --env npm --allow-publish
 ```
 
+本工作流还需要管理 `latest` / `next`。在 npm 包的 **Settings → Trusted Publisher → Edit → Allowed actions** 中启用 **Allow npm dist-tag** 并保存；**Allow npm publish** 也需开启。npm 11.17.0 的 `trust` 命令没有暴露这个 dist-tag 选项，需要通过网页配置。已有连接可以直接编辑权限，无需重新创建仓库、工作流或环境绑定。
+
 首次配置所需的登录、2FA 和身份确认由维护者本人完成。先核对当前 npm 账号和包权限；读取信任设置返回 403，或浏览器登录为另一个账号时，不代表 Trusted Publisher 已配置成功，也不能静默换身份继续。
 
 只有实际核验 npm 侧的仓库、工作流、environment 与发布许可均正确后，才将 GitHub 仓库变量 `NPM_TRUSTED_PUBLISHER_CONFIGURED` 设为 `true`。该变量是正式 npm 提交的显式开关，不是配置证明本身；创建 GitHub environment、打开 npm 设置页或运行失败的 trust 命令都不足以开启它。变量未确认时保留发布阻塞，不提交 npm。
 
 发布 job 使用 GitHub OIDC 与最小所需权限，不将长期 npm Token 写入仓库、工作流、状态资产或日志。Trusted Publisher 必须由有权限的维护者在 npm 侧完成配置；新增 workflow 文件并不代表远端授权已经完成。缺少授权或 OIDC 上传尚未跑通时，应保留具体阻塞和原提交状态，不能自动退回其他身份或重复上传。
 
-npm 11.17.0 的 `publish` 会进行 OIDC 交换，`dist-tag` 不会自动完成这一步。独立 `promote` job 因此通过受限的 GitHub OIDC → npm 包级短时令牌交换来更新固定包的 `latest` / `next`，凭据只在内存中使用。该路径校验仓库、版本标签、工作流和 `npm` environment 身份，不读取本机 npm 登录或回退长期 Token。配置发布连接不等于已验证短时令牌可以更新 dist-tag；首次真实推进必须分别验收交换、写入与读回。当前 npm trust CLI 只有 publish/stage-publish 配置，不要求不存在的 dist-tag 开关。
+npm 11.17.0 的 `publish` 会进行 OIDC 交换，`dist-tag` 不会自动完成这一步。独立 `promote` job 因此通过受限的 GitHub OIDC → npm 包级短时令牌交换来更新固定包的 `latest` / `next`，凭据只在内存中使用。该路径校验仓库、版本标签、工作流和 `npm` environment 身份，不读取本机 npm 登录或回退长期 Token。网页的 **Allow npm dist-tag** 授权和运行时的 OIDC 交换都必须具备；首次真实推进仍需分别验收交换、写入与读回。
 
 ### 同一归档、三平台门禁
 
@@ -257,7 +259,7 @@ Run full checks, the production audit, and standard export. Validate the same TG
 
 Push the matching version tag to use `release.yml`; manual dispatch runs a complete independent preview for the selected ref without invoking the publication coordinator. Configure the npm Trusted Publisher for this repository, `release.yml` and its matching environment before expecting OIDC publication. Release jobs use Node.js 24 and npm 11.17.0. The same standard-export TGZ must pass the three-platform archive and npm-consumer gates before a new submission.
 
-Uploads use a version-specific `release-vVERSION` tag. A separate serialized promotion job drains durable published receipts across versions, verifies original public archives, and advances `latest`, `next` and GitHub Latest without downgrading an observed version. npm's `dist-tag` command does not perform OIDC exchange itself; the promoter explicitly obtains a package-scoped short-lived token and keeps it in memory. Verify the first real token exchange, channel write and read-back separately; a configured publishing connection or an offline test is not proof that this permission works.
+Uploads use a version-specific `release-vVERSION` tag. A separate serialized promotion job drains durable published receipts across versions, verifies original public archives, and advances `latest`, `next` and GitHub Latest without downgrading an observed version. Enable **Allow npm publish** and **Allow npm dist-tag** on the existing connection in npm package **Settings → Trusted Publisher → Edit → Allowed actions**; npm 11.17.0's `trust` CLI does not expose the dist-tag permission. npm's `dist-tag` command does not perform OIDC exchange itself; the promoter explicitly obtains a package-scoped short-lived token and keeps it in memory. Verify the first real token exchange, channel write and read-back separately; a configured publishing connection or an offline test is not proof that this permission works.
 
 The workflow persists the archive identity and a submission claim before invoking npm once. An accepted or unknown submission is only reconciled against the registry; missing metadata never authorizes a retry. Existing releases without state require an explicit history import. Recover legacy processing submissions, such as the original 0.1.3 submission, from their original receipt and archive without rebuilding or uploading again. Since the original tag has no coordinator, run `check` / `verify` from newer source while retaining the original tag, commit and TGZ identity; do not move or push the old tag again. If these Node.js 24 commands need the configured environment proxy, set `NODE_USE_ENV_PROXY=1` for their process without exposing proxy credentials.
 
