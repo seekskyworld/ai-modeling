@@ -29,9 +29,11 @@ Golutra Agent 0.3.9 原生插件注册已实测通过，但客户端的 provider
 
 ## 认证、身份与恢复
 
-凭据保存于系统凭据库，SQLite、MCP 参数和日志只保留脱敏状态。可见浏览器登录先验证账号再保存会话；CDP 只接受调用方显式指定的回环地址，只清理工具自己创建的页面或连接。
+凭据使用 `JsonStore` / `JsonEntry` 保存于 OS 用户主目录的私有 JSON 文件，产物链接使用 `JsonLinks`；会话、上传引用和独立 LLM 密钥也遵守同一存储边界。认证根是 `userInfo().homedir/.ai-modeling-auth`，条目为 `credentials/<sha256(service)>/<sha256(account)>.json`，使用 `schema_version: 1` envelope。业务 `dataDir`、`HOME`/`TMPDIR` 环境变化不能分裂同 OS 用户/profile 的认证与撤销作用域，生产没有认证根重定位配置。
 
-原生系统凭据访问在独立子进程执行，单次调用有10秒边界；系统授权未响应时返回 `CREDENTIAL_STORE_UNAVAILABLE`，避免把整个 CLI 无限挂起。读失败与写结果未知分别保留 certainty；终止等待不证明凭据写入绝对未发生。静态帮助、Skill 管理和 MCP 发现不应为此读取凭据或提前加载图像原生模块。
+POSIX 使用目录 `0700`、文件 `0600`，读取验证大小、结构、所有者及 no-follow 文件身份；写入采用同目录临时文件、fsync 和原子 rename。Windows 通过有界 PowerShell 调用验证/设置受保护 DACL，仅允许当前用户 SID 与 SYSTEM，拒绝 reparse point 或额外 allow ACE，不能用 chmod 当作等价验证。应用自有认证控制目录及登录状态文件在验证归属、非 reparse 和文件身份后，可按需收紧旧 ACL；已私有的 ACL 不重写，登录状态内容、nonce 和撤销信息保持不变。凭据 JSON 条目和外部导入文件的读取只验证、不修复 ACL。权限或文件验证失败保留 `CREDENTIAL_STORE_UNAVAILABLE` / `AUTH_DIRECTORY_INVALID`，锁竞争使用 `CREDENTIAL_STORE_BUSY`；保留读失败与写结果未知的差异。
+
+JSON 内含未额外加密的凭据值，只进入私有文件；SQLite、MCP 参数、公开文档和日志不得复制其秘密内容。静态帮助、Skill 管理和 MCP 发现不读取凭据或提前加载图像原生模块。可见浏览器登录先验证账号再保存会话；CDP 只接受调用方显式指定的回环地址，只清理工具自己创建的页面或连接。旧钥匙串不会自动读取、迁移或删除。
 
 登录协调器按 OS 用户和 profile 共享，独立于业务数据目录。取消、退出、迟到验证和凭据更新受锁及版本检查约束。交互 CLI 可在安全请求边界等待登录；非交互 CLI/MCP 返回可处理的登录状态。
 
@@ -41,7 +43,7 @@ SQLite 迁移保留一致备份，CLI 与 MCP 一同升级。缓存与下载绑�
 
 ## 开发与本地检查
 
-使用 Node.js **24+** 和 npm。`npm ci` 安装锁定依赖；自动测试使用隔离夹具与合成数据，不要求 Studio 账号或真实系统凭据。
+使用 Node.js **24+** 和 npm。`npm ci` 安装锁定依赖；自动测试使用隔离夹具与合成数据，不要求 Studio 账号或真实用户凭据。
 
 ```sh
 npm ci
@@ -55,7 +57,7 @@ npm run package:check
 
 `npm run --silent capabilities` 从当前命令树、四种工具集配置和模型注册表生成机器清单；`--out` 只接受源码之外、父目录已存在的新文件。它不接触账号或任务库。映射、支持条件和证据引用用于定位实现，未执行条目保留 `not_verified`；不要将测试文件路径当作已经通过的运行证据。该清单按需生成，不增加普通导出的六个文件。
 
-`npm test` 使用 `scripts/run-tests.ts`，为测试合成 OS home、内存凭据服务、临时 profile/state，并将测试网络限制到回环地址；不修改用户 HOME，也不添加生产测试开关。定向用例用 `node scripts/run-tests.ts tests/guides.test.ts`，或 `npm test -- tests/guides.test.ts`，不要绕过该入口直接执行测试文件。
+`npm test` 使用 `scripts/run-tests.ts`，为测试合成 OS home、内存会话或临时 JSON 存储、独立 profile/state，并将测试网络限制到回环地址；不修改用户 HOME，也不添加生产测试开关。定向用例用 `node scripts/run-tests.ts tests/guides.test.ts`，或 `npm test -- tests/guides.test.ts`，不要绕过该入口直接执行测试文件。
 
 部分几何集成测试需要 Blender **4.5+**，通过 `AI_MODELING_TEST_BLENDER` 或 `AI_MODELING_BLENDER` 指定。未设置时相关真实 Blender 用例会跳过，报告必须区分通过和跳过。涉及视频的本地处理另需带 libx264 的 FFmpeg。
 
@@ -68,23 +70,24 @@ AI_MODELING_TEST_BLENDER=/path/to/blender npm test
 | 验证层次 | 应记录的证据与边界 |
 | --- | --- |
 | 离线测试 | CLI/MCP 子进程合同、登录状态机、撤销与并发、文件和数据库边界；凭据、浏览器与服务使用替代接口 |
-| 真实浏览器登录 | 实际浏览器与系统凭据库、会话验证和保存、窗口归属及命令接续；注明操作系统和浏览器版本 |
+| 真实浏览器登录 | 实际浏览器、私有 JSON 目录权限、会话验证和保存、窗口归属及命令接续；注明操作系统和浏览器版本 |
 | 真实 Studio 请求 | 授权账号、输入、预算、完整请求链、远端状态与原始请求身份；不以离线断言替代服务验证 |
 | 产物与网页对比 | 几何、尺寸、纹理、材质、动画及实际网页操作效果；任务成功不等于产物正确或网页效果等价 |
 
-认证变更应覆盖空会话、失效与拒绝、超时、Host/Origin 校验、凭据并发更新、账号切换、跨数据目录撤销及资源清理。已发送写入和未知提交不得因重新登录而自动重放；MCP 不应无限等待用户登录。
+认证变更应覆盖空会话、失效与拒绝、Host/Origin 校验、JSON 损坏/超大/符号链接/权限拒绝、原子替换、凭据并发更新、账号切换、跨数据目录撤销及资源清理。POSIX 模式和 Windows SID/DACL 的实际验证分别报告；在另一操作系统模拟平台分支不等于原生通过。已发送写入和未知提交不得因重新登录而自动重放；MCP 不应无限等待用户登录。
 
 真实测试需要操作人的授权和明确积分预算。首次密码输入、验证码、双重验证及第三方身份提供商交互由用户完成；已有会话复用不能证明所有首次登录方式可用。只公开合成或脱敏证据，原始账号数据、会话、签名链接和现场日志留在本地。
 
 ## CI 配置
 
 - `check` 在 push / pull request 上执行 Linux/Node.js 24 完整检查、构建与包清单验证；生产依赖审计单独执行 `npm audit --omit=dev`。
+- 安装矩阵还会在各自操作系统执行 JSON 凭据、路径、受限文件导入及登录撤销回归；Windows 原生 DACL 用例只在 Windows 执行，其它系统明确跳过，不把模拟检查当作原生验收。
 - 安装冒烟矩阵覆盖 Ubuntu 24.04、macOS 15、Windows 2025 / Node.js 24。每个平台构建并解包 TGZ，在解包目录运行 `npm ci --omit=dev`，再用 `npm link --omit=dev --ignore-scripts` 链接到临时 npm prefix；验证唯一 bin、版本、CLI/MCP 帮助与指南、四种工具集配置和生产锁依赖。严格安装检查之后，对同一 TGZ 执行 `package:consumer-smoke`，分别检查本地 npm、真实全局 npm 安装、npm exec/npx 执行路径，并校验平台原生模块可加载；将依赖漂移单独记录。工具/指南发现还断言不创建任务状态。
 - `release-candidate`（`package.yml`）仅接受手动 `workflow_dispatch`。完成全检查、审计和六文件导出后，三个系统验证同一个 TGZ，分别保存 `smoke-{platform}.json` 与 `consumer-{platform}.json`。最后汇总 release notes、readiness 和带归档摘要的两类报告，保留 90 天。
 - 候选工作流从实际 GitHub 仓库上下文取得 repository。公开仓库变量 `SECURITY_CONTACT_URL` 使用 `https://github.com/seekskyworld/ai-modeling/security/advisories/new`；发布前确认私密报告入口启用且可用。缺项会记录为 blocker。
 - 工作流只有 `contents: read`，不创建 Release、不推标签、不发布 npm，也不使用 Studio 会话。Dependabot 更新仍需验证与审阅。
 
-这里说明的是配置，不能代替对应提交的托管运行记录。三平台矩阵只证明安装和离线入口，不证明真实凭据库、浏览器登录、Blender/FFmpeg 或全部 Studio 业务已验收。候选产物有保留期限，不是稳定下载地址。
+这里说明的是配置，不能代替对应提交的托管运行记录。三平台矩阵只证明安装和离线入口，不证明私有 JSON 在所有系统上的真实 ACL 行为、浏览器登录、Blender/FFmpeg 或全部 Studio 业务已验收。候选产物有保留期限，不是稳定下载地址。
 
 ## 准备版本
 
@@ -143,7 +146,7 @@ npm run release:check
 
 `package:smoke` 解包归档、运行 `npm ci --omit=dev` 并链接全局入口，再启动 CLI/MCP，核对唯一 bin、版本、工具/指南与生产依赖。`package:consumer-smoke` 分别验证本地 npm 安装、真实全局 npm 安装、npm exec/npx、MCP 发现和 Skill 管理，并比较实际依赖的名称、版本与完整性；功能和依赖锁结果分别记录，发布验收使用 `--require-locked` 将偏离审阅版本或完整性的情况视为失败。这些检查用临时配置与缓存，不登录账号或生成素材；不能代替发布后从公共 registry 的安装验证。
 
-Linux、macOS、Windows 报告分别为 `smoke-{platform}.json` 与 `consumer-{platform}.json`，须对应同一 TGZ。缺少某平台或消费端功能报告，不能称候选通过三平台验收；消费端依赖偏离锁定版本或完整性会产生 `CONSUMER_DEPENDENCY_DRIFT` 阻塞，功能通过不能抵消它。本地已通过的报告与尚未执行的平台分别记录；Windows 等平台没有成功回执时保留未验收，不能称三平台全部通过。即使三平台安装成功，也不意味着全部浏览器、OS 凭据库、AI 宿主和真实业务都已验收。
+Linux、macOS、Windows 报告分别为 `smoke-{platform}.json` 与 `consumer-{platform}.json`，须对应同一 TGZ。缺少某平台或消费端功能报告，不能称候选通过三平台验收；消费端依赖偏离锁定版本或完整性会产生 `CONSUMER_DEPENDENCY_DRIFT` 阻塞，功能通过不能抵消它。本地已通过的报告与尚未执行的平台分别记录；Windows 等平台没有成功回执时保留未验收，不能称三平台全部通过。即使三平台安装成功，也不意味着全部浏览器、私有文件/ACL、AI 宿主和真实业务都已验收。
 
 `release:check` 检查源码元数据、可追溯且干净的 Git 提交以及内置价格有效期；默认要求价格至少剩余24小时。它不访问账号、不自动续期，也不联网验证联系人或价格证据。`scope: source` 的 ready 仅表示源码前置条件满足。
 

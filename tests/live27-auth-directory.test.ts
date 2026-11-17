@@ -1,4 +1,4 @@
-/** 只验证目录与随机profile锁，不构造真实Keyring Entry。 */
+/** 只验证目录与随机profile锁，不读取真实用户凭据。 */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmod, lstat, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';

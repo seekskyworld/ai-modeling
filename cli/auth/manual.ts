@@ -24,7 +24,7 @@ export async function manualLogin(
     deadline = Date.now() + timeout;
   const state: LoginState = {
     version: 1,
-    profile: config.keyringAccount,
+    profile: config.credentialProfile,
     login_id: id,
     status: 'verifying',
     started_at: new Date().toISOString(),

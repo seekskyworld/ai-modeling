@@ -25,7 +25,7 @@ export async function startAuthBridge(
     if (req.method === 'GET') {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.end(
-        `<!doctype html><html lang="zh"><title>Tripo3D MCP 本机登录</title><style>body{font:18px system-ui;max-width:640px;margin:80px auto;background:#101820;color:#edf4f7}input,button{font:inherit;padding:12px;width:100%;box-sizing:border-box;margin:12px 0}button{background:#62d5bf;border:0;cursor:pointer}</style><h1>连接 Tripo Studio</h1><p>将本人 Studio 会话或浏览器请求副本粘贴到下方。内容仅提交给本机，并保存到系统凭据库。</p><form method="post"><label for="credential">Studio 登录凭证</label><input id="credential" name="credential" type="password" autocomplete="off" required><button>验证并保存登录</button></form><p>已有浏览器登录可以在 Studio 的开发者工具中复制本人会话或请求。请勿提交密码。</p></html>`,
+        `<!doctype html><html lang="zh"><title>ai-modeling 本机登录</title><style>body{font:18px system-ui;max-width:640px;margin:80px auto;background:#101820;color:#edf4f7}input,button{font:inherit;padding:12px;width:100%;box-sizing:border-box;margin:12px 0}button{background:#62d5bf;border:0;cursor:pointer}</style><h1>连接 Tripo Studio</h1><p>将本人 Studio 会话或浏览器请求副本粘贴到下方。内容仅提交给本机，并保存到当前用户的私有本地 JSON 文件。</p><form method="post"><label for="credential">Studio 登录凭证</label><input id="credential" name="credential" type="password" autocomplete="off" required><button>验证并保存登录</button></form><p>已有浏览器登录可以在 Studio 的开发者工具中复制本人会话或请求。请勿提交密码。</p></html>`,
       );
       return;
     }

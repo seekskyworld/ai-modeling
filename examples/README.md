@@ -43,7 +43,8 @@ ai-modeling make "A compact wooden chair with four legs" --model tripo-v3.1 \
 
 | 使用方式 | 示例 |
 | --- | --- |
-| 通过 npm 按固定版本启动 | [mcp-npx.json](mcp-npx.json)：`npx --yes --package @seekskyworld/ai-modeling@0.1.2 ai-modeling mcp`，无需全局安装；首次启动需要下载依赖。 |
+| 通过 npm 按固定版本启动 | [mcp-npx.json](mcp-npx.json)：`npx --yes --package @seekskyworld/ai-modeling@0.1.3 ai-modeling mcp`，无需全局安装；首次启动需要下载依赖。 |
+| Windows 宿主不能直接启动 npm `.cmd` 脚本 | [mcp-npx-windows.json](mcp-npx-windows.json)：使用 `cmd.exe /d /c npx.cmd`；能解析 `.cmd` 的宿主可保留通用示例。 |
 | Claude Code、Cursor、当前 VS Code/Copilot | [mcp-installed.json](mcp-installed.json)：`mcpServers` 格式，使用 PATH 中的 `ai-modeling`，与导出的 `mcp.json` 用法一致。 |
 | Codex | [mcp-codex.toml](mcp-codex.toml)：原生 `mcp_servers` TOML，合并到客户端配置。 |
 | OpenCode | [mcp-opencode.json](mcp-opencode.json)：原生 `mcp.servers`、`type: local`、命令数组及 `environment`。 |
@@ -51,7 +52,7 @@ ai-modeling make "A compact wooden chair with four legs" --model tripo-v3.1 \
 | VS Code 的旧 Local harness | [mcp-vscode.json](mcp-vscode.json)：`servers` 格式，用于 `.vscode/mcp.json`；Local 已弃用，官方计划于 2027 年 2 月移除，新 Copilot 使用上面的 `mcpServers`。 |
 | 从源码运行 | [mcp.json](mcp.json)：使用本机 Node 和已构建的 `dist/cli/main.js`，通过 `mcp` 子命令启动，需替换占位路径。 |
 
-先按[运行包安装步骤](../docs/usage.md#安装运行包)运行 `npm install --global @seekskyworld/ai-modeling@0.1.2`，或直接使用 npx 配置。Node.js 24+ 与 npm 必须能被客户端找到；GUI 不继承终端 PATH 时使用对应可执行文件的绝对路径。归档安装和源码构建是独立替代路径，不混用它们的 `command` / `args`。
+先按[运行包安装步骤](../docs/usage.md#安装运行包)运行 `npm install --global @seekskyworld/ai-modeling@0.1.3`，或直接使用 npx 配置。Node.js 24+ 与 npm 必须能被客户端找到；GUI 不继承终端 PATH 时使用对应可执行文件的绝对路径。Windows 还可将 `node.exe` 与已安装包 `dist/cli/main.js` 的实际路径分开放入 command/args，避开 `.cmd` 启动差异；详见 [Windows 启动方式](../docs/usage.md#windows-启动方式)。这些示例不构成 Windows 实机验证。归档安装和源码构建是独立替代路径，不混用它们的 `command` / `args`。
 
 源码示例使用前替换：
 
@@ -63,7 +64,7 @@ JSON 不支持注释，也不会自动展开 `~`、`$HOME` 或 shell 命令。�
 
 起步示例都选择6工具 `default` 集和 `default` profile；独立生图默认 GPT Image 2.5。需要完整资产和编辑入口时，在 args 末尾追加 `--toolset studio` 并重启。CLI 使用其它 profile 时同步设置。配置后先验证工具列表和 `ai-modeling://guides/usage` 可读，语法检查不能替代真实客户端连接。
 
-首次账号操作缺少会话时，工具会返回 `AUTH_REQUIRED` 和登录 URL；用户在浏览器登录，Agent 读取 `ai-modeling://auth/status`，确认 authenticated 后使用原请求身份继续。Agent 全程沿用 MCP。业务操作通过同包 CLI 完成；查看工具或任务本身不会授权新的收费生成。
+首次账号操作缺少会话时，工具会返回 `AUTH_REQUIRED`、登录 URL 和 `login_id`；用户在浏览器登录，Agent 读取 `ai-modeling://auth/status`，确认同一 `login_id` 的流程 `authenticated: true` 后使用原请求身份继续。该资源不重新验证当前凭据或远端会话，按接续工具的实际结果处理。会话由 CLI 保存在同 OS 用户/profile 共用的私有 JSON 文件中，不填入 MCP 配置，也不随项目数据目录改变。Agent 全程沿用 MCP。业务操作通过同包 CLI 完成；查看工具或任务本身不会授权新的收费生成。
 
 Gemini CLI 使用 `~/.gemini/settings.json` 或项目 `.gemini/settings.json` 中的 `mcpServers`，复制已安装示例的 `command`、`args` 和 `env`，按其官方示例省略 `type`。客户端配置结构和默认目录会随版本变化，核对 [Claude Code](https://code.claude.com/docs/en/mcp)、[Cursor](https://cursor.com/docs/mcp)、[VS Code/Copilot](https://code.visualstudio.com/docs/agents/reference/mcp-configuration)、[Codex](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)、[Gemini CLI](https://geminicli.com/docs/cli/tutorials/mcp-setup/) 和 [OpenCode](https://opencode.ai/docs/mcp-servers/) 的当前说明。配置语法与 MCP 协议检查不代表每种客户端都已现场连接；重启或重新加载后，在客户端中查看 `ai_modeling_*` 工具与指南资源。
 

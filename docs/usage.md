@@ -9,7 +9,7 @@ ai-modeling 通过你的 Tripo Studio 网页会话提供建模功能，使用网
 Install Node.js **24+** and npm, then install the single runtime package:
 
 ```sh
-npm install --global @seekskyworld/ai-modeling@0.1.2
+npm install --global @seekskyworld/ai-modeling@0.1.3
 ai-modeling --version
 ai-modeling doctor --offline --json
 ```
@@ -26,17 +26,19 @@ ai-modeling balance
 ai-modeling make "a small toy robot" --model tripo-p2 --dry-run --json
 ```
 
-Account operations need a working OS credential store: macOS Keychain, Windows Credential Manager, or unlocked Linux Secret Service with session D-Bus. WSL uses its Linux service. Browser login needs an installed Chrome/Edge and a visible desktop. `setup` reuses a valid saved session and guides login when needed. Passwords and verification stay in the browser; do not copy account tokens into configuration. For MCP, a missing session returns `AUTH_REQUIRED`, a login URL and `login_id`. The user completes that login; the agent reads `ai-modeling://auth/status` until the same `login_id` reports `authenticated: true`, then continues the original request through MCP with its returned request identity. The resource is a flow snapshot and does not verify current credential access or the remote session; the resumed tool reports its actual authentication result.
+Account operations use private local JSON files under the OS account's `.ai-modeling-auth` directory. No system keychain, Linux Secret Service or session D-Bus is required for credentials. POSIX directories/files use `0700/0600`; Windows uses protected ACLs for the current user and SYSTEM, checked through system PowerShell. The JSON contains unencrypted credentials and must stay out of repositories, packages and logs. WSL and native Windows use their own OS user homes. Browser login needs an installed Chrome/Edge and a visible desktop. `setup` reuses a valid JSON session and guides login when needed; older keychain entries are not automatically read or migrated. Passwords and verification stay in the browser; do not copy account tokens into MCP configuration. See [storage and upgrades](#本地-json-凭据).
 
-If setup returns `CREDENTIAL_STORE_UNAVAILABLE`, unlock the OS credential store and allow ai-modeling (Node.js) access when the system prompts, then retry the original command. Each native credential call has a 10-second limit. A store permission error does not mean the Studio browser session expired; do not sign out or create a replacement task. A timed-out credential write can have an unknown outcome.
+For MCP, a missing session returns `AUTH_REQUIRED`, a login URL and `login_id`. The user completes that login; the agent reads `ai-modeling://auth/status` until the same `login_id` reports `authenticated: true`, then continues the original request through MCP with its returned request identity. The resource is a flow snapshot and does not verify current credential access or the remote session; the resumed tool reports its actual authentication result.
+
+If setup returns `CREDENTIAL_STORE_UNAVAILABLE` or `AUTH_DIRECTORY_INVALID`, check the private JSON directory's owner, file permissions and sandbox access. On Windows, ensure system PowerShell is available and the ACL can be verified. Upgrade initialization can tighten legacy ACLs on verified application-owned control directories and login-state files, preserving their contents and cancellation state; credential records and external import files are only checked, never repaired on read. Do not publish the JSON, loosen access for everyone or switch profiles to get past the error. A local storage error does not mean the Studio session expired; retain the original request and any unknown write outcome before retrying.
 
 The dry run checks local inputs and does not submit or quote a live task. Remove `--dry-run` only when ready to spend Studio web credits, which are separate from the developer API wallet. Use a stable `--request-id` for each new intended submission and retain the returned task identity. `task get TASK_ID` and `task watch TASK_ID --download --out ./assets` inspect or finish that task. `outcome_unknown` requires reconciliation of the original receipt; `needs_attention` requires checking the output mismatch. Neither is a reason to create a paid replacement automatically.
 
 To avoid a global installation, use the complete prefix for every command:
 
 ```sh
-npx --yes --package @seekskyworld/ai-modeling@0.1.2 ai-modeling --version
-npx --yes --package @seekskyworld/ai-modeling@0.1.2 ai-modeling skill install --target claude-code
+npx --yes --package @seekskyworld/ai-modeling@0.1.3 ai-modeling --version
+npx --yes --package @seekskyworld/ai-modeling@0.1.3 ai-modeling skill install --target claude-code
 ```
 
 Use the same pinned package when the Skill invokes CLI through npx. To upgrade, select a published version, update the runtime, then update the Skill in the same destination or the MCP configuration. Do not assume an existing client reloads automatically. Node/npm or the installed command must be on the client's PATH; GUI applications may need an absolute executable path.
@@ -51,25 +53,25 @@ For optional features, run `doctor --offline --feature render`, `video`, or `fro
 
 ## 安装
 
-需要 Node.js **24+** 和 npm。账号操作还需要当前 OS 用户可用的系统凭据库：macOS Keychain、Windows Credential Manager，或 Linux Secret Service。Linux 需要会话 D-Bus 和已解锁的 Secret Service；WSL 使用 Linux 后端，不自动借用 Windows 凭据库。离线工具发现和 Skill 安装管理不需要账号或凭据服务。保留 npm 平台可选依赖，不使用 `--omit=optional`。
+需要 Node.js **24+** 和 npm。账号操作使用当前 OS 用户的私有 JSON 文件，支持 macOS/Linux 的 POSIX 权限以及 Windows ACL，不要求系统钥匙串或 Linux Secret Service/D-Bus。Windows 需要系统 PowerShell 执行有界 ACL 检查；WSL 与原生 Windows 各用自身 OS 用户目录。离线工具发现和 Skill 安装管理不需要读取会话。保留 npm 平台可选依赖，不使用 `--omit=optional`。
 
-自动登录需要已安装 Chrome 或 Edge，并能打开可见窗口。无桌面的 SSH、容器环境不一定具备浏览器和凭据服务；安装成功不代表这些运行条件都已满足。
+自动登录需要已安装 Chrome 或 Edge，并能打开可见窗口。无桌面的 SSH、容器环境不一定具备浏览器；使用已保存 JSON 会话时仍需私有目录权限与网络访问。安装成功不代表所有系统与浏览器组合已完成真实登录验收。
 
 ### 安装运行包
 
 从 [npm](https://www.npmjs.com/package/@seekskyworld/ai-modeling) 安装固定版本：
 
 ```sh
-npm install --global @seekskyworld/ai-modeling@0.1.2
+npm install --global @seekskyworld/ai-modeling@0.1.3
 ai-modeling --version
 ai-modeling doctor --offline --json
 ```
 
-0.1.0 预发布版可能在全局安装后缺少原生依赖；使用0.1.2修补版。执行安装后紧接着运行 `ai-modeling --version` 和离线诊断，不能仅凭 npm install 退出码判定程序可用。
+0.1.0 预发布版可能在全局安装后缺少原生依赖；使用0.1.3修补版。执行安装后紧接着运行 `ai-modeling --version` 和离线诊断，不能仅凭 npm install 退出码判定程序可用。
 
 `@seekskyworld/ai-modeling` 是包名，`ai-modeling` 是唯一命令。一个包包含 CLI、MCP 和随包 Skill 指导，不需要分别安装三个运行引擎。发行包随附已审阅的可移植生产依赖，原生包及其平台依赖交由 npm 安装；保留 optional 依赖，不手工拼装其它平台的原生包。CLI 用户直接继续；Skill 用户执行下一节的目标安装；MCP 用户按[客户端配置](#mcp-客户端配置)添加服务。
 
-不做全局安装时，每次用 `npx --yes --package @seekskyworld/ai-modeling@0.1.2 ai-modeling` 替换命令前缀。比如 `npx --yes --package @seekskyworld/ai-modeling@0.1.2 ai-modeling skill install --target claude-code`；此时 Skill 的 CLI 调用也沿用同一完整前缀。MCP 可直接使用[npx 配置](../examples/mcp-npx.json)。
+不做全局安装时，每次用 `npx --yes --package @seekskyworld/ai-modeling@0.1.3 ai-modeling` 替换命令前缀。比如 `npx --yes --package @seekskyworld/ai-modeling@0.1.3 ai-modeling skill install --target claude-code`；此时 Skill 的 CLI 调用也沿用同一完整前缀。MCP 可直接使用[npx 配置](../examples/mcp-npx.json)。
 
 `ai-modeling update` 离线显示更新指引，`ai-modeling update --check` 查询 scoped npm 的最新版本；它们不自动安装。升级时选择已发布版本，重新安装运行包，并在原目标/范围执行 `skill install` 更新指导；MCP 固定版本配置也需更新并重启。多版本环境用 `command -v ai-modeling` 或 PowerShell `Get-Command ai-modeling -All` 检查实际入口，避免新 Skill 调用旧程序。首次账号操作用 `ai-modeling setup` 引导连接，不把 Token 放进 MCP 配置。
 
@@ -169,9 +171,9 @@ ai-modeling balance
 
 `setup` 先检查环境与现有会话；已经认证时直接返回，不重复询问登录。需要连接时，交互终端可选择专用 Chrome/Edge 窗口、显式授权的本机 CDP 或只显示说明。`setup --check` 只诊断，`setup --offline` 也不读凭据或联网，两者都不启动登录。非交互调用可用 `setup --no-wait --no-open` 获取有界登录状态；支持 `--browser-executable`、`--cdp-endpoint` 和 `--timeout`。即使登录成功，价格或依赖缺项仍会返回 `setup_status: needs_configuration`，按具体检查项处理。
 
-`login` 先验证已有会话，需要时打开独立浏览器窗口。密码、验证码和双重验证由你完成；CLI 验证账号后将会话存入系统凭据库。有效 Cookie 可用于续期，只有 Bearer 的导入会标记 `renewable:false`。`balance` 是联网只读查询，不生成素材。
+`login` 先验证已有 JSON 会话，需要时打开独立浏览器窗口。密码、验证码和双重验证由你完成；CLI 验证账号后将会话存入[私有 JSON 文件](#本地-json-凭据)。有效 Cookie 可用于续期，只有 Bearer 的导入会标记 `renewable:false`。`balance` 是联网只读查询，不生成素材。
 
-程序不会自动安装浏览器或读取普通浏览器用户目录。找不到程序时使用 `login --browser-executable /absolute/path/to/chrome-or-edge`。备用入口为 `login --form` 的本机表单、`login --paste` / `auth import --stdin`，或只接受私有普通文件的 `auth import --file PATH`（Unix 权限 0600）。凭据不要放入命令行参数、环境文件或 MCP 配置。
+程序不会自动安装浏览器或读取普通浏览器用户目录。找不到程序时使用 `login --browser-executable /absolute/path/to/chrome-or-edge`。备用入口为 `login --form` 的本机表单、`login --paste` / `auth import --stdin`，或只接受私有普通文件的 `auth import --file PATH`（Unix 权限 0600；Windows 须有仅当前用户 SID 与 SYSTEM 可访问的受保护 ACL，导入不会替外部文件修权限）。凭据不要放入命令行参数、环境文件或 MCP 配置。
 
 非交互 CLI/MCP 默认返回登录状态；也可主动取得本机入口：
 
@@ -233,7 +235,7 @@ ai-modeling task watch @concept --download --out ./assets --json
 
 `--no-wait` 适用于支持异步提交的单任务；多步骤处理可能要求等待。`--no-download` 省略向调用方目录交付，但有产物证明义务的操作仍会读取并验证原件。`--then` 可组合处理步骤；`rig-check` 明确不通过时停止后续绑定。多候选的无人值守调用应明确选择结果，再执行后续操作。
 
-`studio` 和 `canvas` 提供网页扩展。使用 `ai-modeling <command> --help` 查看具体参数，或用 `ai-modeling tools --toolset studio` 读取工具 schema；工具与指南发现是纯元数据读取，不访问账号或凭据库，也不创建目录和任务库。结构化调用支持 `call TOOL --input-stdin` 或 `--input JSON`，与 `--toolset`、`--profile` 可按正常任意顺序排列，支持 `--flag=value`。重复、未知、互斥或缺值选项及非对象 JSON 返回 `INVALID_INPUT`。复杂编辑的输入范围、素材身份和处理条件应按相应命令帮助检查。
+`studio` 和 `canvas` 提供网页扩展。使用 `ai-modeling <command> --help` 查看具体参数，或用 `ai-modeling tools --toolset studio` 读取工具 schema；工具与指南发现是纯元数据读取，不访问账号或凭据文件，也不创建目录和任务库。结构化调用支持 `call TOOL --input-stdin` 或 `--input JSON`，与 `--toolset`、`--profile` 可按正常任意顺序排列，支持 `--flag=value`。重复、未知、互斥或缺值选项及非对象 JSON 返回 `INVALID_INPUT`。复杂编辑的输入范围、素材身份和处理条件应按相应命令帮助检查。
 
 批处理入口是 **`ai-modeling batch run MANIFEST`，当前没有批处理 `--dry-run`**。先按[示例](../examples/README.md)用等价的 `make --dry-run` 预览各项。真实批处理会提交网页任务，清单旁的 `.state.json` 保存恢复身份；重跑须保留它。`--fresh` 是新的提交意图，不是未知结果的恢复办法。
 
@@ -293,6 +295,14 @@ MCP 经同包 CLI 子进程执行业务。它应与 CLI 使用同一 OS 用户�
 
 MCP 既提供指导，也提供工具入口。Agent 可先读 `ai-modeling://guides/commands/index`，再按 `ai-modeling://guides/commands/{+command}` 模板读取 `model/convert` 等具体分片；`usage`、`commands`、`pipelines` 仍与 Skill 参考资料及公开命令参考同源。选择 MCP 时保持 `Agent → MCP → CLI` 链路，不为读取指南或执行任务自行改跑 shell CLI。
 
+### Windows 启动方式
+
+Windows 的 npm 全局命令通常带 `.cmd` 启动脚本。能解析这些脚本的 MCP 宿主可继续使用通用 `npx` / `ai-modeling` 示例；不能直接启动 `.cmd` 的宿主使用 [Windows npx 配置](../examples/mcp-npx-windows.json)，由 `cmd.exe /d /c npx.cmd` 启动固定版本。Node.js 的直接 `execFile` 与采用 cross-spawn 的客户端行为不同，不能仅凭 macOS 的协议测试判断 Windows 启动必然成功。依据[Node.js 子进程说明](https://nodejs.org/docs/latest-v24.x/api/child_process.html#spawning-bat-and-cmd-files-on-windows)检查实际宿主。
+
+已安装运行包时，也可直接配置 Node，无需 shell：`command` 使用 `node -p "process.execPath"` 得到的 `node.exe` 路径，`args` 使用已安装包的 `dist/cli/main.js` 绝对路径和 `mcp`。全局安装根可通过 `npm.cmd root --global` 查询，包位于其 `@seekskyworld/ai-modeling` 子目录；保留完整运行包与依赖。将路径作为独立 JSON 字符串，不在字符串中额外加入 shell 引号，也不把 `%APPDATA%` 等未展开变量直接当路径。
+
+PowerShell 若因执行策略拒绝 `npm.ps1` / `npx.ps1`，可调用对应 `npm.cmd` / `npx.cmd`，无需为此降低整机执行策略。MCP 客户端仍需能找到 Node/npm；GUI 的 PATH、工作目录和沙箱权限应单独检查。以上是启动配置与源码依据，不能代替 Windows 实机、原生 ACL、浏览器登录和宿主工具调用的验收。
+
 ### Golutra Agent
 
 Golutra Agent 0.3.9 支持发现项目 Skill。先安装运行包，在自己的项目中安装 Skill：
@@ -305,7 +315,7 @@ golutra-agent --cwd /absolute/path/to/project
 
 TUI 输入 `@skill:ai-modeling` 可选择项目内的 Skill。提及本身不会自动注入正文；首次使用时请 Agent 读取 `.agents/skills/ai-modeling/SKILL.md`，再按需读取其参考资料。非交互 `exec` 也须明确要求读取该文件。安装器不提供该客户端的用户范围，不写入 Golutra 桌面的 `.golutra` 目录。
 
-运行包及其依赖还须位于客户端沙箱可读的位置；已在 macOS 0.3.9 验证项目内安装的 Skill 读取与离线 CLI 调用。工作区外的临时安装路径可能返回 `EPERM`，命令链接存在不等于原文件可读；可将完整运行包安装到所选项目内，或使用宿主已授权的安装位置。真实账号、网络和系统凭据库操作仍须按运行环境另行验收。
+运行包及其依赖还须位于客户端沙箱可读的位置；已在 macOS 0.3.9 验证项目内安装的 Skill 读取与离线 CLI 调用。工作区外的临时安装路径可能返回 `EPERM`，命令链接存在不等于原文件可读；可将完整运行包安装到所选项目内，或使用宿主已授权的安装位置。真实账号、网络和私有 JSON 凭据目录访问仍须按运行环境另行验收。
 
 **当前 MCP 限制：** 已在原生 0.3.9 验证三包清单 `stage/review/enable` 成功，但其 provider 工具白名单只包含内置工具，MCP 工具不会进入模型可调用列表；`full` 工具模式或审批开关不能修复。下面的导出和注册步骤用于准备接入，不能据此认定 MCP 已可执行。须等待 Golutra Agent 修复工具暴露与调用过滤，并重新验收；尚未确认其它版本已修复。现在可选择上面的 Skill/CLI 路线，选择 MCP 的任务遇到该限制应报告阻塞，不自行改为 shell 执行业务。
 
@@ -339,7 +349,7 @@ golutra-agent --cwd /absolute/path/to/project
 
 `--env NAME` 可重复；未使用时清单的 `env` 为空列表。声明的每个变量在运行 Golutra Agent 时都必须存在，不能把未设置的可选变量加入清单。可按需传递 profile、输入根、代理或外部程序路径，不在清单、环境文件或命令参数里放账号 Token。导出记录当前 Node 和同包 CLI 的绝对路径；移动或升级运行包后须重新导出并审阅新 revision。
 
-原生插件进程的当前目录是插件包目录，素材与交付参数应使用绝对路径；工作区写权限不覆盖任意用户目录。账号操作还取决于系统凭据库及登录协调目录在客户端沙箱中的可用性，工具发现通过不能替代真实账号验收。当前客户端使用 macOS Seatbelt 或 Linux bubblewrap 执行插件，Windows 可以管理清单但尚不能执行这种原生受限 MCP 插件。
+原生插件进程的当前目录是插件包目录，素材与交付参数应使用绝对路径；工作区写权限不覆盖任意用户目录。账号操作还取决于私有 JSON 凭据及登录协调目录在客户端沙箱中的可用性，工具发现通过不能替代真实账号验收。当前客户端使用 macOS Seatbelt 或 Linux bubblewrap 执行插件，Windows 可以管理清单但尚不能执行这种原生受限 MCP 插件。
 
 Golutra Agent 当前桥接 MCP 工具，尚不桥接 `ai-modeling://guides/*` 资源；可同时安装上述 Skill 读取指导，业务仍调用 MCP 工具。客户端每次调用重新启动服务，默认工具执行限时约 30 秒；长生成应异步提交，再查询原任务，超时不重新提交付费任务。`.mcp.json` 在该版本仅用于 TUI 提及发现，不代替上述插件注册。停用某包使用 `golutra-agent plugin disable PLUGIN_ID`。
 
@@ -355,11 +365,21 @@ Golutra Agent 当前桥接 MCP 工具，尚不桥接 `ai-modeling://guides/*` �
 | `AI_MODELING_BLENDER` / `AI_MODELING_FFMPEG` | 可选本地程序；未设置时查找 PATH 中的 `blender` / `ffmpeg` |
 | `AI_MODELING_EXPERIMENTAL_MESH_EDIT=1` | 在 full MCP 工具集中启用实验性 `ai_modeling_mesh_edit` |
 
-macOS 默认数据目录为用户主目录下的 `Library/Application Support/ai-modeling`；其它平台（包括 Windows）使用 `XDG_DATA_HOME/ai-modeling`，未设置时为用户主目录下的 `.local/share/ai-modeling`，不自动使用 `%APPDATA%`。相对环境路径基于进程工作目录，MCP 中宜使用绝对路径。
+默认业务数据目录：macOS 为用户主目录下的 `Library/Application Support/ai-modeling`；Linux 为 `XDG_DATA_HOME/ai-modeling`，未设置时使用 `~/.local/share/ai-modeling`；Windows 为 `%LOCALAPPDATA%/ai-modeling`，未设置时使用用户主目录下的 `AppData/Local/ai-modeling`。`AI_MODELING_DATA_DIR` 可覆盖业务数据位置。相对环境路径基于进程工作目录，MCP 中宜使用绝对路径。
 
 兼容命令的 profile 优先级为 `--profile` → `AI_MODELING_PROFILE` → 本地 `active_profile` → `default`。先 `ai-modeling login --profile personal`，再 `ai-modeling use personal` 可保存选择；原始 `auth`、`call` 入口和 MCP 使用环境或本地默认值，不假定它们接受兼容层的 `--profile`。
 
-凭据与任务目录分离。OS 用户主目录下的 `.ai-modeling-auth` 保存登录协调状态和锁，按 profile 共享；改变 `AI_MODELING_DATA_DIR` 不隔离同 profile 的凭据或登录流程，改变 profile 也不自动新建任务库。
+凭据与任务目录分离。OS 用户主目录下的 `.ai-modeling-auth` 保存私有 JSON 凭据、登录协调状态和锁，按同一用户/profile 共享；改变 `AI_MODELING_DATA_DIR` 不隔离同 profile 的凭据或登录流程，改变 profile 也不自动新建任务库。
+
+### 本地 JSON 凭据
+
+认证根通过 OS 用户信息确定，固定在该用户主目录的 `.ai-modeling-auth`，不受 `HOME`、`TMPDIR`、工作目录或 `AI_MODELING_DATA_DIR` 改变影响，也没有公开环境变量重定位入口。每条凭据位于 `credentials/<service-sha256>/<account-sha256>.json`，使用 `schema_version: 1` JSON envelope；会话按 profile 共享，上传引用、私有产物链接和可选 LLM 密钥也使用独立 JSON 条目。目录名使用摘要不代表文件内容已加密。
+
+macOS/Linux 要求私有目录 `0700`、文件 `0600`，并核对所有者与文件身份。Windows 使用受保护 DACL，仅允许当前用户 SID 与 SYSTEM；读取前检查所有者、reparse point 和访问规则，不能以 chmod 代替 ACL。升级初始化可在验证归属与文件身份后，收紧应用自有控制目录和登录状态的旧 ACL，保留原状态、nonce 和撤销信息；权限已正确则不重写。凭据 JSON 条目及外部导入文件只验证、不自动修复 ACL。权限无法确认时明确失败，不自动放宽权限。JSON 中包含会话 Token 等秘密，不提交到 Git、放入发布包、粘贴到聊天或写入诊断日志。
+
+正常登录会验证会话，再经同 profile 锁和 compare-and-save 原子保存；CLI 与 MCP 可复用同一条目。并发登录、取消、退出和刷新仍保留账号绑定与撤销检查。`ai-modeling://auth/status` 流程资源只读流程快照，不会因为 JSON 存储而成为实时账号验证。
+
+从 0.1.2 或更早版本升级时，不自动读取、迁移或删除旧钥匙串。若没有 JSON 会话，运行 `setup` 或 `login` 正常登录；先前配置的可选 LLM 密钥也需通过相应配置入口重新设置。Windows 的业务数据默认位置也已调整；已有旧目录时可显式设置 `AI_MODELING_DATA_DIR` 指向原业务目录，以保留任务和设置，认证根仍按上述规则共享。旧任务继续绑定原账号和请求身份，不清理任务库或换 profile 强行恢复。`logout` 只清除当前 profile 的会话并撤销登录流程，不自动清除上传引用、产物链接、独立 LLM 密钥或其它 profile；不要为退出而删除整个认证目录。
 
 ```sh
 ai-modeling config set default_output_dir /absolute/path/to/assets
@@ -441,7 +461,7 @@ ai-modeling pricing status
 | --- | --- |
 | MCP 找不到命令、缺少依赖或 `dist` | 先确认配置选择 npm/npx、全局命令还是源码入口；检查 Node 24+、版本与客户端 PATH。归档安装要保留运行目录及依赖；源码入口必须先构建。`command` 只放可执行文件，参数放 `args`。 |
 | Skill 已导入但无法执行 | Skill 只提供操作说明；另装运行包，确认客户端允许调用 `ai-modeling`，并按原 profile 完成登录。 |
-| `CREDENTIAL_STORE_UNAVAILABLE` | 每次原生凭据调用最多等待10秒。macOS 解锁钥匙串并在系统提示中允许 ai-modeling（Node.js）访问，Linux 检查 D-Bus/Secret Service，再重试原命令。系统凭据权限问题不等于网页登录失效，无需因此更换账号、退出或重新登录；写入超时不保证操作未发生，保留原请求与状态。不切换明文存储。 |
+| `CREDENTIAL_STORE_UNAVAILABLE` / `AUTH_DIRECTORY_INVALID` | 检查 OS 用户认证目录与 JSON 条目的所有者、私有权限、文件类型和沙箱访问；Windows 另核系统 PowerShell 与 ACL。不要上传文件内容、放宽为所有人可读或换 profile 绕过。存储错误不等于网页登录失效；修复权限后沿原请求恢复，写结果未知时先核对。 |
 | `BROWSER_NOT_FOUND` / `BROWSER_LOGIN_FAILED` | 核对 Chrome/Edge 绝对路径、可执行权限、可见桌面和浏览器自身网络；可使用上文备用导入。 |
 | `AUTH_REQUIRED` / `LOGIN_BROKER_UNAVAILABLE` | 在原 profile 完成或重新开始登录，再继续原业务请求；`ACCOUNT_MISMATCH` 要先恢复正确账号。 |
 | `AUTH_DIRECTORY_INVALID` / `LOGIN_STATE_INVALID` | 核对 `.ai-modeling-auth` 的所有者、私有权限与文件身份，不通过删其它活跃状态绕开检查。 |

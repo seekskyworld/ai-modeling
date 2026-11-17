@@ -4,7 +4,7 @@ import path from 'node:path';
 import { stat } from 'node:fs/promises';
 import { auth } from '../auth.ts';
 import { configFromEnv } from '../core/config.ts';
-import { KeyringStore } from '../../studio/auth/credentials.ts';
+import { JsonStore } from '../../studio/auth/credentials.ts';
 import { object, text, TripoError } from '../../studio/contracts/errors.ts';
 import { diagnose, diagnosticFailure, type DoctorFeature } from '../doctor.ts';
 import { setup, setupExitCode } from '../setup.ts';
@@ -48,7 +48,7 @@ function registerConfig(program: Command, ctx: CommandContext): void {
       const file = contextFile();
       ctx.emit({
         config: readSettings(),
-        active_profile: configFromEnv().keyringAccount,
+        active_profile: configFromEnv().credentialProfile,
         context: file ? readSettings(file) : {},
         context_file: file,
       });
@@ -65,7 +65,7 @@ function registerConfig(program: Command, ctx: CommandContext): void {
       if (key === 'active_profile') validProfile(value);
       if (key === 'llm.api_key') {
         llmSecret().setPassword(value);
-        ctx.emit({ key, value: '[stored in system credential store]' });
+        ctx.emit({ key, value: '[stored in private JSON credential storage]' });
         return;
       }
       const settings = readSettings();
@@ -181,7 +181,7 @@ function registerAuth(program: Command, ctx: CommandContext): void {
     .description('show the active Studio profile, session status and balance')
     .action(async () => {
       const account = await ctx.usingApp(async (app) => await app.studio.account());
-      ctx.emit({ profile: configFromEnv().keyringAccount, backend: 'studio', ...account });
+      ctx.emit({ profile: configFromEnv().credentialProfile, backend: 'studio', ...account });
     });
   program
     .command('use [profile]')
@@ -189,11 +189,11 @@ function registerAuth(program: Command, ctx: CommandContext): void {
     .action(async (profile?: string) => {
       if (profile) {
         validProfile(profile);
-        if (!new KeyringStore(profile).load())
+        if (!new JsonStore(profile).load())
           throw new TripoError('AUTH_REQUIRED', `Sign in with --profile ${profile} first.`);
         await writeSettings({ ...readSettings(), active_profile: profile });
       }
-      ctx.emit({ active_profile: profile ?? configFromEnv().keyringAccount });
+      ctx.emit({ active_profile: profile ?? configFromEnv().credentialProfile });
     });
 }
 function registerDocs(program: Command, ctx: CommandContext): void {

@@ -117,7 +117,7 @@ export async function beginLogin(options: LoginOptions = {}, injected?: LoginRun
     assertAccount(options, expected);
     const state: LoginState = {
       version: 1,
-      profile: config.keyringAccount,
+      profile: config.credentialProfile,
       login_id: randomUUID(),
       status: 'checking',
       started_at: new Date().toISOString(),
@@ -257,7 +257,7 @@ async function verifiedExisting(
     scope: 'verified_session',
     credential_store_check: 'verified',
     studio_session_check: 'verified',
-    profile: config.keyringAccount,
+    profile: config.credentialProfile,
     status: 'authenticated',
     authenticated: true,
     login_required: false,

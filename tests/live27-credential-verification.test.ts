@@ -1,13 +1,8 @@
-/** 全部使用构造会话及本机假凭据条目，不读写真实 Keychain。 */
+/** 全部使用合成会话及隔离 OS 用户目录，不读取操作人的凭据。 */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import {
-  KeyringStore,
-  MemoryCredentials,
-  accountReference,
-  type Session,
-} from '../studio/auth/credentials.ts';
+import { JsonStore, MemoryCredentials, accountReference, type Session } from '../studio/auth/credentials.ts';
 import { importCredential, verifyCredential } from '../studio/auth/import.ts';
 import { object } from '../studio/contracts/errors.ts';
 import { withCredentialLock } from '../studio/auth/credential-lock.ts';
@@ -127,35 +122,18 @@ test('empty-snapshot memory CAS allows one login and rejects late overwrites and
   assert.equal(store.load(), undefined);
 });
 
-test('keyring empty-snapshot CAS uses the same profile lock without constructing a real Entry', () => {
+test('JSON empty-snapshot CAS uses the shared profile lock and rejects a late writer', () => {
   const profile = `live27-cas-${randomUUID()}`;
-  let password: string | undefined;
-  let writes = 0;
-  let insideRead: (() => void) | undefined;
-  // 构造假的 Entry 字段，直接测试正式 CAS 方法；不得 new KeyringStore 触碰系统凭据库。
-  const store = Object.create(KeyringStore.prototype) as KeyringStore;
-  Object.assign(store, {
-    profile,
-    entry: {
-      getPassword: () => {
-        insideRead?.();
-        return password;
-      },
-      setPassword: (value: string) => {
-        password = value;
-        writes++;
-      },
-    },
-  });
-  insideRead = () =>
-    assert.throws(() => withCredentialLock(profile, () => assert.fail('CAS released the profile lock')), {
+  const store = new JsonStore(profile);
+  withCredentialLock(profile, () => {
+    assert.throws(() => store.saveIfUnchanged(undefined, session()), {
       code: 'CREDENTIAL_STORE_BUSY',
     });
+  });
   assert.equal(store.saveIfUnchanged(undefined, session()), true);
   assert.equal(store.saveIfUnchanged(undefined, { ...session(), deviceId: 'late' }), false);
-  insideRead = undefined;
-  assert.equal(writes, 1);
   assert.deepEqual(store.load(), session());
+  store.clear();
 });
 
 test('manual bridge delegates saving to the login coordinator and cannot commit a cancelled late form', async () => {

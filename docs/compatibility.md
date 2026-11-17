@@ -18,7 +18,7 @@ The machine-readable catalogue is generated with `npm run --silent capabilities`
 | --- | --- | --- |
 | 已提供 / Implemented | CLI、MCP、Skill；离线工具和分片指南发现 / CLI, MCP, Skill and offline discovery | 唯一运行入口为 CLI，MCP 内部调用；发现不读账号、凭据或创建任务状态 / MCP invokes CLI; discovery has no account or state access. |
 | 已提供 / Implemented | 网页生成、原请求恢复、下载证明 / Studio generation, original-request recovery, verified delivery | 使用 Studio 网页积分，保留多步回执和产物检查 / Studio web credits, per-step receipts and output checks apply. |
-| 条件支持 / Conditional | 浏览器登录、setup、doctor / Browser sign-in and diagnostics | 需要可见 Chrome/Edge、OS 凭据服务；三平台安装冒烟不等于真实登录实测 / Requires browser and credential services; install smoke does not verify real sign-in. |
+| 条件支持 / Conditional | 浏览器登录、setup、doctor / Browser sign-in and diagnostics | 需要可见 Chrome/Edge 与可访问的私有 JSON 凭据目录；POSIX 权限或 Windows ACL 必须可验证；三平台安装冒烟不等于真实登录实测 / Requires a visible browser and protected local JSON storage; install smoke does not verify sign-in or every OS permission path. |
 | 条件支持 / Conditional | 本地转换、渲染、视频、网页前端导出 / Local processing and frontend export | 依赖 Blender、FFmpeg 或固定引擎，且受具体来源、几何和材质条件限制 / Optional programs and source/geometry/material constraints apply. |
 | 实验 / Experimental | full 工具集 `ai_modeling_mesh_edit` | 默认不暴露；显式启用 `AI_MODELING_EXPERIMENTAL_MESH_EDIT=1`，仍受参考编辑限制 / Opt-in only; reference-edit restrictions remain. |
 | 未完成或未验证 / Incomplete or unverified | Gaussian 链、任意 mask/变换/动画保真、全部网页条件 / Gaussian pipeline, arbitrary masks/transforms/animation, complete website parity | 参见 E23/W23 条目；命令名称和单例成功不证明等价 / See E23/W23; names and isolated successes do not prove parity. |
@@ -31,7 +31,7 @@ The machine-readable catalogue is generated with `npm run --silent capabilities`
 | --- | --- |
 | 后端 | 优先使用已验证网页接口；已确认属于网页浏览器计算的功能可提供本地对应实现，并披露处理方式。不静默切换官方 API 钱包或其它服务。 |
 | 身份 | 本机 job、Studio project/operator、Canvas asset、Lab job 与官方 API task ID 不可互换。上传句柄受来源与账号限制，不补造服务未返回的身份。 |
-| 登录与 MCP | 可见浏览器登录、同 profile 等待/取消和安全请求边界接续已提供；MCP 不返回凭据。首次密码、验证码和双重验证由用户完成，不保证所有系统与登录方式均已实测。 |
+| 登录与 MCP | 可见浏览器登录、同 OS 用户/profile 的私有 JSON 会话、等待/取消和安全请求边界接续已提供；MCP 不返回凭据。首次密码、验证码和双重验证由用户完成。Windows、Linux、macOS 的代码支持与现场验收分别记录，不保证所有系统与登录方式均已实测。 |
 | 工具集 | `default`、`full`、`studio` 分别为常用入口（含独立生图）、官方兼容合同和网页扩展；均通过 CLI。full 的实验 `ai_modeling_mesh_edit` 需 `AI_MODELING_EXPERIMENTAL_MESH_EDIT=1`。 |
 | 路径 | `make/generate/处理命令 --out` 为根目录，产物写入其下 `ai-modeling-out/<name>-<id8>/`；`task get/watch --download --out` 与 full MCP 下载为精确目录。路径由调用方选择。 |
 | 计费 | 多步骤分别保存回执并可能收费，不具备官方单任务原子性。估算阈值不是上游扣费硬上限；普通报价未知/过期会阻止提交，Canvas/Lab 可变费用需显式接受。 |

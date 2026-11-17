@@ -9,36 +9,39 @@ export interface Config {
   dataDir: string;
   outputDir: string;
   inputRoots: string[];
-  keyringAccount: string;
+  credentialProfile: string;
 }
 
 export function configFromEnv(
   env: NodeJS.ProcessEnv = process.env,
   location: { home: string; platform: NodeJS.Platform } = { home: os.homedir(), platform: process.platform },
 ): Config {
+  const paths = location.platform === 'win32' ? path.win32 : path.posix;
   const home = location.home;
   const dataBase =
     location.platform === 'darwin'
-      ? path.join(home, 'Library/Application Support')
-      : (env.XDG_DATA_HOME ?? path.join(home, '.local/share'));
-  const dataDir = path.resolve(environmentValue('DATA_DIR', env) ?? path.join(dataBase, 'ai-modeling'));
+      ? paths.join(home, 'Library/Application Support')
+      : location.platform === 'win32'
+        ? (env.LOCALAPPDATA ?? paths.join(home, 'AppData/Local'))
+        : (env.XDG_DATA_HOME ?? paths.join(home, '.local/share'));
+  const dataDir = paths.resolve(environmentValue('DATA_DIR', env) ?? paths.join(dataBase, 'ai-modeling'));
   const output = environmentValue('OUTPUT_DIR', env);
   const inputs = environmentValue('INPUT_ROOTS', env);
-  const settingsFile = path.join(dataDir, 'settings.json');
+  const settingsFile = paths.join(dataDir, 'settings.json');
   const settings: Record<string, unknown> = existsSync(settingsFile)
     ? JSON.parse(readFileSync(settingsFile, 'utf8'))
     : {};
   return {
     dataDir,
     // 素材位置属于调用方；仅显式配置时才启用目录限制，内部状态仍遵守系统数据目录约定。
-    outputDir: output ? path.resolve(output) : '',
+    outputDir: output ? paths.resolve(output) : '',
     inputRoots: inputs
       ? inputs
-          .split(path.delimiter)
+          .split(paths.delimiter)
           .filter(Boolean)
-          .map((p) => path.resolve(p))
+          .map((p) => paths.resolve(p))
       : [],
-    keyringAccount:
+    credentialProfile:
       environmentValue('PROFILE', env) ??
       (typeof settings.active_profile === 'string' ? settings.active_profile : 'default'),
   };
@@ -46,6 +49,6 @@ export function configFromEnv(
 
 export async function initializeDirectories(config: Config): Promise<void> {
   await mkdir(config.dataDir, { recursive: true, mode: 0o700 });
-  await chmod(config.dataDir, 0o700);
+  if (process.platform !== 'win32') await chmod(config.dataDir, 0o700);
   if (config.outputDir) await mkdir(config.outputDir, { recursive: true, mode: 0o700 });
 }

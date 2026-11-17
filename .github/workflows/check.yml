@@ -71,6 +71,8 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      - name: Verify native credential storage and login cancellation
+        run: node scripts/run-tests.ts tests/json-credentials.test.ts tests/config-platform.test.ts tests/hardening-auth-input.test.ts tests/login-lock-stall.test.ts
       - name: Export the real runtime package
         id: export
         shell: bash

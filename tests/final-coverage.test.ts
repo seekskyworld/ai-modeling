@@ -148,7 +148,7 @@ test('history name resolution preserves duplicate names, case-sensitive fuzzy ma
 });
 test('crop produces exact requested pixels and refuses bounds errors or overwriting', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'tripo-crop-test-'));
-  const config = { dataDir: directory, outputDir: '', inputRoots: [], keyringAccount: 'test' };
+  const config = { dataDir: directory, outputDir: '', inputRoots: [], credentialProfile: 'test' };
   const input = path.join(directory, 'input.png'),
     output = path.join(directory, 'output.png');
   try {

@@ -1,14 +1,14 @@
-/** 系统凭据库没有 CAS；同 profile 的写入、清理和刷新回写共用跨进程锁。 */
+/** 每个 JSON 身份独立锁；同 profile 的写入、清理和刷新回写共用跨进程锁。 */
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { lockSync } from 'proper-lockfile';
 import { TripoError } from '../contracts/errors.ts';
 import { privateAuthDirectory } from './control-directory.ts';
 
-export function withCredentialLock<T>(profile: string, run: () => T): T {
-  const root = privateAuthDirectory('credential-locks');
+export function withJsonEntryLock<T>(service: string, account: string, run: () => T, directory?: string): T {
+  const root = privateAuthDirectory('credential-locks', directory);
   const name = createHash('sha256')
-    .update(`${process.getuid?.() ?? 'user'}:${profile}`)
+    .update(JSON.stringify([service, account]))
     .digest('hex');
   let release: () => void;
   try {
@@ -25,4 +25,8 @@ export function withCredentialLock<T>(profile: string, run: () => T): T {
   } finally {
     release();
   }
+}
+
+export function withCredentialLock<T>(profile: string, run: () => T, directory?: string): T {
+  return withJsonEntryLock('ai-modeling', profile, run, directory);
 }

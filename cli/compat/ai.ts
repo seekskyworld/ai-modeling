@@ -1,7 +1,7 @@
 /** 交互向导和可选 LLM 只生成声明式计划；执行与校验仍由同一 CLI 规划器承担。 */
 import type { Command } from 'commander';
 import { createInterface } from 'node:readline/promises';
-import { Entry } from '../../studio/auth/keyring-entry.ts';
+import { JsonEntry } from '../../studio/auth/json-entry.ts';
 import { z } from 'zod';
 import { networkFetch } from '../../studio/api/client.ts';
 import { object, text, array, TripoError } from '../../studio/contracts/errors.ts';
@@ -9,8 +9,8 @@ import { readSettings } from './settings.ts';
 import { makePlan, type Flags } from './planning.ts';
 import type { CommandContext } from './support.ts';
 import { expertPlanSchema as planSchema, buildExpertPlan, type PlanningMessage } from './ai-plan.ts';
-export function llmSecret(): Entry {
-  return new Entry('ai-modeling-llm', 'default');
+export function llmSecret(): JsonEntry {
+  return new JsonEntry('ai-modeling-llm', 'default');
 }
 async function chatJson(messages: PlanningMessage[], llm: Record<string, unknown>): Promise<unknown> {
   const base = new URL(text(llm.base_url));

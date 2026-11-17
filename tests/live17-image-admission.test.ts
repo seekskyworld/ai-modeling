@@ -241,7 +241,7 @@ test('generated image identity mismatch fails before classification or audit can
   assert.equal(reads, 1);
 });
 
-test('model upload handles cannot enter image audit or read the system image credential store', async () => {
+test('model upload handles cannot enter image audit or read the private upload credential store', async () => {
   const client = new StudioClient(credentials(), async () => {
     assert.fail('model tokens are rejected before any remote audit');
   });

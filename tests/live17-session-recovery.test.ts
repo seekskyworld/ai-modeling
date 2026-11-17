@@ -242,7 +242,7 @@ test('import can refresh an invalid captured expiry and retains the most recent 
   assert.equal(store.load()!.bearer === latest, true);
 });
 
-test('credential lock excludes another process without touching the real keychain', async () => {
+test('credential lock excludes another process without touching real user credentials', async () => {
   const profile = `test-${randomUUID()}`;
   const moduleUrl = new URL('../studio/auth/credential-lock.ts', import.meta.url).href;
   const code = `import { withCredentialLock } from ${JSON.stringify(moduleUrl)}; withCredentialLock(${JSON.stringify(profile)}, () => { process.stdout.write('locked\\n'); Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 400); });`;

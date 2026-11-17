@@ -1,7 +1,9 @@
 /** 同一文件描述符完成身份检查和有界读取；不跟随最终软链接或回显文件内容/路径。 */
 import { constants, type BigIntStats } from 'node:fs';
 import { lstat, open, type FileHandle } from 'node:fs/promises';
+import path from 'node:path';
 import { TripoError } from '../../studio/contracts/errors.ts';
+import { verifyPrivateWindowsPath } from '../../studio/auth/windows-permissions.ts';
 
 const maximumBytes = 131072;
 
@@ -45,10 +47,12 @@ async function boundedRead(handle: FileHandle): Promise<Buffer> {
 }
 
 export async function readCredentialFile(filename: string): Promise<string> {
+  filename = path.resolve(filename);
   let handle: FileHandle | undefined;
   try {
     const initial = await lstat(filename, { bigint: true });
     assertCredentialFile(initial);
+    if (process.platform === 'win32') verifyPrivateWindowsPath(filename, 'file');
     handle = await open(
       filename,
       constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0),
@@ -58,6 +62,7 @@ export async function readCredentialFile(filename: string): Promise<string> {
     unchanged(initial, opened);
     const bytes = await boundedRead(handle);
     const final = await handle.stat({ bigint: true });
+    if (process.platform === 'win32') verifyPrivateWindowsPath(filename, 'file');
     assertCredentialFile(final);
     unchanged(opened, final);
     if (BigInt(bytes.length) !== final.size)

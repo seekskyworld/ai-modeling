@@ -1,4 +1,4 @@
-/** 登录接续仅用内存凭据与受控HTTP；不打开真实浏览器、Keychain或生产任务库。 */
+/** 登录接续仅用内存凭据与受控HTTP；不打开真实浏览器、凭据文件或生产任务库。 */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { StudioClient, type AuthenticationHandler } from '../studio/api/client.ts';

@@ -1,24 +1,28 @@
 /** 每个profile独立短时状态和互斥锁；原始Cookie/Token/浏览器端点/业务命令不落盘。 */
 import { constants } from 'node:fs';
-import { open, writeFile, rename, rm } from 'node:fs/promises';
+import { lstat, open, writeFile, rename, rm } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import lockfile from 'proper-lockfile';
 import type { Config } from '../core/config.ts';
 import { TripoError } from '../../studio/contracts/errors.ts';
 import { privateAuthDirectory } from '../../studio/auth/control-directory.ts';
+import {
+  protectPrivateWindowsPath,
+  verifyPrivateWindowsPath,
+} from '../../studio/auth/windows-permissions.ts';
 import { loginStates, type LoginState, type LoginStatus } from './types.ts';
 
 export async function loginStateFile(config: Config): Promise<string> {
-  // Keychain身份只按OS用户/profile划分；不同dataDir也必须共享撤销，避免空会话ABA覆盖。
+  // 凭据身份只按OS用户/profile划分；不同dataDir也必须共享撤销，避免空会话ABA覆盖。
   const directory = privateAuthDirectory('login-sessions');
-  const key = createHash('sha256').update(config.keyringAccount).digest('hex');
+  const key = createHash('sha256').update(config.credentialProfile).digest('hex');
   return path.join(directory, key + '.json');
 }
 function valid(state: LoginState, config: Config): boolean {
   return (
     state.version === 1 &&
-    state.profile === config.keyringAccount &&
+    state.profile === config.credentialProfile &&
     /^[a-f0-9-]{36}$/.test(state.login_id) &&
     loginStates.includes(state.status) &&
     Number.isSafeInteger(state.pid) &&
@@ -34,16 +38,26 @@ export async function readState(config: Config): Promise<LoginState | undefined>
   const file = await loginStateFile(config);
   let handle;
   try {
+    const initial = await lstat(file);
+    if (!initial.isFile() || initial.isSymbolicLink() || initial.nlink !== 1)
+      throw new TripoError('LOGIN_STATE_INVALID', 'Login state must be a private regular file.');
+    // Older versions created login-control metadata with inherited Windows permissions.
+    // Narrow this owned control file before reading it; credential records and import files remain read-only checks.
+    if (process.platform === 'win32') protectPrivateWindowsPath(file, 'file');
     handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     const info = await handle.stat();
     if (
       !info.isFile() ||
+      info.nlink !== 1 ||
+      info.dev !== initial.dev ||
+      info.ino !== initial.ino ||
       info.size > 16384 ||
       (process.platform !== 'win32' && info.mode & 0o077) ||
       (process.getuid && info.uid !== process.getuid())
     )
       throw new TripoError('LOGIN_STATE_INVALID', 'Login state must be a private regular file.');
     const state = JSON.parse(await handle.readFile('utf8')) as LoginState;
+    if (process.platform === 'win32') verifyPrivateWindowsPath(file, 'file');
     if (!valid(state, config)) throw new Error('Invalid login state');
     return state;
   } catch (error) {
@@ -60,19 +74,33 @@ export async function writeState(config: Config, state: LoginState): Promise<voi
     temporary = file + '.' + randomUUID() + '.part';
   try {
     await writeFile(temporary, JSON.stringify(state) + '\n', { mode: 0o600, flag: 'wx' });
+    if (process.platform === 'win32') protectPrivateWindowsPath(temporary, 'file');
     await rename(temporary, file);
   } finally {
     await rm(temporary, { force: true });
   }
 }
+// Windows ACL checks are synchronous and individually bounded at 10 seconds. A login commit
+// can perform several checks while the event-loop heartbeat is paused. Keep the lease beyond
+// that bounded critical section so another process cannot steal it and undo a completed logout.
+export const loginLockStaleMs = 180000;
 export async function withLoginLock<T>(config: Config, action: () => Promise<T>): Promise<T> {
   const file = await loginStateFile(config);
-  const release = await lockfile.lock(file, {
-    realpath: false,
-    stale: 10000,
-    update: 2000,
-    retries: { retries: 40, minTimeout: 20, maxTimeout: 100 },
-  });
+  let release: () => Promise<void>;
+  try {
+    release = await lockfile.lock(file, {
+      realpath: false,
+      stale: loginLockStaleMs,
+      update: 2000,
+      retries: { retries: 40, minTimeout: 20, maxTimeout: 100 },
+    });
+  } catch {
+    throw new TripoError(
+      'CREDENTIAL_STORE_BUSY',
+      'Authentication for this profile is being updated by another process. Retry the original action.',
+      'not_submitted',
+    );
+  }
   try {
     return await action();
   } finally {
@@ -117,7 +145,13 @@ export function safeLoginError(error: unknown): { code: string; message: string 
     ACCOUNT_MISMATCH: 'The login account differs from the original account.',
     SESSION_CHANGED: 'The saved session or active login changed; the newer session was preserved.',
     CREDENTIAL_STORE_UNAVAILABLE:
-      'Unlock the OS credential store and allow ai-modeling (Node.js) access when prompted, then retry the original command.',
+      "Cannot access private JSON credentials. Check the current OS user's .ai-modeling-auth directory and file permissions, then retry the original command.",
+    CREDENTIAL_STORE_INVALID:
+      'The private JSON credential file is invalid. Restore a valid private file or sign in again after resolving the storage error.',
+    CREDENTIAL_STORE_BUSY:
+      'Another process is updating the private JSON credentials. Retry the original command.',
+    AUTH_DIRECTORY_INVALID:
+      'Authentication storage must be a private directory owned by the current OS user.',
   };
   return {
     code,

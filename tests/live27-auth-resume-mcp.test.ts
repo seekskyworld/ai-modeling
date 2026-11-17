@@ -170,7 +170,7 @@ test(
     const f = await context('default', 'flow_snapshot');
     const config: Config = {
       dataDir: f.env.AI_MODELING_DATA_DIR!,
-      keyringAccount: f.env.AI_MODELING_PROFILE!,
+      credentialProfile: f.env.AI_MODELING_PROFILE!,
       outputDir: '',
       inputRoots: [],
     };
@@ -181,7 +181,7 @@ test(
         await withLoginLock(config, () =>
           writeState(config, {
             version: 1,
-            profile: config.keyringAccount,
+            profile: config.credentialProfile,
             login_id: loginId,
             status: 'authenticated',
             started_at: '2000-01-01T00:00:00Z',

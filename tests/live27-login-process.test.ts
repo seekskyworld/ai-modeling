@@ -17,7 +17,7 @@ async function processFixture(mode = 'pending') {
   const directory = await realpath(await mkdtemp(path.join(tmpdir(), 'tripo-login-process-')));
   const config: Config = {
     dataDir: directory,
-    keyringAccount: path.basename(directory),
+    credentialProfile: path.basename(directory),
     inputRoots: [],
     outputDir: '',
   };
@@ -126,7 +126,7 @@ test('a detached worker saves a fake verified candidate and its parent can exit 
     assert.equal(finished.account_ref, fakeLoginSession.accountRef);
     const stored = JSON.parse(
       await readFile(
-        path.join(f.directory, 'fixture-credentials-' + f.config.keyringAccount + '.json'),
+        path.join(f.directory, 'fixture-credentials-' + f.config.credentialProfile + '.json'),
         'utf8',
       ),
     );

@@ -14,6 +14,7 @@ import { productionLock, type ProductionLock } from './dependency-lock.ts';
 import { readDistributionFile } from './package-validation.ts';
 import {
   installGlobalConsumer,
+  probeGlobalCredentialStore,
   probeGlobalNativeRuntime,
   verifyGlobalDependencies,
 } from './global-consumer.ts';
@@ -478,6 +479,7 @@ export async function smokePackageConsumer(archive: string, npmCli = process.env
       installed.installEnv,
     );
     const nativeRuntime = probeGlobalNativeRuntime(global.entry, directory, installed.env);
+    const credentialStore = probeGlobalCredentialStore(global.entry, directory, installed.env);
     const cli = (args: string[]) =>
       execute(process.execPath, [installed.local.entry, ...args], directory, installed.env);
     const definitions = JSON.parse(cli(['tools', '--toolset', 'studio'])) as { name: string }[];
@@ -598,6 +600,7 @@ export async function smokePackageConsumer(archive: string, npmCli = process.env
         'global-install',
         'global-bin',
         'global-native-runtime',
+        'global-json-credentials',
         'global-mcp',
         'global-skill-management',
         'global-dependency-bytes',
@@ -608,6 +611,7 @@ export async function smokePackageConsumer(archive: string, npmCli = process.env
       global_installation: {
         functional_passed: true,
         native_runtime: nativeRuntime,
+        credential_store: credentialStore,
         dependency_lock: globalDependencies,
         bundled_files_verified: globalBundledFiles,
       },

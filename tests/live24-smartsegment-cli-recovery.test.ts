@@ -64,7 +64,7 @@ test('CLI restores the exact completed intent after original input removal witho
           env: {
             ...process.env,
             AI_MODELING_DATA_DIR: f.dir,
-            AI_MODELING_PROFILE: 'test-no-keyring',
+            AI_MODELING_PROFILE: 'test-no-credentials',
             NODE_OPTIONS: '',
           },
           stdio: ['ignore', 'pipe', 'pipe'],

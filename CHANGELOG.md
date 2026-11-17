@@ -2,7 +2,19 @@
 
 This file records user-facing changes. Unreleased changes describe the source tree and do not imply an npm or hosted release. Run `ai-modeling --version` or read `package.json` for the current version.
 
-## Unreleased
+## 0.1.3 — 2026-11-17
+
+### Changed
+
+- Store Studio sessions, private artifact links, upload references and optional LLM keys in private local JSON records, shared by the same OS user/profile independently of business data directories. System keychains and Linux Secret Service are no longer required. Existing keychain entries are not automatically read, migrated or deleted; use the normal browser login flow to create a JSON session after upgrading.
+- Protect credential directories/files with POSIX `0700/0600` permissions or Windows current-user/SYSTEM ACLs, preserving account binding, atomic updates, compare-and-save, cancellation and original request identities. Windows implementation and configuration support do not constitute a completed Windows runtime or browser acceptance test.
+- Use `%LOCALAPPDATA%/ai-modeling` for Windows business data, falling back to the OS home `AppData/Local/ai-modeling`. Existing installations can explicitly select their original data directory with `AI_MODELING_DATA_DIR` to retain tasks and settings; the private credential root is unchanged by this setting.
+- Document Windows npm/MCP launch differences and provide an optional `cmd.exe` / `npx.cmd` configuration for hosts that cannot directly launch npm shims.
+
+### Fixed
+
+- Keep a live login lock valid during bounded synchronous credential checks, preventing a late login from restoring a session after logout. Contention reports a retryable credential-store busy error without changing the original login or request.
+- Resolve relative credential-import file paths before Windows ACL validation. Upgrade legacy application-owned authentication control ACLs after ownership and identity checks, preserving login and cancellation state; credential records and external import files remain validation-only.
 
 ## 0.1.2 — 2026-11-17
 

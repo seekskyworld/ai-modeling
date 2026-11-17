@@ -165,7 +165,7 @@ test('recovering submitted or unknown P2 jobs performs neither a fresh symmetry 
           dataDir: f.dir,
           outputDir: path.join(f.dir, 'output'),
           inputRoots: [],
-          keyringAccount: 'test',
+          credentialProfile: 'test',
         },
       });
     const input = { mode: 'image', model_version: p2, image_asset: { asset_id: 'front' } };

@@ -276,13 +276,22 @@ test('consumer evidence preserves dependency drift and rejects false success, du
       'global-install',
       'global-bin',
       'global-native-runtime',
+      'global-json-credentials',
       'global-mcp',
       'global-skill-management',
       'global-dependency-bytes',
     ],
     global_installation: {
       functional_passed: true,
-      native_runtime: { sharp_encode_decode: true, keyring_module_loaded: true, credential_accessed: false },
+      native_runtime: { sharp_encode_decode: true },
+      credential_store: {
+        backend: 'json',
+        persistence_verified: true,
+        compare_and_swap_verified: true,
+        profile_isolation_verified: true,
+        clear_verified: true,
+        operator_credentials_accessed: false,
+      },
       dependency_lock: {
         comparison: 'name-version-reviewed-local-bytes',
         matches: true,
@@ -326,18 +335,32 @@ test('consumer evidence preserves dependency drift and rejects false success, du
     { ...report, checks: report.checks.filter((item) => item !== 'skill-uninstall') },
     { ...report, global_installation: undefined },
     { ...report, checks: report.checks.filter((item) => item !== 'global-native-runtime') },
-    ...['sharp_encode_decode', 'keyring_module_loaded'].map((check) => ({
+    { ...report, checks: report.checks.filter((item) => item !== 'global-json-credentials') },
+    {
+      ...report,
+      global_installation: { ...report.global_installation, native_runtime: { sharp_encode_decode: false } },
+    },
+    { ...report, global_installation: { ...report.global_installation, credential_store: undefined } },
+    ...[
+      'persistence_verified',
+      'compare_and_swap_verified',
+      'profile_isolation_verified',
+      'clear_verified',
+    ].map((check) => ({
       ...report,
       global_installation: {
         ...report.global_installation,
-        native_runtime: { ...report.global_installation.native_runtime, [check]: false },
+        credential_store: { ...report.global_installation.credential_store, [check]: false },
       },
     })),
     {
       ...report,
       global_installation: {
         ...report.global_installation,
-        native_runtime: { ...report.global_installation.native_runtime, credential_accessed: true },
+        credential_store: {
+          ...report.global_installation.credential_store,
+          operator_credentials_accessed: true,
+        },
       },
     },
     { ...report, dependency_lock: { ...report.dependency_lock, matches: true } },

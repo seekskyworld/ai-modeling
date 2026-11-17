@@ -23,7 +23,7 @@ const failureMessages: Record<string, string> = {
   ACCOUNT_MISMATCH: 'The browser login belongs to a different account.',
   SESSION_CHANGED: 'The saved Studio session changed during login.',
   CREDENTIAL_STORE_UNAVAILABLE:
-    'Unlock the OS credential store and allow ai-modeling (Node.js) access when prompted, then retry the original command.',
+    'Check private local JSON storage ownership, permissions, available disk space and JSON integrity, then retry the original command.',
   CREDENTIAL_STORE_BUSY: 'Another process is updating the Studio session.',
   NETWORK_ERROR: 'Studio login verification could not reach the service.',
 };

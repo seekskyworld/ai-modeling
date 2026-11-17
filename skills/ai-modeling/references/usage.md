@@ -8,12 +8,14 @@ CLI 是底层执行接口，MCP 提供同源指导资源并通过工具适配调
 
 - 本 Skill 只有操作指导，不包含 CLI、Node.js、浏览器、运行依赖或用户会话。需要 Node.js 24+，以及已正确安装依赖的同版本 ai-modeling 运行包。
 - npm 包名为 `@seekskyworld/ai-modeling`，唯一命令为 `ai-modeling`。MCP 使用 `ai-modeling mcp` 启动默认6工具集，含 GPT Image 2.5 独立生图；网页资产与编辑扩展另选 `--toolset studio`。官方源码为 [seekskyworld/ai-modeling](https://github.com/seekskyworld/ai-modeling)，归档仍为 `ai-modeling-VERSION.tgz`。
-- 账号操作需要当前 OS 用户可用的系统凭据库；Linux 需要会话 D-Bus 和已解锁的 Secret Service，WSL 不自动借用 Windows 凭据库。自动网页登录另需已安装、可见的 Chrome/Edge。离线发现和 Skill 安装管理不需要登录。
+- 账号操作使用当前 OS 用户的私有 JSON 凭据文件，不需要系统钥匙串、Linux Secret Service 或 D-Bus。POSIX 使用目录 `0700`/文件 `0600`；Windows 通过系统 PowerShell 检查当前用户 SID 与 SYSTEM 的受保护 ACL。自动网页登录另需已安装、可见的 Chrome/Edge。离线发现和 Skill 安装管理不需要登录。
 - 只在具体功能需要时检查 Blender 4.5+、FFmpeg 或固定网页转换运行时。未获用户相应授权时，不自动安装依赖、全局安装/升级程序或修改 MCP 配置；缺少条件时指出具体缺项。用户明确要求这些操作时，确认本项目来源后按授权执行。
-- 使用用户已安装的本项目运行包；有多个版本时核对可执行文件目标与版本。配置使用 `AI_MODELING_*`，结构化工具使用 `ai_modeling_*`，认证资源为 `ai-modeling://auth/status`；旧项目名称不作为别名。更新程序后保留有效会话，按实际认证状态决定是否需要登录，不因 npm 包名带 scope 而更换 profile 或重新认证。
-- 入口不明确时核对已安装版本与路径；源码入口为 `node /absolute/path/to/installation/dist/cli/main.js`。用户选择 npx 路线时，每次沿用同一完整、固定版本前缀，例如 `npx --yes --package @seekskyworld/ai-modeling@0.1.2 ai-modeling`，不能误用无 scope 的同名包或静默升级。
+- 使用用户已安装的本项目运行包；有多个版本时核对可执行文件目标与版本。配置使用 `AI_MODELING_*`，结构化工具使用 `ai_modeling_*`，认证资源为 `ai-modeling://auth/status`；旧项目名称不作为别名。已有有效 JSON 会话可复用；升级自旧钥匙串版本时按下文重新连接，不因 npm 包名带 scope 而更换 profile。
+- 入口不明确时核对已安装版本与路径；源码入口为 `node /absolute/path/to/installation/dist/cli/main.js`。用户选择 npx 路线时，每次沿用同一完整、固定版本前缀，例如 `npx --yes --package @seekskyworld/ai-modeling@0.1.3 ai-modeling`，不能误用无 scope 的同名包或静默升级。
 
-用户已授权安装时，使用 `npm install --global @seekskyworld/ai-modeling@0.1.2`，再核对 `ai-modeling --version`。可按用户选择使用同版本 npx 前缀，无需全局安装。保留平台可选依赖。npm 安装不会自动导入 Skill 或配置 MCP。发布版本与来源以 npm 和指定 GitHub 仓库为准，不使用无 scope 的 `ai-modeling` 包。
+用户已授权安装时，使用 `npm install --global @seekskyworld/ai-modeling@0.1.3`，再核对 `ai-modeling --version`。可按用户选择使用同版本 npx 前缀，无需全局安装。保留平台可选依赖。npm 安装不会自动导入 Skill 或配置 MCP。发布版本与来源以 npm 和指定 GitHub 仓库为准，不使用无 scope 的 `ai-modeling` 包。
+
+Windows PowerShell 若拒绝执行 `npm.ps1` / `npx.ps1`，可使用 `npm.cmd` / `npx.cmd`。MCP 宿主是否能直接启动 `.cmd` 取决于其实现；不支持时可由 `cmd.exe /d /c` 启动，或直接用 `node.exe` 加已安装包的 `dist/cli/main.js` 与 `mcp` 参数。选定 MCP 入口时保持客户端配置和工具调用，不因发现命令启动差异就替换为 shell 执行业务；按用户授权处理配置。
 
 归档是独立替代路线：从同仓库 Releases 取得 `ai-modeling-VERSION.tgz` 并核对 `SHA256SUMS`，解包到选定的新持久目录，在其中执行 `npm ci --omit=dev --no-audit --no-fund`，再执行 `npm link --omit=dev --ignore-scripts`。链接仍依赖该目录及其依赖，不把它当临时文件清理。
 
@@ -34,7 +36,7 @@ ai-modeling model convert --help
 
 最后一行仅示范按命令查帮助；应替换成当前任务的命令。官方兼容入口主要在 `generate/model/mesh/anim/task`，网页扩展在 `studio/canvas`。
 
-需要结构化调用时，用 `ai-modeling tools --toolset studio` 获取对应 schema，再用 `ai-modeling call TOOL --input-stdin` 传 JSON。工具与指南发现只读取元数据，不访问账号、凭据库或创建任务状态；长文本、JSON 和私有路径不要通过不安全的 shell 插值拼接。命令发现可先读 `guides read commands/index`，再读 `guides read commands/model/convert` 等具体分片。MCP 对应资源为 `ai-modeling://guides/commands/index` 和 `ai-modeling://guides/commands/{+command}`，不需要加载完整命令手册。
+需要结构化调用时，用 `ai-modeling tools --toolset studio` 获取对应 schema，再用 `ai-modeling call TOOL --input-stdin` 传 JSON。工具与指南发现只读取元数据，不访问账号、凭据文件或创建任务状态；长文本、JSON 和私有路径不要通过不安全的 shell 插值拼接。命令发现可先读 `guides read commands/index`，再读 `guides read commands/model/convert` 等具体分片。MCP 对应资源为 `ai-modeling://guides/commands/index` 和 `ai-modeling://guides/commands/{+command}`，不需要加载完整命令手册。
 
 Skill 可直接调用 CLI，不要求安装 MCP。用户已选择 MCP 时保持该选择，读取该客户端当前工具定义；二者使用相同运行包和基础能力，不因为 Skill 可用就重配客户端或更换账号。
 
@@ -44,15 +46,17 @@ Skill 可直接调用 CLI，不要求安装 MCP。用户已选择 MCP 时保持�
 
 在用户授权的账号任务需要登录时，使用 CLI 的浏览器流程，不索取、打印、复制或抓取 Token/Cookie，也不读取普通浏览器用户目录。
 
-交互环境可用 `ai-modeling login`；需要返回登录入口时用 `ai-modeling login --no-wait --no-open`。密码、验证码、第三方登录和双重验证由用户在浏览器完成；CLI 验证会话后保存到系统凭据库。
+交互环境可用 `ai-modeling login`；需要返回登录入口时用 `ai-modeling login --no-wait --no-open`。密码、验证码、第三方登录和双重验证由用户在浏览器完成；CLI 验证会话后原子保存到 OS 用户主目录 `.ai-modeling-auth/credentials/<service-sha256>/<account-sha256>.json`。同一 OS 用户/profile 的 CLI/MCP 共用，认证根不随业务 `AI_MODELING_DATA_DIR`、`HOME` 或 `TMPDIR` 变化。JSON 内有未额外加密的凭据，依赖私有权限，不读取其内容用于排障，也不写进日志、项目或发布包。
+
+从 0.1.2 或更早的钥匙串版本升级时，程序不自动读取、迁移或删除旧条目；缺少 JSON 会话时走正常 `setup`/`login`。可选 LLM 密钥需通过对应配置入口重新设置。Windows 业务数据默认改为 `LOCALAPPDATA/ai-modeling`，未设置时使用用户主目录的 `AppData/Local/ai-modeling`；已有旧任务时可显式把 `AI_MODELING_DATA_DIR` 设为原业务目录，认证根不变。保留原 profile、账号和任务身份；`logout` 只清除当前 profile 会话并撤销流程，不清除其它 profile、上传引用、产物链接或独立 LLM 密钥。
 
 初次安装可用 `doctor --offline --json` 检查本机条件，再用 `setup` 引导连接；已有有效会话不重复询问。`setup --check` 或 `--offline` 不启动登录，非交互 `setup --no-wait --no-open` 返回有界状态。MCP 用户继续使用当前客户端的认证资源和工具。default 集首次账号操作缺会话时返回 `AUTH_REQUIRED`、登录 URL 和 `login_id`；由用户完成浏览器交互，Agent 读取 `ai-modeling://auth/status`，确认同一个 `login_id` 的流程 `authenticated: true` 后按返回的原请求身份接续。ID 不同的历史流程不能当作本次完成。default 不需要先切换 Studio 工具集或调用 shell 登录。
 
-用 `ai-modeling auth session status LOGIN_ID` 查询原流程，或 `ai-modeling auth session wait LOGIN_ID --timeout 30` 作有界等待。`LOGIN_ID` 使用真实返回值；单次等待超时不代表流程取消。流程查询返回 `scope: login_flow`，`credential_store_check` 和 `studio_session_check` 均为 `not_checked`：本次没有读取系统凭据或检查远端会话。`authenticated`、`login_required`、余额及到期时间只是该流程的快照，已完成记录也可能长期保留；不能据此忽略后续工具的认证错误。没有流程的 `LOGIN_NOT_FOUND` 也不等于保存的会话失效。需要当前账号验证时使用 CLI 的 `auth status` 或当前 MCP 工具集的 `ai_modeling_balance`；否则以原任务接续工具的实际结果为准。
+用 `ai-modeling auth session status LOGIN_ID` 查询原流程，或 `ai-modeling auth session wait LOGIN_ID --timeout 30` 作有界等待。`LOGIN_ID` 使用真实返回值；单次等待超时不代表流程取消。流程查询返回 `scope: login_flow`，`credential_store_check` 和 `studio_session_check` 均为 `not_checked`：本次没有读取凭据 JSON 或检查远端会话。`authenticated`、`login_required`、余额及到期时间只是该流程的快照，已完成记录也可能长期保留；不能据此忽略后续工具的认证错误。没有流程的 `LOGIN_NOT_FOUND` 也不等于保存的会话失效。需要当前账号验证时使用 CLI 的 `auth status` 或当前 MCP 工具集的 `ai_modeling_balance`；否则以原任务接续工具的实际结果为准。
 
-`CREDENTIAL_STORE_UNAVAILABLE` 表示系统凭据服务不可用或单次调用超过10秒；由用户在系统界面确认凭据库已解锁，并处理 ai-modeling（Node.js）对原 profile 条目的访问提示后重试原命令。整个钥匙串已解锁也不保证具体条目可读。这不等于网页登录失效，不因此退出或重登录。凭据写入超时仍保留结果未知，不能断言未写入或自动重提原业务。
+`CREDENTIAL_STORE_UNAVAILABLE` / `AUTH_DIRECTORY_INVALID` 表示私有 JSON 存储或权限检查失败。检查目录/文件所有者、权限、文件类型和客户端沙箱；Windows 另核系统 PowerShell 与受保护 ACL。升级时仅对经验证的应用自有控制目录和登录状态收紧旧 ACL，保留原状态与撤销信息；凭据 JSON 及外部导入文件的读取不会自动修复 ACL。不要读取秘密内容、放宽所有人访问、删除整个认证目录或换 profile 绕过。该错误不等于网页登录失效；修复后沿用原请求，凭据写结果未知时不能断言未写入或自动重提业务。
 
-登录页回环地址属于 CLI 所在主机；无桌面的 SSH/容器不因此获得本机浏览器或凭据服务。不能默默换 profile、系统用户或数据目录解决问题。HTTP 403、额度不足和普通网络错误也不自动判为登录过期。
+登录页回环地址属于 CLI 所在主机；无桌面的 SSH/容器不因此获得可见浏览器。WSL 与原生 Windows 使用不同的 OS 用户目录，不自动共享会话。不能默默换 profile、系统用户或数据目录解决问题。HTTP 403、额度不足和普通网络错误也不自动判为登录过期。
 
 登录完成后继续原请求或任务。已发送的写请求不因重新认证而整体重放；保留错误中返回的原 `request_id` 和任务身份。
 

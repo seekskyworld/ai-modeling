@@ -1,4 +1,4 @@
-/** First-use commands and MCP discovery must work without loading image or credential binaries. */
+/** First-use commands and MCP discovery must work without loading image binaries or accessing credentials. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -65,7 +65,7 @@ test('version, help, guides, tool discovery and offline setup do not load unavai
   await assert.rejects(stat(f.env.AI_MODELING_DATA_DIR!), { code: 'ENOENT' });
 });
 
-test('first Skill installation and removal succeed while image and credential binaries are unavailable', async (t) => {
+test('first Skill installation and removal succeed while image runtime and credential access are unavailable', async (t) => {
   const f = await fixture(t);
   const parent = path.join(f.directory, 'skills');
   assert.equal(JSON.parse(f.run(['skill', 'install', '--dir', parent, '--json'])).status, 'installed');

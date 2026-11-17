@@ -19,7 +19,7 @@ async function fixture(t: test.TestContext) {
     dataDir: path.join(root, 'absent'),
     outputDir: '',
     inputRoots: [],
-    keyringAccount: 'synthetic-diagnostics',
+    credentialProfile: 'synthetic-diagnostics',
   };
   const dependencies: DoctorDependencies = {
     env: {},
@@ -67,11 +67,42 @@ test('offline diagnostics never verify credentials, create state, or execute opt
   assert.equal(calls, 0);
   await assert.rejects(stat(config.dataDir), { code: 'ENOENT' });
   assert.equal(result.checks.find((check) => check.name === 'credential_backend')?.status, 'not_checked');
+  assert.deepEqual(result.checks.find((check) => check.name === 'credential_backend')?.detail, {
+    storage: 'private_json',
+    protection: 'posix_mode',
+  });
+  assert.equal(
+    result.checks.some((check) => check.name === 'session_dbus'),
+    false,
+  );
+});
+
+test('Windows diagnostics identify file ACL protection without opening a credential store offline', async (t) => {
+  const { config, dependencies } = await fixture(t);
+  const result = await diagnose(
+    config,
+    { offline: true },
+    {
+      ...dependencies,
+      platform: 'win32',
+      verify: async () => assert.fail('offline diagnostics must not open credentials'),
+    },
+  );
+  assert.deepEqual(result.checks.find((check) => check.name === 'credential_backend')?.detail, {
+    storage: 'private_json',
+    protection: 'windows_acl',
+  });
 });
 
 test('diagnostics distinguish missing authentication, unavailable credentials and network errors', async (t) => {
   const { config, dependencies } = await fixture(t);
-  for (const code of ['AUTH_REQUIRED', 'CREDENTIAL_STORE_UNAVAILABLE', 'NETWORK_ERROR']) {
+  for (const code of [
+    'AUTH_REQUIRED',
+    'CREDENTIAL_STORE_UNAVAILABLE',
+    'CREDENTIAL_STORE_BUSY',
+    'AUTH_DIRECTORY_INVALID',
+    'NETWORK_ERROR',
+  ]) {
     const result = await diagnose(
       config,
       {},
@@ -84,14 +115,14 @@ test('diagnostics distinguish missing authentication, unavailable credentials an
     );
     assert.equal(result.login_required, code === 'AUTH_REQUIRED');
     assert.equal(result.session_error, code);
-    if (code === 'CREDENTIAL_STORE_UNAVAILABLE') {
-      assert.match(JSON.stringify(result.next_steps), /Unlock.*allow ai-modeling/);
+    if (code.startsWith('CREDENTIAL_STORE_') || code === 'AUTH_DIRECTORY_INVALID') {
+      assert.match(JSON.stringify(result.next_steps), /private JSON file permissions/);
       assert.equal(result.login_required, false);
     }
     assert.equal(result.authenticated, code === 'AUTH_REQUIRED' ? false : null);
     assert.equal(
       result.checks.find((check) => check.name === 'credential_backend')?.status,
-      code === 'CREDENTIAL_STORE_UNAVAILABLE'
+      code.startsWith('CREDENTIAL_STORE_') || code === 'AUTH_DIRECTORY_INVALID'
         ? 'unavailable'
         : code === 'AUTH_REQUIRED'
           ? 'available'

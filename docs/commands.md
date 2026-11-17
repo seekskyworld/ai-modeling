@@ -1,6 +1,6 @@
 # CLI 命令参考
 
-版本 0.1.2。以下保留实际 Commander 命令树的 233 条路径（含分组）、参数与选项。CLI 是底层执行接口，MCP 工具在内部调用 CLI，Skills 为所选入口提供流程指导。命令存在不等于所有官方 API 效果均已实现，支持条件见[兼容与限制](compatibility.md)。安装、登录、MCP 和恢复流程见[使用指南](usage.md)。
+版本 0.1.3。以下保留实际 Commander 命令树的 233 条路径（含分组）、参数与选项。CLI 是底层执行接口，MCP 工具在内部调用 CLI，Skills 为所选入口提供流程指导。命令存在不等于所有官方 API 效果均已实现，支持条件见[兼容与限制](compatibility.md)。安装、登录、MCP 和恢复流程见[使用指南](usage.md)。
 
 ## 查找命令
 
@@ -25,7 +25,7 @@ ai-modeling tools --toolset studio
 
 ## 认证扩展
 
-这些入口在任务库初始化前分派，不计入 Commander 路径数。兼容入口仍为下方的 `ai-modeling login`、`logout`、`whoami`。登录凭据保存在系统凭据库；结果未知的写请求不会因重新登录而自动重放。
+这些入口在任务库初始化前分派，不计入 Commander 路径数。兼容入口仍为下方的 `ai-modeling login`、`logout`、`whoami`。登录凭据保存在 OS 用户主目录的私有 JSON 文件中，同 profile 的 CLI/MCP 共用，与业务数据目录独立；见[权限与升级](usage.md#本地-json-凭据)。结果未知的写请求不会因重新登录而自动重放。
 
 | 扩展入口 | 行为 |
 | --- | --- |
@@ -35,7 +35,7 @@ ai-modeling tools --toolset studio
 | `ai-modeling auth session wait [login_id]` | 等待当前流程；`--timeout <seconds>` 只限定本次等待，不延长登录流程。也接受 `ai-modeling auth wait`。 |
 | `ai-modeling auth session cancel [login_id]` | 取消当前流程，不删除已保存会话。也接受 `ai-modeling auth cancel`。 |
 | `ai-modeling auth status` | 保留账号会话及余额查询语义；与短时流程状态不同。 |
-| `ai-modeling auth import --stdin` / `--file PATH` | 显式备用导入；文件须为本机私有常规文件（Unix 权限 0600）。`auth login --paste` 读取 stdin；`auth login --form` 打开备用本机表单。 |
+| `ai-modeling auth import --stdin` / `--file PATH` | 显式备用导入；文件须为本机私有常规文件（Unix 权限 0600；Windows 为当前用户 SID/SYSTEM 的受保护 ACL，只验证、不自动修复）。`auth login --paste` 读取 stdin；`auth login --form` 打开备用本机表单。 |
 | `ai-modeling auth logout` | 先取消当前登录流程，再清除当前 profile 的本机会话。 |
 
 ## 共享指南入口

@@ -8,7 +8,7 @@ import { Socket } from 'node:net';
 import { once } from 'node:events';
 import os from 'node:os';
 import path from 'node:path';
-import * as keyring from '@napi-rs/keyring';
+import { JsonEntry } from '../studio/auth/json-entry.ts';
 import { object } from '../studio/contracts/errors.ts';
 import { offlineTestEnvironment } from '../scripts/test-environment.ts';
 
@@ -42,18 +42,13 @@ test('the runner keeps explicit optional Blender selection while excluding accou
   assert.equal(source.NODE_OPTIONS, '--inspect');
 });
 
-test('offline workers and inherited CLI children use disposable state and a synthetic credential store', async () => {
+test('offline workers and inherited CLI children share JSON only inside the disposable OS home', async () => {
   const sandbox = process.env.MODELING_TEST_SANDBOX;
   assert.ok(sandbox, 'Use scripts/run-tests.ts, including when selecting an individual file.');
-  assert.equal(
-    object(keyring).isolatedTestStore,
-    true,
-    'Never construct a native Keychain entry in this test.',
-  );
   assert.ok(os.userInfo().homedir.startsWith(sandbox + path.sep));
   assert.ok(process.env.AI_MODELING_DATA_DIR?.startsWith(sandbox + path.sep));
   assert.equal(os.homedir(), os.userInfo().homedir);
-  const entry = new keyring.Entry('synthetic-only', 'synthetic-only');
+  const entry = new JsonEntry('synthetic-only', 'synthetic-only');
   entry.setPassword('synthetic-value');
   assert.equal(entry.getPassword(), 'synthetic-value');
   const result = await promisify(execFile)(process.execPath, [
@@ -61,14 +56,14 @@ test('offline workers and inherited CLI children use disposable state and a synt
     '-e',
     `
     import os from 'node:os';
-    import * as keyring from '@napi-rs/keyring';
-    console.log(JSON.stringify({ home: os.homedir(), data: process.env.AI_MODELING_DATA_DIR, isolated: keyring.isolatedTestStore }));
+    import {JsonEntry} from ${JSON.stringify(new URL('../studio/auth/json-entry.ts', import.meta.url).href)};
+    console.log(JSON.stringify({ home: os.homedir(), data: process.env.AI_MODELING_DATA_DIR, saved: new JsonEntry('synthetic-only','synthetic-only').getPassword() }));
   `,
   ]);
   assert.deepEqual(JSON.parse(result.stdout), {
     home: os.homedir(),
     data: process.env.AI_MODELING_DATA_DIR,
-    isolated: true,
+    saved: 'synthetic-value',
   });
 });
 

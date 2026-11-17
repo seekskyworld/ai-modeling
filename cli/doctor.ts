@@ -10,7 +10,7 @@ import { environmentValue } from './core/environment.ts';
 import { resolveLoginBrowserOptions } from './auth/browser-options.ts';
 import { installedBrowser } from '../studio/auth/browser-discovery.ts';
 import { loopbackCdpEndpoint } from '../studio/auth/browser-login-cdp.ts';
-import { KeyringStore } from '../studio/auth/credentials.ts';
+import { JsonStore } from '../studio/auth/credentials.ts';
 import { verifyCredential } from '../studio/auth/import.ts';
 import { networkFetch } from '../studio/api/client.ts';
 import { pricingStatus } from '../studio/api/pricing-maintenance.ts';
@@ -43,7 +43,7 @@ export interface DoctorDependencies {
 }
 
 async function verifySavedSession(profile: string) {
-  const session = new KeyringStore(profile).load();
+  const session = new JsonStore(profile).load();
   if (!session) throw new TripoError('AUTH_REQUIRED', 'No saved Studio session is available.');
   const signal = AbortSignal.timeout(15000);
   const verified = await verifyCredential(session, (url, init) =>
@@ -168,7 +168,7 @@ async function checkSession(
     checks.push({ name: 'studio_session_network', ok: true, required: false, status: 'not_checked' });
   else {
     try {
-      const account = await (dependencies.verify ?? verifySavedSession)(config.keyringAccount);
+      const account = await (dependencies.verify ?? verifySavedSession)(config.credentialProfile);
       if (account.authenticated !== true)
         throw new TripoError('AUTH_REQUIRED', 'No verified Studio session is available.');
       authenticated = true;
@@ -184,13 +184,13 @@ async function checkSession(
       sessionCode = String(errorResult(error).code);
       authenticated = sessionCode === 'AUTH_REQUIRED' ? false : null;
       checks.push({ name: 'studio_session_network', ok: false, required: true, code: sessionCode });
-      if (sessionCode === 'CREDENTIAL_STORE_UNAVAILABLE') {
+      if (sessionCode.startsWith('CREDENTIAL_STORE_') || sessionCode === 'AUTH_DIRECTORY_INVALID') {
         const credential = checks.find((check) => check.name === 'credential_backend')!;
         credential.ok = false;
         credential.required = true;
         credential.status = 'unavailable';
         next.add(
-          'Unlock the OS credential store and allow ai-modeling (Node.js) access when prompted; Linux also requires session D-Bus and an unlocked Secret Service.',
+          "Check the current OS user's .ai-modeling-auth directory and private JSON file permissions. Use ai-modeling setup after resolving the reported storage error.",
         );
       } else if (sessionCode === 'AUTH_REQUIRED') {
         checks.find((check) => check.name === 'credential_backend')!.status = 'available';
@@ -256,30 +256,18 @@ export async function diagnose(
   checks.push({ name: 'node', ok: Number(node.split('.')[0]) >= 24, required: true, detail: node });
   checks.push({ name: 'state_directory', ok: await writableStateDirectory(config.dataDir), required: true });
   const browser = checkBrowser(options, dependencies, checks, next);
-  const backend =
-    platform === 'darwin'
-      ? 'macOS Keychain'
-      : platform === 'win32'
-        ? 'Windows Credential Manager'
-        : 'Linux Secret Service';
   checks.push({
     name: 'credential_backend',
     ok: true,
     required: false,
     status: 'not_checked',
-    detail: backend,
+    detail: { storage: 'private_json', protection: platform === 'win32' ? 'windows_acl' : 'posix_mode' },
   });
   if (platform === 'linux') {
     checks.push({
       name: 'desktop_session',
       ok: Boolean(env.DISPLAY || env.WAYLAND_DISPLAY),
       required: false,
-    });
-    checks.push({
-      name: 'session_dbus',
-      ok: Boolean(env.DBUS_SESSION_BUS_ADDRESS),
-      required: false,
-      status: 'environment_hint_only',
     });
   }
   const session = await checkSession(config, options, dependencies, checks, next);

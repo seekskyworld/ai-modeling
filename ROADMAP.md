@@ -5,7 +5,7 @@ The project focuses on useful, verifiable CLI and MCP access to Studio. This roa
 ## Public project maintenance
 
 - Keep installation, configuration, examples and release packages reproducible.
-- Expand platform validation where real operating-system credential stores and browser behavior can be tested.
+- Expand platform validation of private JSON credential storage, POSIX permissions, Windows ACLs and real browser sign-in.
 - Keep dependency updates, security reports and compatibility regressions actionable through the contribution workflow.
 
 ## Compatibility

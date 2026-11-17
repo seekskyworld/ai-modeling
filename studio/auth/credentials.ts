@@ -1,10 +1,9 @@
-/** 浏览器会话只进入系统凭据库；解析导入文本不执行其中的 cURL 命令。 */
-import { Entry } from './keyring-entry.ts';
-import { keyringUnavailable } from './keyring-process.ts';
+/** 浏览器会话只进入私有本地 JSON；解析导入文本不执行其中的 cURL 命令。 */
+import { JsonEntry, jsonStorageUnavailable } from './json-entry.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { object, text, TripoError } from '../contracts/errors.ts';
 import { isDeepStrictEqual } from 'node:util';
-import { withCredentialLock } from './credential-lock.ts';
+import type { AuthStorageOptions } from './control-directory.ts';
 
 export interface Session {
   cookie?: string;
@@ -21,45 +20,60 @@ export interface CredentialStore {
   clear(): void;
 }
 
-export class KeyringStore implements CredentialStore {
-  private entry: Entry;
-  private profile: string;
-  constructor(profile = 'default') {
-    this.profile = profile;
-    this.entry = new Entry('ai-modeling', profile, { linux: { store: 'secret-service' } });
+function validateSession(value: unknown): Session {
+  const session = object(value);
+  const keys = ['cookie', 'bearer', 'deviceId', 'accountRef', 'expiresAt', 'importedAt'];
+  if (
+    Object.keys(session).some((key) => !keys.includes(key)) ||
+    !['deviceId', 'importedAt'].every((key) => typeof session[key] === 'string' && session[key] !== '') ||
+    Object.values(session).some(
+      (item) =>
+        item !== undefined &&
+        (typeof item !== 'string' ||
+          item.length > 131072 ||
+          [...item].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)),
+    ) ||
+    !Number.isFinite(Date.parse(String(session.importedAt))) ||
+    (session.expiresAt !== undefined && !Number.isFinite(Date.parse(String(session.expiresAt))))
+  )
+    throw jsonStorageUnavailable();
+  return session as unknown as Session;
+}
+function decodeSession(value: string | null): Session | undefined {
+  if (value === null) return undefined;
+  try {
+    return validateSession(JSON.parse(value));
+  } catch {
+    throw jsonStorageUnavailable();
+  }
+}
+
+export class JsonStore implements CredentialStore {
+  private entry: JsonEntry;
+  constructor(profile = 'default', options: AuthStorageOptions = {}) {
+    this.entry = new JsonEntry('ai-modeling', profile, options);
   }
   load(): Session | undefined {
-    try {
-      const value = this.entry.getPassword();
-      return value ? (JSON.parse(value) as Session) : undefined;
-    } catch (error) {
-      if (error instanceof TripoError) throw error;
-      throw keyringUnavailable();
-    }
+    return decodeSession(this.entry.getPassword());
   }
   save(session: Session): void {
-    try {
-      withCredentialLock(this.profile, () => this.entry.setPassword(JSON.stringify(session)));
-    } catch (error) {
-      if (error instanceof TripoError) throw error;
-      throw keyringUnavailable(false, 'unknown');
-    }
+    this.entry.setPassword(JSON.stringify(validateSession(session)));
   }
   /** 首次登录和刷新共用同一把锁；原快照（包括空值）变化后不能覆盖新凭据。 */
   saveIfUnchanged(expected: Session | undefined, session: Session): boolean {
-    return withCredentialLock(this.profile, () => {
-      if (!isDeepStrictEqual(this.load(), expected)) return false;
-      try {
-        this.entry.setPassword(JSON.stringify(session));
-      } catch (error) {
-        if (error instanceof TripoError) throw error;
-        throw keyringUnavailable(false, 'unknown');
-      }
-      return true;
+    const encoded = JSON.stringify(validateSession(session));
+    const before =
+      expected === undefined ? undefined : decodeSession(JSON.stringify(validateSession(expected)));
+    let saved = false;
+    this.entry.update((current) => {
+      if (!isDeepStrictEqual(decodeSession(current), before)) return current;
+      saved = true;
+      return encoded;
     });
+    return saved;
   }
   clear(): void {
-    withCredentialLock(this.profile, () => this.entry.deleteCredential());
+    this.entry.deleteCredential();
   }
 }
 

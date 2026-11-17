@@ -60,7 +60,12 @@ export async function fixture(
     gateway,
     credentials,
     pricing: { quote: async () => quote },
-    config: { dataDir: dir, outputDir: path.join(dir, 'output'), inputRoots: [dir], keyringAccount: 'test' },
+    config: {
+      dataDir: dir,
+      outputDir: path.join(dir, 'output'),
+      inputRoots: [dir],
+      credentialProfile: 'test',
+    },
   });
   return { dir, jobs, gateway, service };
 }

@@ -1,4 +1,4 @@
-/** 本地偏好与目录上下文沿用官方命令约定；网页登录与 LLM 密钥始终存于系统凭据库。 */
+/** 本地偏好与目录上下文沿用官方命令约定；网页登录与 LLM 密钥存于用户私有 JSON 凭据文件。 */
 import { readFileSync, existsSync } from 'node:fs';
 import { mkdir, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';

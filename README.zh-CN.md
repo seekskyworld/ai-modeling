@@ -67,7 +67,7 @@
 准备 Node.js **24+**，从 [npm](https://www.npmjs.com/package/@seekskyworld/ai-modeling) 安装统一运行包：
 
 ```sh
-npm install --global @seekskyworld/ai-modeling@0.1.2
+npm install --global @seekskyworld/ai-modeling@0.1.3
 ai-modeling --version
 ai-modeling doctor --offline --json
 ```
@@ -83,9 +83,9 @@ ai-modeling setup
 ai-modeling make "a small blue robot" --model tripo-p2 --dry-run --json
 ```
 
-`setup` 会复用已保存的有效会话；需要登录时，由你在浏览器完成密码与验证，不需要复制 Token。登录需要 Chrome/Edge 和可用的系统凭据库。预览只在本地执行；确认后去掉 `--dry-run` 才会生成并消耗 Studio 积分。用 `ai-modeling task get @last` 查询任务，或用 `ai-modeling task watch @last --download --out ./assets` 下载结果。
+`setup` 会复用已保存的有效会话；需要登录时，由你在 Chrome/Edge 中完成密码与验证，不需要复制 Token。会话使用本地私有 JSON 文件保存，同一 OS 用户和 profile 的 CLI/MCP 共用，不再依赖系统钥匙串。权限要求和旧版升级见[本地 JSON 凭据](docs/usage.md#本地-json-凭据)。预览只在本地执行；确认后去掉 `--dry-run` 才会生成并消耗 Studio 积分。用 `ai-modeling task get @last` 查询任务，或用 `ai-modeling task watch @last --download --out ./assets` 下载结果。
 
-不想全局安装时，可运行 `npx --yes --package @seekskyworld/ai-modeling@0.1.2 ai-modeling --version`；后续 CLI 或 Skill 安装命令沿用这个完整前缀。下方 MCP 配置也可直接通过 npx 启动。
+不想全局安装时，可运行 `npx --yes --package @seekskyworld/ai-modeling@0.1.3 ai-modeling --version`；后续 CLI 或 Skill 安装命令沿用这个完整前缀。下方 MCP 配置也可直接通过 npx 启动。
 
 更多 npm、[Release 归档](https://github.com/seekskyworld/ai-modeling/releases)、平台条件与恢复方法见[安装与登录指南](docs/usage.md)。源码贡献者执行 `npm ci`、`npm run build`，再用 `node dist/cli/main.js` 替换文中的 `ai-modeling`；单纯构建不会安装全局命令。付费流程前可用 `ai-modeling pricing status` 检查价格来源与到期时间。
 
@@ -115,7 +115,7 @@ ai-modeling generate image-to-model ./reference.png --model tripo-v3.1 -p face_l
 
 CLI 是底层执行接口；MCP 是面向 Agent 的工具入口，Agent 调用 MCP 后，由 MCP 内部调用 CLI。Skills 提供使用说明、示例和面向具体目标的流程指导，沿用用户选定的入口。选择 MCP 时使用 MCP 工具，不擅自改成 shell CLI。Skill 需要另装运行包，运行层不强制固定业务流程。
 
-0.1.2 使用 `@seekskyworld/ai-modeling` 包名、`ai-modeling` 命令、`AI_MODELING_*` 配置、`ai_modeling_*` 工具及 `ai-modeling://auth/status` 资源。请按这些名称配置客户端，再通过所选入口完成登录。
+0.1.3 使用 `@seekskyworld/ai-modeling` 包名、`ai-modeling` 命令、`AI_MODELING_*` 配置、`ai_modeling_*` 工具及 `ai-modeling://auth/status` 资源。请按这些名称配置客户端，再通过所选入口完成登录。
 
 ### 使用 Skill
 
@@ -135,7 +135,7 @@ Golutra Agent 用户可执行 `ai-modeling skill install --target golutra-agent 
 
 ### 接入 MCP
 
-在支持 `mcpServers` 的客户端中添加以下固定版本配置。它通过 npx 使用 npm 包，不需要另做全局安装：
+在支持 `mcpServers` 的客户端中添加以下固定版本配置。它通过 npx 使用 npm 包，不需要另做全局安装。Windows 宿主若不能启动 npm 的 `.cmd` 脚本，可用 [Windows npx 示例](examples/mcp-npx-windows.json)；直接用 Node.js 启动已安装包的方式见 [Windows 配置说明](docs/usage.md#windows-启动方式)。
 
 ```json
 {
@@ -143,7 +143,7 @@ Golutra Agent 用户可执行 `ai-modeling skill install --target golutra-agent 
     "ai-modeling": {
       "type": "stdio",
       "command": "npx",
-      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.2", "ai-modeling", "mcp"],
+      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.3", "ai-modeling", "mcp"],
       "env": {"AI_MODELING_PROFILE": "default"}
     }
   }

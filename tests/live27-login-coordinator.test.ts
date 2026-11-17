@@ -51,7 +51,7 @@ async function fixture(initial?: Session) {
   const directory = await realpath(await mkdtemp(path.join(tmpdir(), 'tripo-login-test-')));
   const config: Config = {
     dataDir: directory,
-    keyringAccount: path.basename(directory),
+    credentialProfile: path.basename(directory),
     inputRoots: [],
     outputDir: '',
   };

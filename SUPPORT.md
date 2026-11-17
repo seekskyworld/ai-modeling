@@ -20,7 +20,7 @@ Security reports must follow [SECURITY.md](SECURITY.md) through the [private vul
 | 安全问题 | [安全说明](SECURITY.md)，使用私密渠道 |
 | 社区行为问题 | [行为准则](CODE_OF_CONDUCT.md)，使用私密渠道 |
 
-Node.js 24+ 是运行要求；部分功能另需系统凭据库、Chrome/Edge、Blender 或 FFmpeg。不同系统、浏览器和上游权限的完整组合未全部验证。以具体功能指南的条件为准，不把可启动程序等同于每种处理都可用。
+Node.js 24+ 是运行要求；账号操作使用当前 OS 用户的私有 JSON 凭据文件，不要求系统钥匙串或 Linux Secret Service。自动登录需要可见的 Chrome/Edge；Windows 私有文件权限检查需要系统 PowerShell 和可验证的 ACL。部分处理另需 Blender 或 FFmpeg。不同系统、浏览器和上游权限的完整组合未全部验证，以具体功能指南为准。
 
 ## 如何提问或报告
 
@@ -41,7 +41,7 @@ npm --version
 ai-modeling --version
 ```
 
-本项目唯一可执行名称是 `ai-modeling`；多版本安装时核对它的安装位置。需要本机诊断时用 `ai-modeling doctor --offline --json`，按功能选择 `--feature`。公开报告中不要粘贴个人绝对路径、Cookie、Token、Authorization、签名 URL、真实账号/任务标识或完整任务数据库。MCP 配置只保留与问题相关的非秘密字段。
+本项目唯一可执行名称是 `ai-modeling`；多版本安装时核对它的安装位置。需要本机诊断时用 `ai-modeling doctor --offline --json`，按功能选择 `--feature`。凭据文件错误只提供脱敏错误码和权限检查结论，不上传 `.ai-modeling-auth` 或其中的 JSON。公开报告中不要粘贴个人绝对路径、Cookie、Token、Authorization、签名 URL、真实账号/任务标识或完整任务数据库。MCP 配置只保留与问题相关的非秘密字段。
 
 运行包下载见 [npm](https://www.npmjs.com/package/@seekskyworld/ai-modeling) 和 [GitHub Releases](https://github.com/seekskyworld/ai-modeling/releases)。安全问题使用[私密漏洞报告](https://github.com/seekskyworld/ai-modeling/security/advisories/new)，不附到公开 Issue。
 

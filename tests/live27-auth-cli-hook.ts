@@ -10,14 +10,14 @@ const targets = [
 const blocked = (name: string) =>
   'data:text/javascript,' +
   encodeURIComponent(
-    name === '@napi-rs/keyring'
-      ? 'export class Entry { constructor() { throw Error("Unexpected real Keychain access"); } }'
+    name === 'json-entry'
+      ? 'export class JsonEntry { getPassword(){throw Error("Unexpected private JSON access")} setPassword(){throw Error("Unexpected private JSON access")} deleteCredential(){throw Error("Unexpected private JSON access")} update(){throw Error("Unexpected private JSON access")} } export const jsonEntryLimit=1048576; export const jsonStorageRecoveryMessage="Unavailable private JSON storage"; export function jsonStorageUnavailable(){return Error("Unexpected private JSON access")}'
       : 'export class EnvHttpProxyAgent {} export async function fetch(){throw Error("Unexpected real network");}',
   );
 registerHooks({
   resolve(specifier, context, next) {
-    if (['@napi-rs/keyring', 'undici'].includes(specifier))
-      return { url: blocked(specifier), shortCircuit: true };
+    if (/\/json-entry\.(?:ts|js)$/.test(specifier)) return { url: blocked('json-entry'), shortCircuit: true };
+    if (specifier === 'undici') return { url: blocked(specifier), shortCircuit: true };
     return next(specifier, context);
   },
   load(url, context, next) {

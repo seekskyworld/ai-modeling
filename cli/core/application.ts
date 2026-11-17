@@ -2,8 +2,8 @@
 import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { configFromEnv, initializeDirectories, type Config } from './config.ts';
-import { KeyringStore } from '../../studio/auth/credentials.ts';
-import { KeyringLinks } from '../../studio/auth/artifact-links.ts';
+import { JsonStore } from '../../studio/auth/credentials.ts';
+import { JsonLinks } from '../../studio/auth/artifact-links.ts';
 import { StudioClient } from '../../studio/api/client.ts';
 import { StudioGateway } from '../../studio/api/gateway.ts';
 import { PricingService } from '../../studio/api/pricing.ts';
@@ -20,14 +20,14 @@ export async function createApplication(
   const cache = path.join(config.dataDir, 'input-cache');
   await mkdir(cache, { recursive: true, mode: 0o700 });
   config = { ...config, inputRoots: config.inputRoots.length ? [...config.inputRoots, cache] : [] };
-  const credentials = new KeyringStore(config.keyringAccount);
+  const credentials = new JsonStore(config.credentialProfile);
   const client = new StudioClient(
     credentials,
     undefined,
     undefined,
     options.authentication === false ? undefined : authenticationHandler(config, credentials),
   );
-  const studio = new StudioGateway(client, config.inputRoots, new KeyringLinks(config.keyringAccount));
+  const studio = new StudioGateway(client, config.inputRoots, new JsonLinks(config.credentialProfile));
   const jobs = new JobStore(path.join(config.dataDir, 'jobs.sqlite'));
   jobs.recoverExpired();
   return {

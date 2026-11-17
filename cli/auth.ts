@@ -1,7 +1,7 @@
 /** 可见浏览器登录、短时流程与显式粘贴备用入口；status仍保持旧账号查询语义。 */
 import { configFromEnv } from './core/config.ts';
 import { createApplication } from './core/application.ts';
-import { KeyringStore } from '../studio/auth/credentials.ts';
+import { JsonStore } from '../studio/auth/credentials.ts';
 import { startAuthBridge } from '../studio/auth/bridge.ts';
 import { TripoError } from '../studio/contracts/errors.ts';
 import {
@@ -139,7 +139,7 @@ async function sessionCommand(args: string[]): Promise<void> {
 }
 async function manualForm(config: ReturnType<typeof configFromEnv>): Promise<void> {
   const manual = await manualLogin({ config }),
-    store = new KeyringStore(config.keyringAccount);
+    store = new JsonStore(config.credentialProfile);
   const bridge = await startAuthBridge(
     store,
     (result) => {

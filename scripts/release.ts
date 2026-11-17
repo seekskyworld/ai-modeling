@@ -41,6 +41,7 @@ const consumerChecks = [
   'global-install',
   'global-bin',
   'global-native-runtime',
+  'global-json-credentials',
   'global-mcp',
   'global-skill-management',
   'global-dependency-bytes',
@@ -393,6 +394,18 @@ function consumerLockValid(value: unknown, expectedDigest?: string): boolean {
   );
 }
 
+function jsonCredentialProbeValid(value: unknown): boolean {
+  const credentials = record(value);
+  return (
+    credentials.backend === 'json' &&
+    credentials.persistence_verified === true &&
+    credentials.compare_and_swap_verified === true &&
+    credentials.profile_isolation_verified === true &&
+    credentials.clear_verified === true &&
+    credentials.operator_credentials_accessed === false
+  );
+}
+
 function globalConsumerValid(value: unknown): boolean {
   const global = record(value);
   const native = record(global.native_runtime);
@@ -400,8 +413,7 @@ function globalConsumerValid(value: unknown): boolean {
   return (
     global.functional_passed === true &&
     native.sharp_encode_decode === true &&
-    native.keyring_module_loaded === true &&
-    native.credential_accessed === false &&
+    jsonCredentialProbeValid(global.credential_store) &&
     dependencies.comparison === 'name-version-reviewed-local-bytes' &&
     dependencies.matches === true &&
     typeof dependencies.packages_verified === 'number' &&
@@ -489,7 +501,7 @@ function releaseNotes(report: ReturnType<typeof assessReadiness>): string {
   const blockers = report.blockers.length
     ? report.blockers.map((item) => `- ${item.code}: ${item.message}`).join('\n')
     : '- No automated readiness blockers.';
-  return `# ai-modeling ${report.version} release candidate\n\nStatus: ${report.ready ? 'ready for maintainer review' : 'blocked'}; this report does not publish or establish publication of the candidate.\n\nSource commit: ${report.provenance.source_commit ?? 'unknown'}.\nRepository: ${report.repository ?? 'unconfigured'}.\nPrivate security contact: ${report.security_contact ?? 'unconfigured'}.\n\n## Readiness\n\n${blockers}\n\nBundled pricing expires: ${report.pricing.expires_at ?? 'unknown'}. At least ${report.pricing.minimum_remaining_hours} hours must remain when preparing the candidate. This check does not reverify pricing evidence online.\n\nTGZ SHA-256: ${report.installation?.archive_sha256 ?? 'unverified'}.\nVerified locked-installation platforms: ${report.installation?.verified_platforms.join(', ') || 'none'}.\nVerified npm consumer platforms: ${report.installation?.consumer_verified_platforms?.join(', ') || 'none'}.\nConsumer dependency drift: ${report.consumer_dependency_drift.join(', ') || 'none recorded'}.\n\nConsumer checks exercise direct TGZ installation, offline npm exec/npx, MCP discovery and Skill management. Candidate readiness requires functional success, matching name/version/integrity metadata and unchanged bundled files on all three platforms. Reviewed portable dependencies travel in the archive; exact optional platform dependencies are installed by npm.\n\nInstallation checks cover the executable, version, help, CLI/MCP guides, MCP handshake and locked production dependencies. They do not validate a real account, OS credential store, browser login, Blender, FFmpeg or live Studio behavior.\n\n## Maintainer review and stable publication\n\n1. Review CHANGELOG.md for this version; replace this generated candidate text with the approved user-facing changes.\n2. Confirm the repository and private contact are working, inspect all three locked-installation reports and all three consumer reports, and confirm full checks plus the production dependency audit passed for this commit.\n3. Run release:prepare again with --require-ready immediately before publication so stale pricing or mismatched files block the handoff. Review readiness.json and both SHA256SUMS files.\n4. With explicit maintainer approval, create the stable GitHub Release for the reviewed commit/tag and attach the six original distribution files plus the reviewed candidate evidence. Do not rebuild between review and publication.\n5. Verify the published download links and checksums. Publish the reviewed runtime archive to npm as @seekskyworld/ai-modeling with public access, then verify its registry digest and install the exact published version. This candidate command itself never publishes.\n\n候选包仅供审阅；本命令不会创建稳定 Release、标签或发布到 npm。请先解决 readiness.json 中的阻塞项，人工确认维护渠道和验证记录，再批准具体提交及归档。三平台安装冒烟不代表真实账号、凭据库、浏览器或全部业务能力已验收。\n`;
+  return `# ai-modeling ${report.version} release candidate\n\nStatus: ${report.ready ? 'ready for maintainer review' : 'blocked'}; this report does not publish or establish publication of the candidate.\n\nSource commit: ${report.provenance.source_commit ?? 'unknown'}.\nRepository: ${report.repository ?? 'unconfigured'}.\nPrivate security contact: ${report.security_contact ?? 'unconfigured'}.\n\n## Readiness\n\n${blockers}\n\nBundled pricing expires: ${report.pricing.expires_at ?? 'unknown'}. At least ${report.pricing.minimum_remaining_hours} hours must remain when preparing the candidate. This check does not reverify pricing evidence online.\n\nTGZ SHA-256: ${report.installation?.archive_sha256 ?? 'unverified'}.\nVerified locked-installation platforms: ${report.installation?.verified_platforms.join(', ') || 'none'}.\nVerified npm consumer platforms: ${report.installation?.consumer_verified_platforms?.join(', ') || 'none'}.\nConsumer dependency drift: ${report.consumer_dependency_drift.join(', ') || 'none recorded'}.\n\nConsumer checks exercise direct TGZ installation, offline npm exec/npx, global installation, MCP discovery and Skill management. Global verification includes real PNG encoding/decoding and an isolated JSON credential save/load/CAS/clear check using synthetic data. Candidate readiness requires functional success, matching name/version/integrity metadata and unchanged bundled files on all three platforms. Reviewed portable dependencies travel in the archive; exact optional platform dependencies are installed by npm.\n\nInstallation checks cover the executable, version, help, CLI/MCP guides, MCP handshake and locked production dependencies. They do not validate a real account, existing user credentials, browser login, Blender, FFmpeg or live Studio behavior.\n\n## Maintainer review and stable publication\n\n1. Review CHANGELOG.md for this version; replace this generated candidate text with the approved user-facing changes.\n2. Confirm the repository and private contact are working, inspect all three locked-installation reports and all three consumer reports, and confirm full checks plus the production dependency audit passed for this commit.\n3. Run release:prepare again with --require-ready immediately before publication so stale pricing or mismatched files block the handoff. Review readiness.json and both SHA256SUMS files.\n4. With explicit maintainer approval, create the stable GitHub Release for the reviewed commit/tag and attach the six original distribution files plus the reviewed candidate evidence. Do not rebuild between review and publication.\n5. Verify the published download links and checksums. Publish the reviewed runtime archive to npm as @seekskyworld/ai-modeling with public access, then verify its registry digest and install the exact published version. This candidate command itself never publishes.\n\n候选包仅供审阅；本命令不会创建稳定 Release、标签或发布到 npm。请先解决 readiness.json 中的阻塞项，人工确认维护渠道和验证记录，再批准具体提交及归档。三平台安装冒烟不代表真实账号、已有用户凭据、浏览器或全部业务能力已验收。\n`;
 }
 
 export async function runRelease(root: string, options: ReleaseOptions) {

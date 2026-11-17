@@ -59,7 +59,7 @@ test('fill covers back-facing UVs, eraser restores source, and history survives 
     const model = path.join(dir, 'source.glb'),
       doc = await source();
     await writeFile(model, await new NodeIO().writeBinary(doc));
-    const config: Config = { dataDir: dir, outputDir: dir, inputRoots: [dir], keyringAccount: 'test' };
+    const config: Config = { dataDir: dir, outputDir: dir, inputRoots: [dir], credentialProfile: 'test' };
     const paint = async (name: string, actions: unknown[], history_path?: string) => {
       const destination_path = path.join(dir, name + '.json');
       await brushPaintOperations[0]!.run(config, {

@@ -1,4 +1,4 @@
-/** 仅子进程测试加载：所有会话均为固定假值，网络/真实浏览器/系统凭据库完全不参与。 */
+/** 仅子进程测试加载：所有会话均为固定假值，网络/真实浏览器/用户凭据完全不参与。 */
 import { readFileSync, writeFileSync, existsSync, appendFileSync, unlinkSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import path from 'node:path';
@@ -13,7 +13,7 @@ export const fakeLoginSession: Session = {
   importedAt: '2026-11-16T00:00:00Z',
 };
 export function defaultLoginRuntime(config: Config): LoginRuntime {
-  const file = path.join(config.dataDir, 'fixture-credentials-' + config.keyringAccount + '.json');
+  const file = path.join(config.dataDir, 'fixture-credentials-' + config.credentialProfile + '.json');
   const load = (): Session | undefined =>
     existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : undefined;
   const save = (session: Session) => writeFileSync(file, JSON.stringify(session), { mode: 0o600 });

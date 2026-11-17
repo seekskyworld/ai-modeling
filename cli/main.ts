@@ -27,7 +27,7 @@ const help = `ai-modeling — use your own Tripo Studio account
   auth login                    Sign in in a browser; continue automatically
   auth begin                    Start login without waiting
   auth session status|wait|cancel [id]  Manage the current login flow
-  auth import --file PATH       Import a private (0600) credential file
+  auth import --file PATH       Import a private credential file (POSIX mode or Windows ACL)
   auth import --stdin           Import without a command-line secret
   auth status                   Verify session and show credit balance
   auth logout                   Remove this profile's saved Studio session

@@ -33,6 +33,8 @@ The optional frontend exporter loads the exact Studio-hosted `assimpjs-meshopt` 
 
 Browser authentication uses `playwright-core@1.65.1` (Apache-2.0) to control an installed Chromium browser. Its license and notices remain in the installed package. No browser binary, regular user profile, or saved browser authentication state is bundled. The login broker, account verification and continuation policy are independently maintained here.
 
+The private JSON credential store is maintained independently here. It uses Node.js filesystem APIs and the operating system's file permissions; it does not include a native keychain library or require a system credential service. Sharp and its platform dependencies remain necessary for image processing.
+
 ## MIT License
 
 Copyright (c) 2026 tripo-studio-plugin contributors

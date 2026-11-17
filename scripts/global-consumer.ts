@@ -83,7 +83,7 @@ export async function installGlobalConsumer(
   return { prefix, modules, installed, entry, shim };
 }
 
-/** Exercise actual image processing and load the OS module without opening any credential entry. */
+/** Exercise actual image processing; metadata-only startup cannot establish a working native runtime. */
 export function probeGlobalNativeRuntime(entry: string, directory: string, env: Environment) {
   const script = `
 import { createRequire } from 'node:module';
@@ -92,8 +92,7 @@ const require = createRequire(process.argv[1]);
 const sharp = (await import(pathToFileURL(require.resolve('sharp')).href)).default;
 const image = await sharp({ create: { width: 1, height: 1, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 1 } } }).png().toBuffer();
 const metadata = await sharp(image).metadata();
-const keyring = require('@napi-rs/keyring');
-process.stdout.write(JSON.stringify({ png: image.subarray(0, 8).toString('hex'), width: metadata.width, height: metadata.height, keyring_loaded: typeof keyring.Entry === 'function' }));
+process.stdout.write(JSON.stringify({ png: image.subarray(0, 8).toString('hex'), width: metadata.width, height: metadata.height }));
 `;
   const result = JSON.parse(
     execFileSync(process.execPath, ['--input-type=module', '--eval', script, entry], {
@@ -105,8 +104,70 @@ process.stdout.write(JSON.stringify({ png: image.subarray(0, 8).toString('hex'),
       stdio: ['ignore', 'pipe', 'pipe'],
     }),
   );
-  assert.deepEqual(result, { png: '89504e470d0a1a0a', width: 1, height: 1, keyring_loaded: true });
-  return { sharp_encode_decode: true, keyring_module_loaded: true, credential_accessed: false };
+  assert.deepEqual(result, { png: '89504e470d0a1a0a', width: 1, height: 1 });
+  return { sharp_encode_decode: true };
+}
+
+/** Exercise the installed JSON backend only in an explicit disposable directory, never the operator's store. */
+export function probeGlobalCredentialStore(entry: string, directory: string, env: Environment) {
+  const script = `
+import assert from 'node:assert/strict';
+import { lstat, readFile, readdir } from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+const { JsonStore } = await import(new URL('../studio/auth/credentials.js', pathToFileURL(process.argv[1])));
+const directory = path.join(process.argv[2], 'synthetic-json-credentials');
+const options = { directory };
+const store = new JsonStore('synthetic-global-consumer', options);
+const session = { deviceId: 'synthetic-device', importedAt: '2026-01-01T00:00:00Z', accountRef: 'synthetic-account', bearer: 'synthetic-consumer-value' };
+const fresh = () => new JsonStore('synthetic-global-consumer', options);
+assert.equal(store.load(), undefined);
+store.save(session);
+assert.deepEqual(fresh().load(), session);
+assert.equal(new JsonStore('synthetic-other-profile', options).load(), undefined);
+let jsonFiles = 0;
+async function inspect(root) {
+  for (const name of await readdir(root)) {
+    const file = path.join(root, name);
+    const info = await lstat(file);
+    assert.equal(info.isSymbolicLink(), false);
+    if (info.isDirectory()) await inspect(file);
+    else if (name.endsWith('.json')) {
+      JSON.parse(await readFile(file, 'utf8'));
+      if (process.platform !== 'win32') assert.equal(info.mode & 0o077, 0);
+      jsonFiles++;
+    }
+  }
+}
+await inspect(directory);
+assert.ok(jsonFiles > 0);
+const renewed = { ...session, bearer: 'synthetic-renewed-value' };
+assert.equal(store.saveIfUnchanged(session, renewed), true);
+assert.equal(store.saveIfUnchanged(session, session), false);
+assert.deepEqual(fresh().load(), renewed);
+store.clear();
+assert.equal(fresh().load(), undefined);
+process.stdout.write(JSON.stringify({ backend: 'json', persistence_verified: true, compare_and_swap_verified: true, profile_isolation_verified: true, clear_verified: true, operator_credentials_accessed: false }));
+`;
+  const result = JSON.parse(
+    execFileSync(process.execPath, ['--input-type=module', '--eval', script, entry, directory], {
+      cwd: directory,
+      env,
+      encoding: 'utf8',
+      timeout: 60000,
+      maxBuffer: 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }),
+  );
+  assert.deepEqual(result, {
+    backend: 'json',
+    persistence_verified: true,
+    compare_and_swap_verified: true,
+    profile_isolation_verified: true,
+    clear_verified: true,
+    operator_credentials_accessed: false,
+  });
+  return result;
 }
 
 async function packageFiles(root: string, relative = ''): Promise<string[]> {

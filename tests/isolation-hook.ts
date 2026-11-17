@@ -1,5 +1,5 @@
-/** Test-only process boundary: synthetic OS home/Keychain, disposable state and loopback-only HTTP. */
-import { registerHooks, syncBuiltinESMExports } from 'node:module';
+/** Test-only process boundary: synthetic OS home/private JSON, disposable state and loopback-only HTTP. */
+import { syncBuiltinESMExports } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -25,28 +25,6 @@ const originalUserInfo = os.userInfo;
 Object.defineProperty(os, 'homedir', { value: () => syntheticHome });
 Object.defineProperty(os, 'userInfo', { value: () => ({ ...originalUserInfo(), homedir: syntheticHome }) });
 syncBuiltinESMExports();
-const keyring =
-  'data:text/javascript,' +
-  encodeURIComponent(`
-const values = new Map();
-export const isolatedTestStore = true;
-export class Entry {
-  constructor(service, account) { this.key = JSON.stringify([service, account]); }
-  getPassword() { return values.get(this.key) ?? null; }
-  setPassword(value) { values.set(this.key, value); }
-  deleteCredential() { values.delete(this.key); }
-}`);
-// Business-store tests retain an in-process synthetic store. Process-boundary tests exercise
-// keyring-process directly with explicit synthetic child helpers, never a real native store.
-const isolatedEntry =
-  'data:text/javascript,' + encodeURIComponent('export { Entry } from "@napi-rs/keyring";');
-registerHooks({
-  resolve(specifier, context, next) {
-    if (specifier === '@napi-rs/keyring') return { url: keyring, shortCircuit: true };
-    if (/\/keyring-entry\.(?:ts|js)$/.test(specifier)) return { url: isolatedEntry, shortCircuit: true };
-    return next(specifier, context);
-  },
-});
 const network = new MockAgent();
 network.disableNetConnect();
 network.enableNetConnect(/^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/);

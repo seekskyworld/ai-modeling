@@ -6,7 +6,7 @@ English readers can start with the [English quick tutorial](usage.md#quick-start
 
 | 文档 | 内容 |
 | --- | --- |
-| [使用指南](usage.md) | Skill/MCP 产物安装、源码导出、登录、CLI 使用、任务恢复与排障 |
+| [使用指南](usage.md) | Skill/MCP 产物安装、跨平台私有 JSON 会话、登录、CLI 使用、任务恢复与排障 |
 | [命令参考](commands.md) | 命令、参数、选项和结构化工具入口 |
 | [兼容与限制](compatibility.md) | 官方 CLI 映射、网页功能范围、受限条件与未完成项 |
 | [开发指南](development.md) | 三层架构、测试、统一导出、包检查与分发维护 |

@@ -8,7 +8,7 @@
 - Prefer verified Studio endpoints. Local equivalents are appropriate for behavior performed by the webpage frontend; identify these explicitly. Do not silently switch to the developer API wallet or another model provider.
 - Match the official CLI command structure where practical, then add Studio extensions using the same conventions. Document semantic differences and unsupported combinations in `docs/compatibility.md`.
 - Trace the complete request chain, including upload, authorization, preparation, submission and result retrieval. Similar field names or a successful response alone do not prove equivalent effects.
-- Keep credentials in the operating system credential store. Never include sessions, signed URLs, account identifiers, private paths or account reports in public documentation, fixtures or logs.
+- Store credentials in private local JSON files shared by the same OS user and profile, independently of business data directories. Support Windows, Linux and macOS without requiring a system keychain. Protect concurrent writes and access permissions. Never include sessions, signed URLs, account identifiers, private paths or account reports in public documentation, fixtures or logs.
 - Preserve request identity and account binding. An expired lock or missing response is not evidence that a remote submission did not execute. Do not automatically resubmit an unknown write.
 - Keep migrations, task state, cached artifact identity and idempotency updates transactional. Validate downloaded bytes and avoid overwriting unrelated files.
 - Run checks appropriate to the change. Documentation changes require valid links, accurate examples and a clean package inventory; they do not require unrelated live generation.

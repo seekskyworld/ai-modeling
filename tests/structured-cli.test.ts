@@ -94,7 +94,7 @@ test('the production CLI passes a reordered login ID and discovers tools without
       records.some((row) => row.kind === 'create-application'),
       false,
     );
-    // A directory initialization would fail; discovery must not even read settings or construct Keychain.
+    // A directory initialization would fail; discovery must not even read settings or construct credential storage.
     await writeFile(env.AI_MODELING_DATA_DIR, 'not a directory');
     for (const [toolset, count] of [
       ['default', 6],

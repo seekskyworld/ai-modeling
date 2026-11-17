@@ -19,6 +19,7 @@ import path from 'node:path';
 import { readCredentialFile } from '../cli/auth/credential-file.ts';
 import { resolveLoginBrowserOptions } from '../cli/auth/browser-options.ts';
 import { beginLogin, ensureLogin } from '../cli/auth/coordinator.ts';
+import { protectPrivateWindowsPath } from '../studio/auth/windows-permissions.ts';
 
 test('explicit browser modes override the opposite environment default without mutating it', () => {
   const env = {
@@ -47,7 +48,7 @@ test('explicit browser modes override the opposite environment default without m
   );
 });
 
-test('explicit browser conflicts and empty values fail before configuration, keyring or flow access', async () => {
+test('explicit browser conflicts and empty values fail before configuration, credentials or flow access', async () => {
   for (const options of [
     { executablePath: '/synthetic/chrome', cdpEndpoint: 'http://127.0.0.1:9222' },
     { executablePath: '' },
@@ -65,7 +66,9 @@ test('credential files require a private bounded regular file and never expose r
   try {
     const synthetic = JSON.stringify({ cookie: 'synthetic-cookie-not-real' });
     await writeFile(file, synthetic, { mode: 0o600 });
+    if (process.platform === 'win32') protectPrivateWindowsPath(file, 'file');
     assert.equal(await readCredentialFile(file), synthetic);
+    assert.equal(await readCredentialFile(path.relative(process.cwd(), file)), synthetic);
     await writeFile(file, Buffer.alloc(131072, 65));
     assert.equal((await readCredentialFile(file)).length, 131072);
     await writeFile(file, Buffer.alloc(131073, 65));
@@ -99,6 +102,7 @@ for (const change of ['growth', 'same-size', 'permissions'] as const) {
     const file = path.join(directory, 'synthetic-private-file');
     try {
       await writeFile(file, Buffer.alloc(8192, 65), { mode: 0o600 });
+      if (process.platform === 'win32') protectPrivateWindowsPath(file, 'file');
       const handle = await open(file, 'r'),
         prototype = Object.getPrototypeOf(handle),
         original = handle.read;

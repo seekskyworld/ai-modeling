@@ -81,10 +81,10 @@ test('CLI source-isolation dry-run succeeds without data initialization, credent
   await writeFile(
     guard,
     `
-import { KeyringStore } from ${JSON.stringify(credentials)};
+import { JsonStore } from ${JSON.stringify(credentials)};
 import { StudioClient } from ${JSON.stringify(client)};
 const denied = () => { throw new Error('Offline CLI preview attempted external access'); };
-for (const method of ['load', 'save', 'clear', 'saveIfUnchanged']) KeyringStore.prototype[method] = denied;
+for (const method of ['load', 'save', 'clear', 'saveIfUnchanged']) JsonStore.prototype[method] = denied;
 StudioClient.prototype.request = denied;
 globalThis.fetch = denied;
 `,
