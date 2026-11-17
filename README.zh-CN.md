@@ -177,6 +177,8 @@ npm run export:mcp -- --out ../ai-modeling-mcp
 
 运行包随附已审阅的可移植生产依赖、生产 shrinkwrap 和依赖溯源，原生包及其平台依赖由 npm 安装。CI 矩阵面向 Linux、macOS、Windows，各平台须有实际结果；归档安装、本地 npm 安装、全局 npm 安装和 npm exec/npx 分别验收，本地或 npx 通过不能代表全局安装可用。依赖完整性与功能结果分别记录，依赖漂移会阻塞发布就绪；候选流程准备说明和报告，不自动发布。仓库地址、私密联系渠道、来源提交、平台报告或价格有效期不足时保留阻塞项。维护流程见[分发指南](docs/development.md#打包与分发)。公开 npm 包使用 `@seekskyworld/ai-modeling` 名称；源码与 Release 位于 [seekskyworld/ai-modeling](https://github.com/seekskyworld/ai-modeling)。本地导出本身不执行发布。
 
+维护者配置 npm Trusted Publisher 后，可使用[版本标签发布工作流](docs/development.md#自动-npm-发布)。手动触发仅预演；新提交须由三平台验证同一归档，公开 npm 实际下载字节匹配后才确认发布完成。已受理或结果未知的提交保留原归档，继续核对而不重新上传。
+
 ## 它如何工作
 
 ```text

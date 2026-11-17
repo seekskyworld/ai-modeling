@@ -177,6 +177,8 @@ The full export contains the Skill ZIP, runtime TGZ, `mcp.json`, `INSTALL.md`, `
 
 Runtime exports include reviewed portable runtime dependencies, a production shrinkwrap and dependency provenance. Native packages and their platform dependencies are installed by npm. The CI matrix targets Linux, macOS and Windows; each platform needs its own actual result. Archive installation, local npm installation, global npm installation and npm exec/npx are checked separately. A passing local or npx check does not establish a working global install. Dependency integrity is recorded separately from functionality; drift blocks release readiness. Missing repository/contact information, source identity, platform reports or valid prices block readiness. See the [distribution guide](docs/development.md#打包与分发). Public releases use the `@seekskyworld/ai-modeling` npm package; releases and source are maintained at [seekskyworld/ai-modeling](https://github.com/seekskyworld/ai-modeling). A local export alone does not publish anything.
 
+Maintainers can use the [version-tag release workflow](docs/development.md#自动-npm-发布) after configuring npm Trusted Publishing. Manual dispatch is a preview; release readiness requires the same archive to pass three-platform checks, and publication completes only when the public npm tarball matches it. Accepted or uncertain submissions retain their original archive and are checked without another upload.
+
 ## How it fits together
 
 ```text

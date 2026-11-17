@@ -1,0 +1,538 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit, branch or tag to inspect. Manual runs never publish.'
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+# A second run of the same version must not cancel an npm submission in progress.
+# The durable publication claim also protects against other workflows and expired runs.
+concurrency:
+  group: ai-modeling-release-${{ github.event_name == 'push' && github.ref_name || format('preview-{0}', inputs.ref || github.ref_name) }}
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    name: Inspect version and durable publication state
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.identity.outputs.version }}
+      tag: ${{ steps.identity.outputs.tag }}
+      source: ${{ steps.identity.outputs.source }}
+      npm_tag: ${{ steps.identity.outputs.npm_tag }}
+      prerelease: ${{ steps.identity.outputs.prerelease }}
+      action: ${{ steps.state.outputs.action || steps.preview.outputs.action }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Pin the npm version used by every release job
+        run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci
+      - name: Bind package version, tag and source commit
+        id: identity
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const metadata = JSON.parse(readFileSync('package.json', 'utf8'));
+          const version = metadata.version;
+          const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?$/;
+          if (metadata.name !== '@seekskyworld/ai-modeling' || typeof version !== 'string' || !semver.test(version)) {
+            throw new Error('Expected the canonical package and a version without build metadata.');
+          }
+          const tag = 'v' + version;
+          if (process.env.GITHUB_EVENT_NAME === 'push' && process.env.GITHUB_REF !== 'refs/tags/' + tag) {
+            throw new Error('The pushed version tag must exactly match package.json.');
+          }
+          const source = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+          if (!/^[a-f0-9]{40}$/.test(source)) throw new Error('Expected a full source commit.');
+          const prerelease = version.includes('-');
+          appendFileSync(process.env.GITHUB_OUTPUT, [
+            'version=' + version, 'tag=' + tag, 'source=' + source,
+            'npm_tag=' + (prerelease ? 'next' : 'latest'),
+            'prerelease=' + String(prerelease), '',
+          ].join('\n'));
+          NODE
+      - name: Select an isolated read-only preview for a manual run
+        id: preview
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.identity.outputs.tag }}
+          SOURCE_COMMIT: ${{ steps.identity.outputs.source }}
+          STATE_DIR: ${{ runner.temp }}/ai-modeling-inspection
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+          import path from 'node:path';
+          mkdirSync(process.env.STATE_DIR, { recursive: true });
+          writeFileSync(path.join(process.env.STATE_DIR, 'inspection.json'), JSON.stringify({
+            action: 'prepare', dry_run: true, should_publish: false,
+            source: process.env.SOURCE_COMMIT, tag: process.env.RELEASE_TAG,
+            reason: 'Manual previews only validate this source; their artifacts cannot authorize publication.',
+          }, null, 2) + '\n', { flag: 'wx' });
+          appendFileSync(process.env.GITHUB_OUTPUT, 'action=prepare\n');
+          NODE
+      - name: Read remote state and restore any frozen distribution
+        id: state
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.identity.outputs.tag }}
+          SOURCE_COMMIT: ${{ steps.identity.outputs.source }}
+          STATE_DIR: ${{ runner.temp }}/ai-modeling-inspection
+          RESTORE_DIR: ${{ runner.temp }}/ai-modeling-inspected-release
+        run: |
+          mkdir -p "$STATE_DIR"
+          node scripts/npm-publication.ts check \
+            --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --source "$SOURCE_COMMIT" \
+            --restore "$RESTORE_DIR" --out "$STATE_DIR/inspection.json"
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs';
+          import path from 'node:path';
+          const result = JSON.parse(readFileSync(path.join(process.env.STATE_DIR, 'inspection.json'), 'utf8'));
+          const allowed = new Set(['prepare', 'submit', 'wait', 'verify', 'published']);
+          if (!allowed.has(result.action)) {
+            throw new Error('Publication state needs maintainer reconciliation; do not rebuild or resubmit this version.');
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, 'action=' + result.action + '\n');
+          NODE
+      - name: Retain the read-only inspection result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-modeling-inspection-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ai-modeling-inspection/*.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  build:
+    name: Check source and export the six candidate files
+    needs: inspect
+    if: needs.inspect.outputs.action == 'prepare'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.inspect.outputs.source }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci
+      - run: npm run check
+      - run: npm run package:check
+      - run: npm audit --omit=dev
+      - name: Use the standard exporter without rebuilding later
+        shell: bash
+        env:
+          DISTRIBUTION_DIR: ${{ runner.temp }}/ai-modeling-distribution
+          VERSION: ${{ needs.inspect.outputs.version }}
+        run: |
+          npm run export -- --target all --out "$DISTRIBUTION_DIR"
+          node --input-type=module <<'NODE'
+          import { readdirSync } from 'node:fs';
+          const version = process.env.VERSION;
+          const expected = ['INSTALL.md', 'SHA256SUMS', 'manifest.json', 'mcp.json',
+            'ai-modeling-' + version + '.tgz', 'ai-modeling-skill-' + version + '.zip'].sort();
+          const entries = readdirSync(process.env.DISTRIBUTION_DIR, { withFileTypes: true });
+          const actual = entries.map(entry => entry.name).sort();
+          if (entries.some(entry => !entry.isFile()) || JSON.stringify(actual) !== JSON.stringify(expected)) {
+            throw new Error('The standard export must contain exactly the six expected files.');
+          }
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-modeling-release-distribution-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ai-modeling-distribution/*
+          if-no-files-found: error
+          retention-days: 90
+
+  smoke:
+    name: Verify the same TGZ (${{ matrix.platform }})
+    needs: [inspect, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+          - os: macos-15
+            platform: darwin
+          - os: windows-2025
+            platform: win32
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.inspect.outputs.source }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci
+      - name: Check native credential permissions and cancellation on this OS
+        run: node scripts/run-tests.ts tests/json-credentials.test.ts tests/config-platform.test.ts tests/hardening-auth-input.test.ts tests/login-lock-stall.test.ts tests/login-state-race.test.ts
+      - uses: actions/download-artifact@v4
+        with:
+          name: ai-modeling-release-distribution-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ai-modeling-distribution
+      - name: Verify extracted installation and the production lock
+        shell: bash
+        env:
+          PACKAGE_ARCHIVE: ${{ runner.temp }}/ai-modeling-distribution/ai-modeling-${{ needs.inspect.outputs.version }}.tgz
+          REPORT: ${{ runner.temp }}/smoke-${{ matrix.platform }}.json
+        run: npm run package:smoke -- --archive "$PACKAGE_ARCHIVE" --report "$REPORT"
+      - name: Verify global npm, local npm, npx, JSON credentials, Sharp, MCP and Skill
+        shell: bash
+        env:
+          PACKAGE_ARCHIVE: ${{ runner.temp }}/ai-modeling-distribution/ai-modeling-${{ needs.inspect.outputs.version }}.tgz
+          REPORT: ${{ runner.temp }}/consumer-${{ matrix.platform }}.json
+        run: npm run package:consumer-smoke -- --archive "$PACKAGE_ARCHIVE" --report "$REPORT" --require-locked
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-modeling-release-smoke-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/smoke-${{ matrix.platform }}.json
+            ${{ runner.temp }}/consumer-${{ matrix.platform }}.json
+          if-no-files-found: error
+          retention-days: 90
+
+  candidate:
+    name: Require all three platforms and preview durable preparation
+    needs: [inspect, build, smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.inspect.outputs.source }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: ai-modeling-release-distribution-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ai-modeling-distribution
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ai-modeling-release-smoke-*-${{ github.run_id }}-${{ github.run_attempt }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/ai-modeling-smoke-reports
+      - name: Reject missing platforms, drift, stale pricing and mismatched source or archives
+        shell: bash
+        env:
+          RELEASE_REPOSITORY: https://github.com/${{ github.repository }}
+          RELEASE_SECURITY_CONTACT: ${{ vars.SECURITY_CONTACT_URL }}
+          DISTRIBUTION_DIR: ${{ runner.temp }}/ai-modeling-distribution
+          SMOKE_DIR: ${{ runner.temp }}/ai-modeling-smoke-reports
+          CANDIDATE_DIR: ${{ runner.temp }}/ai-modeling-candidate
+        run: |
+          if [[ -z "$RELEASE_SECURITY_CONTACT" ]]; then
+            echo "::error::Set SECURITY_CONTACT_URL to the verified private vulnerability-reporting entry."
+            exit 1
+          fi
+          npm run release:prepare -- --distribution "$DISTRIBUTION_DIR" \
+            --smoke-dir "$SMOKE_DIR" --out "$CANDIDATE_DIR" \
+            --repository "$RELEASE_REPOSITORY" --security-contact "$RELEASE_SECURITY_CONTACT" --require-ready
+      - name: Preview publication preparation without any remote write
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.inspect.outputs.tag }}
+          SOURCE_COMMIT: ${{ needs.inspect.outputs.source }}
+          DISTRIBUTION_DIR: ${{ runner.temp }}/ai-modeling-distribution
+          CANDIDATE_DIR: ${{ runner.temp }}/ai-modeling-candidate
+          PLAN_FILE: ${{ runner.temp }}/ai-modeling-publication-preview.json
+        run: |
+          node scripts/npm-publication.ts prepare \
+            --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --source "$SOURCE_COMMIT" \
+            --distribution "$DISTRIBUTION_DIR" --candidate "$CANDIDATE_DIR" --out "$PLAN_FILE" --dry-run
+      - name: Record the manual preview without requiring an existing version tag
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.inspect.outputs.tag }}
+          SOURCE_COMMIT: ${{ needs.inspect.outputs.source }}
+          CANDIDATE_DIR: ${{ runner.temp }}/ai-modeling-candidate
+          PLAN_FILE: ${{ runner.temp }}/ai-modeling-publication-preview.json
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import path from 'node:path';
+          const readiness = JSON.parse(readFileSync(path.join(process.env.CANDIDATE_DIR, 'readiness.json'), 'utf8'));
+          writeFileSync(process.env.PLAN_FILE, JSON.stringify({
+            action: 'preview', dry_run: true, should_publish: false,
+            source: process.env.SOURCE_COMMIT, tag: process.env.RELEASE_TAG,
+            readiness,
+            reason: 'Manual preview only. A version tag must independently prepare and freeze its original release.',
+          }, null, 2) + '\n', { flag: 'wx' });
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-modeling-release-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ai-modeling-candidate/*
+          if-no-files-found: error
+          retention-days: 90
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-modeling-publication-preview-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ai-modeling-publication-preview.json
+          if-no-files-found: error
+          retention-days: 90
+
+  publish:
+    name: Claim once, publish through OIDC, and verify public bytes
+    needs: [inspect, build, smoke, candidate]
+    if: >-
+      ${{ always() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+          && needs.inspect.result == 'success'
+          && (needs.inspect.outputs.action != 'prepare'
+              || (needs.build.result == 'success' && needs.smoke.result == 'success'
+                  && needs.candidate.result == 'success')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: npm
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      RELEASE_TAG: ${{ needs.inspect.outputs.tag }}
+      VERSION: ${{ needs.inspect.outputs.version }}
+      SOURCE_COMMIT: ${{ needs.inspect.outputs.source }}
+      NPM_DIST_TAG: ${{ needs.inspect.outputs.npm_tag }}
+      PRERELEASE: ${{ needs.inspect.outputs.prerelease }}
+      PUBLICATION_RUN: ${{ github.run_id }}.${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.inspect.outputs.source }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci
+      - name: Initialize isolated publication paths
+        shell: bash
+        run: |
+          echo "STATE_DIR=$RUNNER_TEMP/ai-modeling-publication" >> "$GITHUB_ENV"
+          echo "RESTORE_DIR=$RUNNER_TEMP/ai-modeling-frozen-release" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/ai-modeling-publication"
+      - if: needs.inspect.outputs.action == 'prepare'
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-modeling-release-distribution-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ai-modeling-distribution
+      - if: needs.inspect.outputs.action == 'prepare'
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-modeling-release-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ai-modeling-candidate
+      - name: Freeze the six original files and original readiness before any npm attempt
+        if: needs.inspect.outputs.action == 'prepare'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISTRIBUTION_DIR: ${{ runner.temp }}/ai-modeling-distribution
+          CANDIDATE_DIR: ${{ runner.temp }}/ai-modeling-candidate
+        run: |
+          node scripts/npm-publication.ts prepare \
+            --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --source "$SOURCE_COMMIT" \
+            --distribution "$DISTRIBUTION_DIR" --candidate "$CANDIDATE_DIR" --out "$STATE_DIR/prepared.json"
+      - name: Check the npm-side Trusted Publisher prerequisite before a new claim
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NPM_TRUSTED_PUBLISHER_CONFIGURED: ${{ vars.NPM_TRUSTED_PUBLISHER_CONFIGURED }}
+        run: |
+          node scripts/npm-publication.ts check \
+            --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --source "$SOURCE_COMMIT" \
+            --out "$STATE_DIR/preclaim.json"
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import path from 'node:path';
+          const state = JSON.parse(readFileSync(path.join(process.env.STATE_DIR, 'preclaim.json'), 'utf8'));
+          if (state.action === 'submit' && process.env.NPM_TRUSTED_PUBLISHER_CONFIGURED !== 'true') {
+            throw new Error('Configure npm Trusted Publishing for this GitHub repository, release.yml and the npm environment, then set NPM_TRUSTED_PUBLISHER_CONFIGURED=true. This variable is a maintainer assertion, not an npm authentication check.');
+          }
+          if (!['submit', 'wait', 'verify', 'published'].includes(state.action)) {
+            throw new Error('The version is not prepared for publication; preserve remote state and reconcile it.');
+          }
+          NODE
+      - name: Persist and read back the immutable submission claim
+        id: claim
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/npm-publication.ts check \
+            --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --source "$SOURCE_COMMIT" \
+            --begin-submission --run-id "$PUBLICATION_RUN" --restore "$RESTORE_DIR" \
+            --out "$STATE_DIR/claim.json"
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync, statSync } from 'node:fs';
+          import path from 'node:path';
+          const state = JSON.parse(readFileSync(path.join(process.env.STATE_DIR, 'claim.json'), 'utf8'));
+          const publish = state.action === 'publish' && state.should_publish === true;
+          if (state.should_publish === true && !publish) throw new Error('Inconsistent submission permission.');
+          if (!['publish', 'wait', 'verify', 'published'].includes(state.action)) {
+            throw new Error('No durable submission permission or recoverable existing attempt.');
+          }
+          if (publish && (typeof state.archive_path !== 'string' || !statSync(state.archive_path).isFile())) {
+            throw new Error('The original frozen archive was not restored.');
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, 'should_publish=' + String(publish) + '\n');
+          NODE
+      - name: Submit the original TGZ to npm exactly once
+        id: npm
+        if: steps.claim.outputs.should_publish == 'true'
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ''
+          NPM_TOKEN: ''
+        run: |
+          ARCHIVE_PATH="$(node --input-type=module -e "import fs from 'node:fs'; import path from 'node:path'; process.stdout.write(JSON.parse(fs.readFileSync(path.join(process.env.STATE_DIR, 'claim.json'), 'utf8')).archive_path)")"
+          set +e
+          npm publish "$ARCHIVE_PATH" --access public --provenance --ignore-scripts \
+            --registry https://registry.npmjs.org/ --tag "$NPM_DIST_TAG"
+          npm_exit=$?
+          set -e
+          if [[ "$npm_exit" -eq 0 ]]; then outcome=accepted; else outcome=unknown; fi
+          echo "outcome=$outcome" >> "$GITHUB_OUTPUT"
+          echo "exit_code=$npm_exit" >> "$GITHUB_OUTPUT"
+      - name: Persist accepted or unknown outcome without retrying npm
+        if: always() && steps.claim.outputs.should_publish == 'true' && steps.npm.outputs.outcome != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NPM_OUTCOME: ${{ steps.npm.outputs.outcome }}
+        run: |
+          node scripts/npm-publication.ts check \
+            --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --source "$SOURCE_COMMIT" \
+            --submitted --outcome "$NPM_OUTCOME" --run-id "$PUBLICATION_RUN" \
+            --out "$STATE_DIR/submitted.json"
+      - name: Verify public npm metadata and the downloaded TGZ before release visibility
+        id: public
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in $(seq 1 20); do
+            VERIFY_FILE="$STATE_DIR/verify-$attempt.json"
+            node scripts/npm-publication.ts verify \
+              --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --source "$SOURCE_COMMIT" \
+              --out "$VERIFY_FILE"
+            action="$(node --input-type=module - "$VERIFY_FILE" <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const state = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          if (state.action === 'published' && (
+            state.state !== 'published' || state.dry_run !== false || state.registry_tarball_downloaded !== true ||
+            !/^[a-f0-9]{64}$/.test(state.verification?.sha256 ?? '') ||
+            state.verification.sha256 !== state.archive_sha256 ||
+            state.source !== process.env.SOURCE_COMMIT || state.tag !== process.env.RELEASE_TAG ||
+            state.repository !== process.env.GITHUB_REPOSITORY
+          )) throw new Error('Public visibility requires durable, exact-version verification of the actual npm archive.');
+          process.stdout.write(state.action);
+          NODE
+            )"
+            if [[ "$action" == published ]]; then
+              cp "$VERIFY_FILE" "$STATE_DIR/verified.json"
+              echo "verified=true" >> "$GITHUB_OUTPUT"
+              break
+            fi
+            if [[ "$action" != wait ]]; then
+              echo "::error::Unexpected public verification result; preserve the frozen release."
+              exit 1
+            fi
+            if [[ "$attempt" -eq 20 ]]; then
+              echo "::error::npm publication remains accepted or unknown and is not publicly verifiable. The draft and claim remain durable. Rerun this original tag workflow to reconcile; never resubmit or retag the version."
+              exit 1
+            fi
+            sleep 30
+          done
+      - name: Publish the GitHub Release only after exact public npm verification
+        if: steps.public.outputs.verified == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          is_draft="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')"
+          if [[ "$is_draft" == false ]]; then
+            echo "The GitHub Release is already public; the npm bytes were reverified."
+            exit 0
+          fi
+          if [[ "$is_draft" != true ]]; then
+            echo "::error::Could not establish GitHub Release visibility."
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import path from 'node:path';
+          const state = JSON.parse(readFileSync(path.join(process.env.STATE_DIR, 'verified.json'), 'utf8'));
+          const digest = state.verification.sha256;
+          const repository = 'https://github.com/' + process.env.GITHUB_REPOSITORY;
+          const notes = [
+            'Install the published runtime:', '',
+            '    npm install --global @seekskyworld/ai-modeling@' + process.env.VERSION, '',
+            'The CLI, MCP server and Agent Skill use this runtime. The attached Skill ZIP and MCP configuration provide the alternative entry points.', '',
+            'The public npm tarball was downloaded and matched against the original frozen archive.',
+            'Runtime TGZ SHA-256: ' + digest, '',
+            'Source commit: ' + repository + '/commit/' + process.env.SOURCE_COMMIT,
+            'Changes: ' + repository + '/blob/' + process.env.RELEASE_TAG + '/CHANGELOG.md', '',
+          ];
+          writeFileSync(path.join(process.env.STATE_DIR, 'release-notes.md'), notes.join('\n'));
+          NODE
+          if [[ "$PRERELEASE" == true ]]; then
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false \
+              --prerelease --latest=false --notes-file "$STATE_DIR/release-notes.md"
+          else
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false \
+              --prerelease=false --latest --notes-file "$STATE_DIR/release-notes.md"
+          fi
+      - name: Retain local receipts even when publication is still pending
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-modeling-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ai-modeling-publication/*.json
+            ${{ runner.temp }}/ai-modeling-publication/release-notes.md
+          if-no-files-found: warn
+          retention-days: 90

@@ -2,6 +2,19 @@
 
 This file records user-facing changes. Unreleased changes describe the source tree and do not imply an npm or hosted release. Run `ai-modeling --version` or read `package.json` for the current version.
 
+## Unreleased
+
+### Added
+
+- A version-tag npm release workflow using GitHub OIDC Trusted Publishing, Node.js 24 and npm 11.17.0. Manual dispatch previews checks without publishing; new submissions require the same standard-export archive to pass the Linux, macOS and Windows installation gates.
+- Durable archive identity and submission records that preserve accepted or unknown uploads across workflow retries. Publication verification downloads the exact public npm tarball and compares its bytes and registry digests with the frozen archive; legacy processing submissions reuse their original receipt and archive.
+
+### Fixed
+
+- Retry private login-state reads when a concurrent login worker atomically replaces the file, while retaining ownership, permission, link and bounded-size checks.
+
+These source changes do not republish 0.1.3 or establish that npm Trusted Publisher configuration, OIDC uploads or native Windows validation have already completed.
+
 ## 0.1.3 — 2026-11-17
 
 ### Changed

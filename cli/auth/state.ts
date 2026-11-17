@@ -1,6 +1,6 @@
 /** 每个profile独立短时状态和互斥锁；原始Cookie/Token/浏览器端点/业务命令不落盘。 */
-import { constants } from 'node:fs';
-import { lstat, open, writeFile, rename, rm } from 'node:fs/promises';
+import { constants, type Stats } from 'node:fs';
+import { lstat, open, writeFile, rename, rm, type FileHandle } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import lockfile from 'proper-lockfile';
@@ -34,39 +34,88 @@ function valid(state: LoginState, config: Config): boolean {
     (state.port === undefined || (Number.isInteger(state.port) && state.port > 0 && state.port <= 65535))
   );
 }
-export async function readState(config: Config): Promise<LoginState | undefined> {
-  const file = await loginStateFile(config);
-  let handle;
+const maximumLoginStateBytes = 16384;
+const loginStateReadAttempts = 5;
+class LoginStateReplaced extends Error {}
+
+function assertPrivateState(info: Stats): void {
+  if (
+    !info.isFile() ||
+    ![0, 1].includes(info.nlink) ||
+    info.size > maximumLoginStateBytes ||
+    (process.platform !== 'win32' && info.mode & 0o077) ||
+    (process.getuid && info.uid !== process.getuid())
+  )
+    throw new TripoError('LOGIN_STATE_INVALID', 'Login state must be a private regular file.');
+  // Atomic replacement can unlink a valid inode after path lookup or open.
+  // Never consume it: close any descriptor and inspect the new path from the start.
+  if (info.nlink === 0) throw new LoginStateReplaced();
+}
+
+async function boundedStateRead(handle: FileHandle): Promise<Buffer> {
+  const bytes = Buffer.alloc(maximumLoginStateBytes + 1);
+  let length = 0;
+  while (length < bytes.length) {
+    const result = await handle.read(bytes, length, bytes.length - length, null);
+    if (!result.bytesRead) break;
+    length += result.bytesRead;
+  }
+  if (length > maximumLoginStateBytes)
+    throw new TripoError('LOGIN_STATE_INVALID', 'Login state exceeds its private file size limit.');
+  return bytes.subarray(0, length);
+}
+
+async function readStateAttempt(file: string, config: Config): Promise<LoginState> {
+  let handle: FileHandle | undefined;
   try {
     const initial = await lstat(file);
-    if (!initial.isFile() || initial.isSymbolicLink() || initial.nlink !== 1)
-      throw new TripoError('LOGIN_STATE_INVALID', 'Login state must be a private regular file.');
+    assertPrivateState(initial);
     // Older versions created login-control metadata with inherited Windows permissions.
     // Narrow this owned control file before reading it; credential records and import files remain read-only checks.
     if (process.platform === 'win32') protectPrivateWindowsPath(file, 'file');
     handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     const info = await handle.stat();
+    assertPrivateState(info);
+    if (info.dev !== initial.dev || info.ino !== initial.ino) throw new LoginStateReplaced();
+    const bytes = await boundedStateRead(handle);
+    const after = await handle.stat();
+    assertPrivateState(after);
     if (
-      !info.isFile() ||
-      info.nlink !== 1 ||
-      info.dev !== initial.dev ||
-      info.ino !== initial.ino ||
-      info.size > 16384 ||
-      (process.platform !== 'win32' && info.mode & 0o077) ||
-      (process.getuid && info.uid !== process.getuid())
+      after.size !== bytes.length ||
+      after.size !== info.size ||
+      after.mtimeMs !== info.mtimeMs ||
+      after.ctimeMs !== info.ctimeMs
     )
-      throw new TripoError('LOGIN_STATE_INVALID', 'Login state must be a private regular file.');
-    const state = JSON.parse(await handle.readFile('utf8')) as LoginState;
+      throw new TripoError('LOGIN_STATE_INVALID', 'Login state changed while being read.');
     if (process.platform === 'win32') verifyPrivateWindowsPath(file, 'file');
+    const current = await lstat(file);
+    assertPrivateState(current);
+    if (current.dev !== info.dev || current.ino !== info.ino) throw new LoginStateReplaced();
+    const state = JSON.parse(bytes.toString('utf8')) as LoginState;
     if (!valid(state, config)) throw new Error('Invalid login state');
     return state;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
-    if (error instanceof TripoError) throw error;
-    throw new TripoError('LOGIN_STATE_INVALID', 'Cannot read the private login state.');
   } finally {
     await handle?.close();
   }
+}
+
+export async function readState(config: Config): Promise<LoginState | undefined> {
+  const file = await loginStateFile(config);
+  for (let attempt = 0; attempt < loginStateReadAttempts; attempt++) {
+    try {
+      return await readStateAttempt(file, config);
+    } catch (error) {
+      if (error instanceof LoginStateReplaced) continue;
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+      if (error instanceof TripoError) throw error;
+      throw new TripoError('LOGIN_STATE_INVALID', 'Cannot read the private login state.');
+    }
+  }
+  throw new TripoError(
+    'CREDENTIAL_STORE_BUSY',
+    'The login state is being updated by another process. Retry the original action.',
+    'read',
+  );
 }
 /** 仅在profile互斥锁内调用；临时文件原子替换，避免观察到半写状态。 */
 export async function writeState(config: Config, state: LoginState): Promise<void> {
