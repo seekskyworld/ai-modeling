@@ -457,6 +457,7 @@ async function checkGolutraExport(
 export async function smokePackageConsumer(archive: string, npmCli = process.env.npm_execpath) {
   if (!npmCli) throw new Error('Run package:consumer-smoke through npm run so npm_execpath is available.');
   const directory = await realpath(await mkdtemp(path.join(tmpdir(), 'ai-modeling-consumer-smoke-')));
+  let verificationError: unknown;
   try {
     const snapshot = await snapshotArchive(archive, directory);
     const entries = archiveEntries(await readFile(snapshot.filename));
@@ -623,8 +624,21 @@ export async function smokePackageConsumer(archive: string, npmCli = process.env
       },
       live_services: false,
     };
+  } catch (error) {
+    verificationError = error;
+    throw error;
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch(
+      (cleanupError) => {
+        if (verificationError !== undefined)
+          throw new AggregateError(
+            [verificationError, cleanupError],
+            'Consumer verification and temporary-directory cleanup both failed.',
+            { cause: cleanupError },
+          );
+        throw cleanupError;
+      },
+    );
   }
 }
 
