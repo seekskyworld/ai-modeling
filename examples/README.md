@@ -43,7 +43,7 @@ ai-modeling make "A compact wooden chair with four legs" --model tripo-v3.1 \
 
 | 使用方式 | 示例 |
 | --- | --- |
-| 通过 npm 按固定版本启动 | [mcp-npx.json](mcp-npx.json)：`npx --yes --package @seekskyworld/ai-modeling@0.1.7 ai-modeling mcp`，无需全局安装；首次启动需要下载依赖。 |
+| 通过 npm 按固定版本启动 | [mcp-npx.json](mcp-npx.json)：`npx --yes --package @seekskyworld/ai-modeling@0.1.8 ai-modeling mcp`，无需全局安装；首次启动需要下载依赖。 |
 | Windows 宿主不能直接启动 npm `.cmd` 脚本 | [mcp-npx-windows.json](mcp-npx-windows.json)：使用 `cmd.exe /d /c npx.cmd`；能解析 `.cmd` 的宿主可保留通用示例。 |
 | Claude Code、Cursor、当前 VS Code/Copilot | [mcp-installed.json](mcp-installed.json)：`mcpServers` 格式，使用 PATH 中的 `ai-modeling`，与导出的 `mcp.json` 用法一致。 |
 | Codex | [mcp-codex.toml](mcp-codex.toml)：原生 `mcp_servers` TOML，合并到客户端配置。 |
@@ -52,7 +52,7 @@ ai-modeling make "A compact wooden chair with four legs" --model tripo-v3.1 \
 | VS Code 的旧 Local harness | [mcp-vscode.json](mcp-vscode.json)：`servers` 格式，用于 `.vscode/mcp.json`；Local 已弃用，官方计划于 2027 年 2 月移除，新 Copilot 使用上面的 `mcpServers`。 |
 | 从源码运行 | [mcp.json](mcp.json)：使用本机 Node 和已构建的 `dist/cli/main.js`，通过 `mcp` 子命令启动，需替换占位路径。 |
 
-先按[运行包安装步骤](../docs/usage.md#安装运行包)运行 `npm install --global @seekskyworld/ai-modeling@0.1.7`，或直接使用 npx 配置。Node.js 24+ 与 npm 必须能被客户端找到；GUI 不继承终端 PATH 时使用对应可执行文件的绝对路径。Windows 还可将 `node.exe` 与已安装包 `dist/cli/main.js` 的实际路径分开放入 command/args，避开 `.cmd` 启动差异；详见 [Windows 启动方式](../docs/usage.md#windows-启动方式)。这些示例不构成 Windows 实机验证。归档安装和源码构建是独立替代路径，不混用它们的 `command` / `args`。
+先按[运行包安装步骤](../docs/usage.md#安装运行包)运行 `npm install --global @seekskyworld/ai-modeling@0.1.8`，或直接使用 npx 配置。Node.js 24+ 与 npm 必须能被客户端找到；GUI 不继承终端 PATH 时使用对应可执行文件的绝对路径。Windows 还可将 `node.exe` 与已安装包 `dist/cli/main.js` 的实际路径分开放入 command/args，避开 `.cmd` 启动差异；详见 [Windows 启动方式](../docs/usage.md#windows-启动方式)。这些示例不构成 Windows 实机验证。归档安装和源码构建是独立替代路径，不混用它们的 `command` / `args`。
 
 源码示例使用前替换：
 

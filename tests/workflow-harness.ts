@@ -26,13 +26,17 @@ const shim = `import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 const [name, ...args] = process.argv.slice(2);
-if (name === 'node' && args[0] !== 'scripts/npm-publication.ts') {
+if (name === 'node' && !['scripts/npm-publication.ts', 'scripts/npm-auth-check.ts'].includes(args[0])) {
   const child = spawnSync(process.env.WORKFLOW_REAL_NODE, args, { env: process.env, stdio: 'inherit' });
   process.exit(child.status ?? 1);
 }
 const root = process.env.WORKFLOW_TEST_ROOT;
 fs.appendFileSync(path.join(root, 'calls.jsonl'), JSON.stringify({command: name, args}) + '\\n');
 if (name === 'node') {
+  if (args[0] === 'scripts/npm-auth-check.ts') {
+    fs.writeFileSync(args[args.indexOf('--out') + 1], process.env.WORKFLOW_AUTH_REPORT);
+    process.exit(Number(process.env.WORKFLOW_AUTH_EXIT ?? 0));
+  }
   let report;
   if (args.includes('--begin-submission')) report = JSON.parse(process.env.WORKFLOW_CLAIM_REPORT);
   else if (args.includes('--submitted')) report = { action: 'wait', outcome: args[args.indexOf('--outcome') + 1] };
@@ -73,6 +77,7 @@ export async function workflowFixture(t: TestContext) {
     GITHUB_TOKEN: '',
     NODE_AUTH_TOKEN: '',
     NPM_TOKEN: '',
+    NPM_ID_TOKEN: '',
     WORKFLOW_REAL_NODE: process.execPath,
     WORKFLOW_SHIM: path.join(directory, 'shim.mjs'),
     WORKFLOW_TEST_ROOT: directory,
@@ -89,10 +94,12 @@ export async function workflowFixture(t: TestContext) {
     RESTORE_DIR: path.join(directory, 'restore'),
     CANDIDATE_DIR: path.join(directory, 'candidate'),
     PLAN_FILE: path.join(directory, 'preview.json'),
+    AUTH_REPORT: path.join(directory, 'state', 'auth-before-claim.json'),
     NPM_UPLOAD_TAG: 'release-v0.1.4',
     PUBLICATION_RUN: '123.1',
     NPM_TRUSTED_PUBLISHER_CONFIGURED: 'true',
     WORKFLOW_PRECLAIM_REPORT: JSON.stringify({ action: 'submit' }),
+    WORKFLOW_AUTH_REPORT: JSON.stringify({ schema_version: 1, success: true, stages: [] }),
     WORKFLOW_CLAIM_REPORT: JSON.stringify({ action: 'publish', should_publish: true, archive_path: archive }),
     WORKFLOW_VERIFY_REPORTS: JSON.stringify([workflowProof()]),
   };

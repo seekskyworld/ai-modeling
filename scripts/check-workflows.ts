@@ -17,6 +17,7 @@ export interface WorkflowStep {
 }
 export interface WorkflowJob {
   name?: string;
+  environment?: string;
   if?: string;
   needs?: string[] | string;
   outputs?: Record<string, string>;
@@ -73,9 +74,14 @@ function releaseGuards(release: WorkflowDocument) {
       assert.deepEqual(job.permissions, { contents: 'write', 'id-token': 'write' });
       assert.ok(job.if?.includes("github.event_name == 'push'"));
       assert.ok(job.if?.includes("startsWith(github.ref, 'refs/tags/v')"));
-    } else assert.equal(job.permissions, undefined, `Only publication coordinators may elevate ${name}`);
+    } else if (name === 'auth') {
+      assert.deepEqual(job.permissions, { contents: 'read', 'id-token': 'write' });
+    } else assert.equal(job.permissions, undefined, `Unexpected elevated permissions on ${name}`);
   }
-  assert.equal(release.jobs.build?.if, "needs.inspect.outputs.action == 'prepare'");
+  assert.deepEqual(release.jobs.build?.needs, ['inspect', 'auth']);
+  assert.deepEqual(release.jobs.smoke?.needs, ['inspect', 'build']);
+  assert.deepEqual(release.jobs.candidate?.needs, ['inspect', 'build', 'smoke']);
+  assert.deepEqual(release.jobs.publish?.needs, ['inspect', 'auth', 'build', 'smoke', 'candidate']);
   assert.equal(workflowStep(release, 'inspect', { id: 'state' }).if, "github.event_name == 'push'");
   assert.equal(
     workflowStep(release, 'candidate', { name: 'Preview publication preparation without any remote write' })
@@ -84,6 +90,55 @@ function releaseGuards(release: WorkflowDocument) {
   );
   assert.match(workflowStep(release, 'inspect', { id: 'preview' }).run!, /action=prepare/);
   assert.doesNotMatch(workflowStep(release, 'inspect', { id: 'preview' }).run!, /npm-publication\.ts/);
+}
+
+function authenticationGuards(release: WorkflowDocument) {
+  const auth = release.jobs.auth!;
+  assert.ok(auth, 'New submissions require real npm authentication before candidate work');
+  assert.equal(auth.needs, 'inspect');
+  assert.equal(auth.environment, 'npm');
+  assert.ok(auth.if?.includes("github.event_name == 'push'"));
+  assert.ok(auth.if?.includes("startsWith(github.ref, 'refs/tags/v')"));
+  const command = 'node scripts/npm-auth-check.ts --repository "$GITHUB_REPOSITORY" --out "$AUTH_REPORT"';
+  const preflight = workflowStep(release, 'auth', { id: 'authenticate' });
+  const recheck = workflowStep(release, 'publish', { id: 'auth' });
+  for (const step of [preflight, recheck]) {
+    assert.equal(step.run, command);
+    assert.ok(step.env?.AUTH_REPORT?.endsWith('.json'));
+  }
+  for (const step of [preflight, recheck, workflowStep(release, 'publish', { id: 'npm' })])
+    for (const variable of ['NODE_AUTH_TOKEN', 'NPM_TOKEN', 'NPM_ID_TOKEN'])
+      assert.equal(step.env?.[variable], '', `${step.name}: consistent credential environment`);
+  for (const job of [auth, release.jobs.publish!]) {
+    assert.equal(job.environment, 'npm');
+    assert.ok(job.steps.some((step) => step.run === 'npm ci --ignore-scripts'));
+    assert.ok(job.steps.some((step) => step.run?.includes('npm@11.17.0')));
+    const checkout = job.steps.find((step) => step.uses?.startsWith('actions/checkout@'));
+    assert.equal(checkout?.with?.ref, '${{ needs.inspect.outputs.source }}');
+    assert.equal(checkout?.with?.['persist-credentials'], false);
+  }
+  const retain = workflowStep(release, 'auth', {
+    name: 'Retain the credential-free authentication report',
+  });
+  assert.equal(retain.if, 'always()');
+  assert.equal(retain.with?.path, preflight.env?.AUTH_REPORT);
+  assert.doesNotMatch(
+    auth.steps.map((step) => step.run ?? '').join('\n'),
+    /npm publish|dist-tag|npm-publication/,
+  );
+  assert.equal(recheck.if, "steps.preclaim.outputs.action == 'submit'");
+  const claim = workflowStep(release, 'publish', { id: 'claim' });
+  assert.equal(claim.if, "steps.preclaim.outputs.action == 'submit' && steps.auth.outcome == 'success'");
+  const order = ['preclaim', 'auth', 'claim', 'npm'].map((id) =>
+    release.jobs.publish!.steps.findIndex((step) => step.id === id),
+  );
+  assert.ok(order.every((index, position) => index >= 0 && (position === 0 || index > order[position - 1]!)));
+  assert.equal(recheck.env?.AUTH_REPORT, '${{ runner.temp }}/ai-modeling-publication/auth-before-claim.json');
+  const retainClaim = workflowStep(release, 'publish', {
+    name: 'Retain local receipts even when publication is still pending',
+  });
+  assert.equal(retainClaim.if, 'always()');
+  assert.ok(String(retainClaim.with?.path).includes('${{ runner.temp }}/ai-modeling-publication/*.json'));
 }
 
 function archiveGates(release: WorkflowDocument) {
@@ -152,6 +207,7 @@ export async function checkWorkflows(root: string) {
   const release = workflows['release.yml'];
   assert.ok(release, 'The controlled release workflow is required');
   releaseGuards(release);
+  authenticationGuards(release);
   archiveGates(release);
   promotionGates(release);
   for (const job of [release.jobs.smoke, workflows['check.yml']?.jobs['installed-package']])

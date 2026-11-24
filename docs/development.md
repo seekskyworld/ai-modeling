@@ -101,7 +101,7 @@ npm run package:check
 | `package.yml` | 手动候选检查及标准导出，三系统验证同一 TGZ，汇总两类平台报告、readiness 和候选说明；归档保留 90 天。 |
 | `release.yml` | 版本标签触发正式发布；手动 dispatch 只对所选 ref 完整预演，不进入发布状态协调器或写入 npm/Release。 |
 
-普通检查和候选仅 `contents: read`；正式 publish/promote job 使用最小 `contents: write`、`id-token: write` 和 `npm` environment。第三方 Actions 固定完整提交 SHA，升级审阅注释及离线合同；合成发布回归不代替托管验收。公开 `SECURITY_CONTACT_URL` 应指向已启用的[私密报告入口](https://github.com/seekskyworld/ai-modeling/security/advisories/new)，缺项阻塞候选。
+普通检查和候选仅 `contents: read`；正式发布前的 auth job 使用 `contents: read`、`id-token: write` 和 `npm` environment，publish/promote job 才取得 `contents: write`。第三方 Actions 固定完整提交 SHA，升级审阅注释及离线合同；合成发布回归不代替托管验收。公开 `SECURITY_CONTACT_URL` 应指向已启用的[私密报告入口](https://github.com/seekskyworld/ai-modeling/security/advisories/new)，缺项阻塞候选。
 
 安装矩阵分别执行平台路径、JSON 凭据和撤销回归；Windows DACL 用例在其它系统跳过。矩阵是配置，不是成功记录；实际报告只证明对应检查，不外推浏览器登录、Blender/FFmpeg、宿主调用或全部 Studio 业务。临时 workflow artifacts 有期限，不作为稳定下载或唯一发布凭据。
 
@@ -179,6 +179,14 @@ npm trust github @seekskyworld/ai-modeling --file release.yml --repo seekskyworl
 
 发布使用 OIDC，不回退本机登录或长期 Token。npm publish 执行 OIDC 交换，dist-tag 不自动交换，所以 promote 使用受限仓库/标签/工作流/environment 身份取得包级短时令牌，仅存内存。首次真实交换、渠道写入和读回各自验收；配置和离线测试不代表已成功。
 
+正式标签的 `prepare` / `submit` 路径先由独立 auth job 执行真实 GitHub OIDC 获取与 npm 包级令牌交换，成功后才允许新候选构建或恢复首次提交。三平台验收可能持续较久，因此 publish 重新读取持久状态；只有当前仍为 `submit` 时，才在 `--begin-submission` 之前再次认证。第二次认证失败保留 prepared 状态，不消耗唯一提交占位。认证通过也不代替后续 npm 上传及公共字节验收。
+
+两处统一运行 `node scripts/npm-auth-check.ts --repository "$GITHUB_REPOSITORY" --out "$AUTH_REPORT"`。预检只获取短时凭据并立即丢弃，不发布包、不改 dist-tag、不保存 npmrc；失败非零退出，并由 `always()` 步骤保留无凭据诊断报告。报告仅包含环境变量是否存在、认证阶段、HTTP 状态、工具版本等安全字段，不保存 token、JWT、OIDC 请求 URL、响应正文或原始错误。`NPM_TRUSTED_PUBLISHER_CONFIGURED=true` 仍只是维护者声明，不能替代真实预检。
+
+预检要求 Node.js **24+** 和 npm **11.17.0**，与已验证的发布工具链一致；这是发布维护脚本的约束，不改变普通用户安装产品 CLI 的 npm 要求。`CI=false` 或非空 `NPM_ID_TOKEN` 会在交换前被拒绝；早期预检、提交前预检和实际 publish 三处均显式清空 `NPM_ID_TOKEN`，保留继承的 CI 值用于检查。
+
+手动 dispatch 完整运行构建、三平台和候选预演，但跳过认证与远端写入。已有 `wait` / `verify` / `published` 状态直接核验原提交，不因认证不可用而中断，不重新申请提交占位；即使初次 inspect 后状态被另一运行推进，也以最新 preclaim 状态为准。原 `submitted/unknown` 不因认证修复、registry 404 或新版本预检成功而解除，旧标签和原包保持不动。
+
 ### 同一归档、三平台门禁
 
 完整检查、生产审计和标准导出后冻结六产物；三平台对同一 TGZ 执行 archive 与带 `--require-locked` 的 consumer 检查，再通过 `release:prepare --require-ready`。各平台重新打包、缺少 Windows 回执或仅本地 npm 成功都不满足门禁。
@@ -222,7 +230,7 @@ node scripts/npm-publication.ts verify --repository seekskyworld/ai-modeling \
 
 ### Maintainer workflow in English
 
-Run the source checks and standard export, then verify the same TGZ on Linux, macOS and Windows with archive and locked npm-consumer checks. Prepare the candidate immediately before publication. The version-tag workflow requires the matching npm Trusted Publisher and environment; manual dispatch is a preview.
+The version-tag workflow authenticates the matching npm Trusted Publisher before new candidate work, then runs the source checks and standard export and verifies the same TGZ on Linux, macOS and Windows. Prepare the candidate immediately before publication. Recheck authentication before acquiring the unique submission claim; either failure retains a credential-free diagnostic. Manual dispatch runs the complete preview without authentication or remote writes. Existing pending submissions skip authentication and continue verification without acquiring a new claim.
 
 Retain the frozen archive and durable submission claim. Accepted or unknown uploads are reconciled, never repeated. Verify the actual public tarball before promoting channels, then test a clean public installation through the selected interface. Source changes under Unreleased do not update published versions; workflow configuration does not establish native-platform, OIDC or business acceptance.
 
