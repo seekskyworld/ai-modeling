@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { JsonEntry, jsonEntryLimit } from '../studio/auth/json-entry.ts';
 import { JsonStore, type Session } from '../studio/auth/credentials.ts';
 import {
+  checkWindowsPermissions,
   protectPrivateWindowsPath,
   replacePrivateWindowsFile,
   verifyPrivateWindowsPath,
@@ -138,6 +139,111 @@ test('Windows atomic replacement is restricted to private siblings and never ret
       { code: 'CREDENTIAL_STORE_UNAVAILABLE' },
     );
 });
+
+test(
+  'native Windows replacement exposes only bounded synthetic failure diagnostics',
+  { skip: process.platform !== 'win32', timeout: 60000 },
+  async (t) => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ai-modeling-replace-diagnostic-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const source = path.join(directory, '新 source.tmp');
+    const target = path.join(directory, '旧 target.json');
+    writeFileSync(source, 'synthetic-new', { mode: 0o600 });
+    writeFileSync(target, 'synthetic-old', { mode: 0o600 });
+    checkWindowsPermissions([
+      { path: directory, kind: 'directory', protect: true },
+      { path: source, kind: 'file', protect: true },
+      { path: target, kind: 'file', protect: true },
+    ]);
+    const old = openSync(target, 'r');
+    let observed = false;
+    try {
+      replacePrivateWindowsFile(source, target, (command, args, options) => {
+        let script = Buffer.from(args.at(-1)!, 'base64').toString('utf16le');
+        const checkpoints = [
+          ["$ErrorActionPreference = 'Stop'", 'start'],
+          ['Import-Module -Name $utilityModule -ErrorAction Stop', 'import'],
+          ['$requests = @(', 'json'],
+          ['foreach ($request in $requests) {', 'validate'],
+          ['[IO.File]::Replace(', 'replace'],
+          ['$location = [string]$requests[2].path', 'verify'],
+        ];
+        for (const [checkpoint, stage] of checkpoints) {
+          assert.ok(script.includes(checkpoint!));
+          script = script.replace(checkpoint!, `$diagnosticStage = '${stage}'\n  ${checkpoint}`);
+        }
+        const originalCatch = `} catch {\n  [Console]::Out.Write('{"ok":false}')\n  exit 1\n}`;
+        assert.ok(script.includes(originalCatch));
+        script = script.replace(
+          originalCatch,
+          `} catch {
+  $exception = $_.Exception
+  $hresult = 0
+  $native = 'null'
+  $exceptionType = ''
+  $depth = 0
+  while ($null -ne $exception -and $depth -lt 8) {
+    $hresult = [int]$exception.HResult
+    $exceptionType = $exception.GetType().FullName
+    if ($exception -is [ComponentModel.Win32Exception]) { $native = [string]$exception.NativeErrorCode }
+    $exception = $exception.InnerException
+    $depth++
+  }
+  [Console]::Out.Write('{"ok":false,"stage":"' + $diagnosticStage + '","hresult":' + $hresult + ',"native_error_code":' + $native + ',"exception_type":"' + $exceptionType + '"}')
+  exit 1
+}`,
+        );
+        const started = performance.now();
+        const result = spawnSync(
+          command,
+          [...args.slice(0, -1), Buffer.from(script, 'utf16le').toString('base64')],
+          options,
+        );
+        const payload: Record<string, unknown> = (() => {
+          try {
+            return JSON.parse(result.stdout) as Record<string, unknown>;
+          } catch {
+            return {};
+          }
+        })();
+        const allowedTypes = new Set([
+          'System.ArgumentException',
+          'System.ArgumentNullException',
+          'System.IO.IOException',
+          'System.UnauthorizedAccessException',
+          'System.ComponentModel.Win32Exception',
+          'System.Management.Automation.MethodInvocationException',
+        ]);
+        t.diagnostic(
+          JSON.stringify({
+            probe: 'native_replace_failure_stage',
+            status: result.status,
+            signal: result.signal,
+            error_code: (result.error as NodeJS.ErrnoException | undefined)?.code ?? null,
+            elapsed_ms: Math.round(performance.now() - started),
+            stage: checkpoints.some(([, stage]) => stage === payload.stage) ? payload.stage : null,
+            hresult: Number.isSafeInteger(payload.hresult) ? payload.hresult : null,
+            native_error_code: Number.isSafeInteger(payload.native_error_code)
+              ? payload.native_error_code
+              : null,
+            exception_type:
+              typeof payload.exception_type === 'string' && allowedTypes.has(payload.exception_type)
+                ? payload.exception_type
+                : null,
+            ok: payload.ok === true,
+          }),
+        );
+        observed = true;
+        return result;
+      });
+    } catch {
+      // The separate success regression retains its hard assertion; this probe records only safe evidence.
+    } finally {
+      closeSync(old);
+    }
+    assert.equal(observed, true, 'The real replacement subprocess must produce diagnostic metadata.');
+  },
+);
 
 test(
   'native Windows replacement preserves old reader bytes and private new-file identity',
