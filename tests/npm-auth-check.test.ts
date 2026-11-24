@@ -214,6 +214,70 @@ test('authentication obtains an in-memory package credential with exactly one is
   assert.deepEqual(logs, []);
 });
 
+test('GitHub runner opaque endpoint paths retain their query and use the same package exchange', async (t) => {
+  const logs = captureConsole(t);
+  const endpoint =
+    'https://run-actions-3-azure-eastus.actions.githubusercontent.com/synthetic/run/opaque/credential?request=synthetic%2Fopaque&item=one&item=two&audience=previous&api-version=2.0';
+  const original = new URL(endpoint);
+  let calls = 0;
+  const fetcher: typeof fetch = async (input, options = {}) => {
+    calls++;
+    assert.equal(options.redirect, 'error');
+    assert.equal(options.credentials, 'omit');
+    assert.equal(options.body, undefined);
+    assert.ok(options.signal instanceof AbortSignal);
+    if (calls === 1) {
+      const actual = new URL(String(input));
+      assert.equal(actual.origin, original.origin);
+      assert.equal(actual.pathname, original.pathname);
+      assert.deepEqual(actual.searchParams.getAll('audience'), ['npm:registry.npmjs.org']);
+      assert.deepEqual(
+        [...actual.searchParams].filter(([key]) => key !== 'audience'),
+        [...original.searchParams].filter(([key]) => key !== 'audience'),
+      );
+      assert.equal(options.method ?? 'GET', 'GET');
+      assert.equal(new Headers(options.headers).get('authorization'), `Bearer ${requestToken}`);
+      return Response.json({ value: identity() });
+    }
+    assert.equal(calls, 2, 'Opaque endpoints must not add an upload or a channel write');
+    assert.equal(String(input), exchangeUrl);
+    assert.equal(options.method, 'POST');
+    assert.equal(new Headers(options.headers).get('authorization'), `Bearer ${identity()}`);
+    return Response.json({ token: packageToken });
+  };
+  const report = await checkNpmAuthentication(
+    { repository },
+    dependencies(fetcher, environment({ ACTIONS_ID_TOKEN_REQUEST_URL: endpoint })),
+  );
+  assert.equal(report.success, true);
+  assert.equal(calls, 2);
+  safeReport(report);
+  noSecrets(report, [endpoint]);
+  assert.deepEqual(logs, []);
+});
+
+for (const [label, endpoint] of [
+  ['HTTP issuer', 'http://run-actions-3-azure-eastus.actions.githubusercontent.com/synthetic/opaque'],
+  ['foreign host', 'https://example.com/synthetic/opaque'],
+  ['suffix spoof', 'https://run-actions.actions.githubusercontent.com.example.com/synthetic/opaque'],
+  ['missing host boundary', 'https://notactions.githubusercontent.com/synthetic/opaque'],
+  ['userinfo', 'https://user:synthetic-password@run-actions.actions.githubusercontent.com/synthetic/opaque'],
+  ['non-default port', 'https://run-actions.actions.githubusercontent.com:8443/synthetic/opaque'],
+  ['fragment', 'https://run-actions.actions.githubusercontent.com/synthetic/opaque#synthetic-fragment'],
+] as const)
+  test(`an opaque path does not permit ${label} or disclose the rejected endpoint`, async () => {
+    const network = transport();
+    const report = await checkNpmAuthentication(
+      { repository },
+      dependencies(network.fetcher, environment({ ACTIONS_ID_TOKEN_REQUEST_URL: endpoint })),
+    );
+    assert.equal(report.success, false);
+    assert.deepEqual(report.failure, { stage: 'workflow_identity', code: 'REQUEST_ENDPOINT' });
+    assert.equal(network.calls.length, 0);
+    safeReport(report);
+    noSecrets(report, [endpoint]);
+  });
+
 for (const [changes, code] of [
   [{ CI: 'false' }, 'CI_FALSE'],
   [{ NPM_ID_TOKEN: overrideToken }, 'NPM_ID_TOKEN_OVERRIDE'],

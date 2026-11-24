@@ -96,7 +96,6 @@ function workflowIdentity(env: NodeJS.ProcessEnv, selectedRepository: string) {
   if (
     url.protocol !== 'https:' ||
     !url.hostname.endsWith('.actions.githubusercontent.com') ||
-    !url.pathname.endsWith('/idtoken') ||
     url.username ||
     url.password ||
     url.port ||
@@ -108,6 +107,7 @@ function workflowIdentity(env: NodeJS.ProcessEnv, selectedRepository: string) {
       'REQUEST_ENDPOINT',
       'GitHub OIDC request does not target an approved issuer endpoint.',
     );
+  // GitHub supplies an opaque endpoint; supported runners do not share a pathname suffix.
   url.searchParams.set('audience', audience);
   return { ref, workflow, sha: env.GITHUB_SHA, url, requestToken: env.ACTIONS_ID_TOKEN_REQUEST_TOKEN };
 }

@@ -4,7 +4,7 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 ## Unreleased
 
-## 0.1.8 — 2026-11-25
+## 0.1.9 — 2026-11-25
 
 ### Added
 
@@ -32,6 +32,7 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 ### Fixed
 
+- Accept the opaque OIDC request path supplied by current GitHub-hosted runners while retaining HTTPS and GitHub issuer-host validation. Release authentication no longer assumes the legacy `/idtoken` suffix; external hosts, embedded credentials, custom ports and URL fragments remain rejected.
 - Verify GitHub OIDC and the npm package credential before new release builds and again before claiming a submission. Authentication failures retain a credential-free stage report without uploading a package; existing submitted or unknown releases continue verification without acquiring another claim. This preflight does not replace actual publication or public archive validation.
 - Serialize login revocation monitoring so slow native permission checks do not accumulate overlapping reads. Cancellation remains observable and closing the broker prevents new polls.
 - Preserve concurrent readers when replacing private Windows credentials and login state. If ordinary rename is blocked, use one same-directory native replacement after rechecking file identity and private ACLs. Uncertain replacements retain protected temporary records for inspection and are never automatically retried.
@@ -57,17 +58,21 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 - New Canvas chat submissions validate standalone and mixed attachment identity/readiness; continuations require a turn waiting for user input. Run preparation verifies the exact Canvas and unique Lab outputs, while Lab reuse rejects explicitly unavailable selected assets. Submitted jobs query their original receipts; uncertain creative submissions remain unbound without resubmission.
 
+## 0.1.8 — Unpublished candidate
+
+The original `v0.1.8` tag is retained. Its authentication preflight rejected the current GitHub-hosted runner endpoint before any credential request because it required the legacy `/idtoken` path suffix. No package upload or submission claim was made. The corrected endpoint handling and other changes are carried forward to 0.1.9.
+
 ## 0.1.7 — Publication unverified
 
-The original `v0.1.7` tag and frozen distribution are retained. Source checks and the same-archive Linux, macOS and Windows installation gates passed, but npm returned `ENEEDAUTH`. Its durable submission remains `submitted/unknown`; the exact version has not been publicly verified, and channel promotion was skipped. The original claim is preserved without retrying the submission or moving the tag. Its changes are carried forward to 0.1.8.
+The original `v0.1.7` tag and frozen distribution are retained. Source checks and the same-archive Linux, macOS and Windows installation gates passed, but npm returned `ENEEDAUTH`. Its durable submission remains `submitted/unknown`; the exact version has not been publicly verified, and channel promotion was skipped. The original claim is preserved without retrying the submission or moving the tag. Its changes are carried forward to 0.1.9.
 
 ## 0.1.6 — Unpublished candidate
 
-The `v0.1.6` tag is retained at its original source commit as a failed release candidate. The Windows local-TGZ npm consumer check exceeded its 300-second budget before publication. Candidate preparation, npm publication and channel promotion were skipped; no npm upload or GitHub Release was created by that run. Its changes are carried forward to 0.1.8.
+The `v0.1.6` tag is retained at its original source commit as a failed release candidate. The Windows local-TGZ npm consumer check exceeded its 300-second budget before publication. Candidate preparation, npm publication and channel promotion were skipped; no npm upload or GitHub Release was created by that run. Its changes are carried forward to 0.1.9.
 
 ## 0.1.5 — Unpublished candidate
 
-The `v0.1.5` tag is retained as a failed release candidate. Windows installation validation failed before publication; no npm upload or GitHub Release was created. Its changes are carried forward to 0.1.8.
+The `v0.1.5` tag is retained as a failed release candidate. Windows installation validation failed before publication; no npm upload or GitHub Release was created. Its changes are carried forward to 0.1.9.
 
 ## 0.1.4 — 2026-11-17
 

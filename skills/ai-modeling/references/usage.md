@@ -11,9 +11,9 @@ CLI 是底层执行接口，MCP 提供同源指导资源并通过工具适配调
 - 账号操作使用当前 OS 用户的私有 JSON 凭据文件，不需要系统钥匙串、Linux Secret Service 或 D-Bus。POSIX 使用目录 `0700`/文件 `0600`；Windows 通过系统 PowerShell 检查当前用户 SID 与 SYSTEM 的受保护 ACL。自动网页登录另需已安装、可见的 Chrome/Edge。离线发现和 Skill 安装管理不需要登录。
 - 只在具体功能需要时检查 Blender 4.5+、FFmpeg 或固定网页转换运行时。未获用户相应授权时，不自动安装依赖、全局安装/升级程序或修改 MCP 配置；缺少条件时指出具体缺项。用户明确要求这些操作时，确认本项目来源后按授权执行。
 - 使用用户已安装的本项目运行包；有多个版本时核对可执行文件目标与版本。配置使用 `AI_MODELING_*`，结构化工具使用 `ai_modeling_*`，认证资源为 `ai-modeling://auth/status`；旧项目名称不作为别名。已有有效 JSON 会话可复用；升级自旧钥匙串版本时按下文重新连接，不因 npm 包名带 scope 而更换 profile。
-- 入口不明确时核对已安装版本与路径；源码入口为 `node /absolute/path/to/installation/dist/cli/main.js`。用户选择 npx 路线时，每次沿用同一完整、固定版本前缀，例如 `npx --yes --package @seekskyworld/ai-modeling@0.1.8 ai-modeling`，不能误用无 scope 的同名包或静默升级。
+- 入口不明确时核对已安装版本与路径；源码入口为 `node /absolute/path/to/installation/dist/cli/main.js`。用户选择 npx 路线时，每次沿用同一完整、固定版本前缀，例如 `npx --yes --package @seekskyworld/ai-modeling@0.1.9 ai-modeling`，不能误用无 scope 的同名包或静默升级。
 
-用户已授权安装时，使用 `npm install --global @seekskyworld/ai-modeling@0.1.8`，再核对 `ai-modeling --version`。可按用户选择使用同版本 npx 前缀，无需全局安装。保留平台可选依赖。npm 安装不会自动导入 Skill 或配置 MCP。发布版本与来源以 npm 和指定 GitHub 仓库为准，不使用无 scope 的 `ai-modeling` 包。
+用户已授权安装时，使用 `npm install --global @seekskyworld/ai-modeling@0.1.9`，再核对 `ai-modeling --version`。可按用户选择使用同版本 npx 前缀，无需全局安装。保留平台可选依赖。npm 安装不会自动导入 Skill 或配置 MCP。发布版本与来源以 npm 和指定 GitHub 仓库为准，不使用无 scope 的 `ai-modeling` 包。
 
 Windows PowerShell 若拒绝执行 `npm.ps1` / `npx.ps1`，可使用 `npm.cmd` / `npx.cmd`。MCP 宿主是否能直接启动 `.cmd` 取决于其实现；不支持时可由 `cmd.exe /d /c` 启动，或直接用 `node.exe` 加已安装包的 `dist/cli/main.js` 与 `mcp` 参数。选定 MCP 入口时保持客户端配置和工具调用，不因发现命令启动差异就替换为 shell 执行业务；按用户授权处理配置。
 
@@ -93,7 +93,7 @@ default MCP 的 `ai_modeling_make` 顶层 `accept_variable_cost:true` 只授权�
 
 HolyMolly 的新消息使用显式 `capabilities:["holy_molly"]`，素材通过准确 `refs` / `attachment_ids`，不接新 materials 图边；独立上传需当前项目 READY，节点结果需准确 node_id + asset_id。修改已有游戏传目标 `node_id`，准备入口 `canvas turn-plan` 则使用 `nodeId`。最终空正文只允许显式能力、已保存 Holy 目标且无普通附件；低层仍须传 `text:""`。它需要独立可变费用授权，不使用普通 `canvas-run`。Holy 历史 retry 只有服务原消息明确记录能力与准确目标且通过当前画布校验时才能准备；缺目标返回 `retry_holy_molly_target_unknown`。不能手补 nodeId/capabilities，CLI 已有 job 继续按原身份恢复。
 
-0.1.8 提供的 `studio canvas-node-stop/canvas-node-retry` 仅作用于已保存 Holy 节点，要求 canvas_id/node_id/expected_run_id 和十进制字符串 revision；先查实际 schema。stop 不要求新生成预算，原账单不归零；retry 要求 retryable=true、原节点/运行终态及 accept_variable_cost=true。持久 job 和预检不构成上游原子条件，未知写不重提，也无可验证的未知回执对账绑定。这是网页协议映射，尚未完成真实节点 stop/retry 验收；完整流程见下方流水线。
+0.1.9 提供的 `studio canvas-node-stop/canvas-node-retry` 仅作用于已保存 Holy 节点，要求 canvas_id/node_id/expected_run_id 和十进制字符串 revision；先查实际 schema。stop 不要求新生成预算，原账单不归零；retry 要求 retryable=true、原节点/运行终态及 accept_variable_cost=true。持久 job 和预检不构成上游原子条件，未知写不重提，也无可验证的未知回执对账绑定。这是网页协议映射，尚未完成真实节点 stop/retry 验收；完整流程见下方流水线。
 
 核对历史使用 `canvas session-history` / `ai_modeling_canvas_session_history`，传准确 `canvasId` 和 `sessionId`。它对六种已知状态的回合、会话消息和回合详情做两次稳定读取；按 `observed_history_consistent`、逐回合差异及 `incomplete` 判断，正文用 `session-get`。一致不证明服务没有截断，`history_complete:null` 不能改成全量完成。
 

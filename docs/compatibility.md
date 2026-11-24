@@ -21,7 +21,7 @@ ai-modeling 以 `tripo-cli 0.11.2` 的基础命令能力为对齐基线，底层
 | 实验 / Experimental | full 工具集 `ai_modeling_mesh_edit` | 默认不暴露；显式启用 `AI_MODELING_EXPERIMENTAL_MESH_EDIT=1`，仍受参考编辑限制 / Opt-in only; reference-edit restrictions remain. |
 | 未完成或未验证 / Incomplete or unverified | Gaussian 链、任意 mask/变换/动画保真、全部网页条件 / Gaussian pipeline, arbitrary masks/transforms/animation, complete website parity | 参见 E23/W23 条目；命令名称和单例成功不证明等价 / See E23/W23; names and isolated successes do not prove parity. |
 
-本页对应 0.1.8。旧 0.1.4 包不包含本次新增的 Canvas 验收、历史与节点控制扩展；后续标为 [Unreleased](../CHANGELOG.md#unreleased) 的改动仍不保证存在于已发布 npm 包。以所用版本的帮助、schema 和返回字段核对能力。发布和三平台 CI 配置不代表对应版本已完成原生环境或业务验收。
+本页对应 0.1.9。旧 0.1.4 包不包含本次新增的 Canvas 验收、历史与节点控制扩展；后续标为 [Unreleased](../CHANGELOG.md#unreleased) 的改动仍不保证存在于已发布 npm 包。以所用版本的帮助、schema 和返回字段核对能力。发布和三平台 CI 配置不代表对应版本已完成原生环境或业务验收。
 
 ## 基本合同
 
@@ -33,7 +33,7 @@ ai-modeling 以 `tripo-cli 0.11.2` 的基础命令能力为对齐基线，底层
 | 工具集 | `default`、`full`、`studio` 分别为常用入口（含独立生图）、官方兼容合同和网页扩展；均通过 CLI。full 的实验 `ai_modeling_mesh_edit` 需 `AI_MODELING_EXPERIMENTAL_MESH_EDIT=1`。 |
 | 宿主适配 | Golutra Agent 0.3.9 的原生插件清单可注册，但 provider 白名单阻止模型发现/调用 MCP 工具；导出器保留 `host_compatibility` 阻塞，不能用独立 SDK 测试替代宿主验收。该适配器不暴露 MCP resources/prompts，Skill 仅项目范围；Windows 执行外部工具还需 OS 沙箱。其它宿主或新版本须分别验证。 |
 | 路径 | `make/generate/处理命令 --out` 为根目录，产物写入其下 `ai-modeling-out/<name>-<id8>/`；`task get/watch --download --out` 与 full MCP 下载为精确目录。路径由调用方选择。 |
-| 计费 | 多步骤分别保存回执并可能收费，不具备官方单任务原子性。估算阈值不是上游扣费硬上限；普通报价未知/过期会阻止提交。0.1.8 内置审阅快照含43个网页常量、5个已证派生数值及3项无预报价声明；仅 `import_model/modification/retexture_apply` 可在有效声明和显式 `accept_variable_cost=true` 下执行，报价仍为 unknown/variable，必须省略数字预算（包括0）。Canvas/Lab 的可变费用合同独立。0.1.4 及更早安装包和旧 Release 的快照不会随本次发布自动更新。 |
+| 计费 | 多步骤分别保存回执并可能收费，不具备官方单任务原子性。估算阈值不是上游扣费硬上限；普通报价未知/过期会阻止提交。0.1.9 内置审阅快照含43个网页常量、5个已证派生数值及3项无预报价声明；仅 `import_model/modification/retexture_apply` 可在有效声明和显式 `accept_variable_cost=true` 下执行，报价仍为 unknown/variable，必须省略数字预算（包括0）。Canvas/Lab 的可变费用合同独立。0.1.4 及更早安装包和旧 Release 的快照不会随本次发布自动更新。 |
 | 任务结果 | 产物未满足尺寸、alpha、几何、材料或动画要求时保留远端回执并标为 `needs_attention`；无可靠提交回执为 `outcome_unknown`，不自动重发。`--no-download` 不免除产物检查。 |
 | 版本与权限 | CLI/MCP 应一起升级；当前任务库 schema v18，初始化/迁移在写锁内串行完成，WAL 设置竞争有界重试。旧读取器不能读取新义务；初始化重试不重发远端任务。来源必须有合法权限和准确历史版本；网页变化可能使原有路线不可用。 |
 
@@ -139,7 +139,7 @@ full MCP 的 `ai_modeling_usage` 统一返回 `usage`、`missed`、`errors`、`u
 
 `canvas tools` 读取当前账号的服务目录，保留原字段并追加 `cli_support`；`ai-modeling tools --toolset studio` 是本地工具发现。`directory_status` 区分资料可用、不完整和不可用，`graph_edit` 表示本地类型支持，`create_node` 还要求当前目录允许创建，`execution` / `execution_command` 表示执行入口映射。退役、未映射、缺少定义及仅本地保留的类型分别列出；这些状态不证明账号权限、任意参数或产物效果，目录中的 `verified` 与空参数列表也不构成验收。
 
-0.1.8 已包含目录诊断、HolyMolly 图表示/聊天/节点停止重试、查询结果导入、`patch_params`、会话历史核对和聊天后验收入口；旧 0.1.4 包不包含这些新增能力。Holy 节点停止/重试的真实结果与其它未验证范围仍按下表保留。
+0.1.9 已包含目录诊断、HolyMolly 图表示/聊天/节点停止重试、查询结果导入、`patch_params`、会话历史核对和聊天后验收入口；旧 0.1.4 包不包含这些新增能力。Holy 节点停止/重试的真实结果与其它未验证范围仍按下表保留。
 
 | 网页能力 | CLI 入口及当前边界 |
 | --- | --- |
@@ -153,7 +153,7 @@ full MCP 的 `ai_modeling_usage` 统一返回 `usage`、`missed`、`errors`、`u
 | 原生拓扑＋UV | Canvas Retopology 可在非SmartMesh上游、`smart_poly=true` 下选择 `smart_uv=true`。真实带纹理HD来源经单节点、单步骤完成，原图其它节点/边不变；约198万面降到1106面，UV及烘焙贴图、网页正侧视和准确35点账单已核。材质粗糙度发生变化，目标面数非精确上限；不能外推所有输入、通用高级材质烘焙或官方v3身份。 |
 | 运行与历史 | `canvas run-check/run-get/runs/run-stop`、`studio canvas-run`；保存 revision、准确 run 与上游资产须匹配，未知状态不新建运行补救。 |
 | 结果选择与交付 | `canvas node-assets/asset-get/asset-select/batches/batch-select/save-to-studio`、`studio asset-download`；选择、入库和下载独立，不以“最新”、缩略图或不同身份代替准确结果。 |
-| Agent 会话与消息 | `canvas sessions/session-create/session-get/session-history/session-mode/turn-plan/turn-stop-plan/answer-plan/turns/turn-get/turn-cancel/events/watch`、`studio canvas-turn/canvas-continue`。0.1.8 新增的 `session-history` 两轮读取会话、显式六状态回合列表及每回合详情，逐条核消息ID、正文、顺序、状态和归属；分页提示或超限标 incomplete，不虚构游标。三个真实会话59条消息/15回合一致，最大29条/8回合；60回合240消息只是离线回归。`history_complete` 保持 null，不用稳定快照证明服务器无截断。session-create 会切换默认 ACTIVE 会话并归档旧会话，旧历史保留。 |
+| Agent 会话与消息 | `canvas sessions/session-create/session-get/session-history/session-mode/turn-plan/turn-stop-plan/answer-plan/turns/turn-get/turn-cancel/events/watch`、`studio canvas-turn/canvas-continue`。0.1.9 新增的 `session-history` 两轮读取会话、显式六状态回合列表及每回合详情，逐条核消息ID、正文、顺序、状态和归属；分页提示或超限标 incomplete，不虚构游标。三个真实会话59条消息/15回合一致，最大29条/8回合；60回合240消息只是离线回归。`history_complete` 保持 null，不用稳定快照证明服务器无截断。session-create 会切换默认 ACTIVE 会话并归档旧会话，旧历史保留。 |
 | Agent 停止顺序 | `canvas turn-stop-plan` 只读准备准确回合，核两次发现快照、计划节点和逐个 GetRun；先 `turn-cancel`，确认 CANCELLED 后再重新准备仍活动的准确 `run-stop`，最后复核。网页实测 CancelTurn→CANCELLED→StopRun→STOPPED，模型步骤 ABORTED/studio_cancelled；CLI 的另一次准确 CancelTurn 后，重读已得到对应运行 STOPPED，页面记录没有额外代发 StopRun，因此无需再停一次。这是普通 Agent 运行，不代表 Holy 节点 Stop，也不把未实际调用的 CLI run-stop 算成写入验收。发现分页、超限、缺 runId、未知状态或变化时 `ready:false`；无关空等待节点若归属不可证也会阻止完整停止准备。ListCanvasRuns 已出现空数组而当前图仍有运行，不能据空列表宣称完整历史；`history_complete:null`。准备不是原子锁，提交可能遇到自然完成，不能把 DONE 当取消成功。 |
 | 附件与失败重试 | `turn-plan` 新消息≤30附件、正文≤200,000 Unicode码点，低层≤100引用；只排除准确已知附件标记。提交复核附件、节点引用和目标：当前项目 READY 或精确节点唯一可用结果，保顺序/重复/来源。复制重绑须有 save 读回证据，不能按名称/数量/“最新”猜；历史 retry 仅合法、可重试 FAILED 的最后 USER 消息。Holy 目标只从服务 cardJson 中明确的 capabilities 与 targetNodeId 恢复，核对其在当前保存图内且为 Holy 节点；输出 source_target_node_id，参数恢复 node_id。缺目标仍返回 retry_holy_molly_target_unknown、ready:false；格式/能力不符或目标缺失/变型拒绝，不从附件、正文、临时字段或现存节点猜补，也不接受调用方覆盖。原本地 job 恢复不受影响；准确本地终态 job 的 redo 是新创作，不能当只读恢复。合法 FAILED 已有线上正例：准确 USER 目标恢复→新回合→新 run/节点/HTML，原件下载、原附件 SHA、依赖加载、方向键、收集阈值、暂停/恢复及 Restart 归零通过，该新运行已 SETTLED；这不等于原生节点 Retry 已验收。 |
 | 答案与 Skip | `answer-plan` 按真实卡片/题目/选项/部件准备，不提交。准备结果保留已识别卡片的标题、说明、计划组、需求和问题，供调用方审阅；卡片估价是展示信息，不替代报价或费用同意。Other≤500码点，部件1–12项、每项≤200且非空不重复；单/多题与 Skip 按卡片语义，不把标签当特殊值。过期、已答、变更卡片或不可用素材拒绝；Skip 可能继续收费，取消用 `turn-cancel`。真实双题 Other/逐题 Skip→单选确认→原回合生图、原件和网页展示已通过；普通 confirmation/gate 在准备层省略 selectedOptionIds，低层续答采用空 selected_option_ids，不能照原卡按钮 ID 当选择卡提交。新增真实 confirmation/plan→Detect→parts 确认链已通过，改名回显、两个新拆件原件及网页展示一致。真实候选 selection→plan 确认→有纹理 HD 模型已通过：选中的头部参考与服务输入对象精确一致，原件贴图、几何及网页正侧视均验收；不能从选项编号推断资产身份。Holy 推荐卡为 selection，真实 confirm 请求与 CLI 参数一致；该样本随后只返回计划文字并 FAILED，因此不算游戏交付通过。其它卡片和提示语仍须分别验收。 |
@@ -163,7 +163,7 @@ full MCP 的 `ai_modeling_usage` 统一返回 `usage`、`missed`、`errors`、`u
 | 元素拆分与贴图参考 | `canvas extraction-plan/texture-reference` 只准备图动作/运行参数，另行编辑/save/run。父 detect/generate/retry 与单子图 CreateRun 不同；部件1–12项不重复、每项≤200码点，数量/模式/parts组合不静默忽略。换源清旧参数/检测清单，只有匹配新 Detect 回执、指纹和 revision 才解除失效；丢记录不冒认旧清单有效，显示0不证明免费。Canvas拆图图片不等于 SmartSegment的GLB/mask/标签。 |
 | 分割最终模型 | quick_cap省略/true走分割→mesh_fill，交付唯一冻结最终件，原task只指中间件。false为服务未封口分支，不是当前网页关闭控件；保旧中间件，来源不唯一则 needs_attention。单最终模型可继续处理，多模型须选准确来源，不随节点重跑漂移。 |
 | HolyMolly 游戏 | `canvas get/graph-edit/save` 支持节点/分组及 `html`→HolyMolly `html`、`html`→Lab `input`。Agent 请求显式 `capabilities:["holy_molly"]`，素材走 refs/attachment_ids，修改已有游戏用准确目标 node_id；`turn-plan` 对应字段为 nodeId。空正文仅允许显式能力、已保存 Holy 目标且无普通附件，低层须传 `text:""`；新建游戏不能仅选能力就提交空消息。`answer-plan` 保留推荐卡说明。`canvas-run` 和新增/复制 materials 图边拒绝，已有图保留；已测 html→materials 返回5415。新游戏已验证使用与原附件 SHA-256 一致的图片；定向修改的目标身份、颜色和收集阈值已有实测。服务保留原节点并生成新版本节点，验收沿本轮 turn/run/新节点/资产核对，不要求覆盖原节点。 |
-| Holy 节点停止与重试 | 0.1.8 的 `studio canvas-node-stop/canvas-node-retry` 映射网页 StopNodeExecution/RetryNodeExecution，仅已保存 Holy 节点；必需 canvas_id/node_id/expected_run_id 和十进制字符串 revision。stop 要求原节点/运行活跃，不索新生成预算，原账单独立。已适配真实 Stop 的准确原 runId + status=accepted 回执，保存 accepted_run 并查询原 run；独立 turn 回执另行核验，冲突身份拒绝。只以准确原 nodeRun 的停止/取消状态确认，旧状态被替换则 STOP_STATE_UNAVAILABLE。真实早停出现 stopRequestedTime/stopping 后最终 FAILED；再次实测的新请求正确保存 accepted_run，但节点仍完成为 DONE/SUCCEEDED。网页原生节点 Stop 也复现服务记录 stopRequestedTime 后最终 SUCCEEDED；这类结果均保留 STOP_NOT_CONFIRMED，不能把受理、助手 stopped 文案当停止。retry 要求原节点/运行终态、retryable=true 和 accept_variable_cost=true，目前没有 eligible 线上正例。本轮更早的 analysing 阶段单次Stop也被准确受理，最终原node/run/step为FAILED，网页显示生成失败，不能算STOPPED。先持久化 job 再提交；预检非原子，既有 outcome_unknown 不补绑或重提，不按最新 run 补认。停止成功及原生节点 Retry 验收仍待补齐。 |
+| Holy 节点停止与重试 | 0.1.9 的 `studio canvas-node-stop/canvas-node-retry` 映射网页 StopNodeExecution/RetryNodeExecution，仅已保存 Holy 节点；必需 canvas_id/node_id/expected_run_id 和十进制字符串 revision。stop 要求原节点/运行活跃，不索新生成预算，原账单独立。已适配真实 Stop 的准确原 runId + status=accepted 回执，保存 accepted_run 并查询原 run；独立 turn 回执另行核验，冲突身份拒绝。只以准确原 nodeRun 的停止/取消状态确认，旧状态被替换则 STOP_STATE_UNAVAILABLE。真实早停出现 stopRequestedTime/stopping 后最终 FAILED；再次实测的新请求正确保存 accepted_run，但节点仍完成为 DONE/SUCCEEDED。网页原生节点 Stop 也复现服务记录 stopRequestedTime 后最终 SUCCEEDED；这类结果均保留 STOP_NOT_CONFIRMED，不能把受理、助手 stopped 文案当停止。retry 要求原节点/运行终态、retryable=true 和 accept_variable_cost=true，目前没有 eligible 线上正例。本轮更早的 analysing 阶段单次Stop也被准确受理，最终原node/run/step为FAILED，网页显示生成失败，不能算STOPPED。先持久化 job 再提交；预检非原子，既有 outcome_unknown 不补绑或重提，不按最新 run 补认。停止成功及原生节点 Retry 验收仍待补齐。 |
 | Holy 原件、试玩与账单 | `canvas audit` 支持 expect.kind=html；优先识别当前结果 URL 路径后缀，路径无后缀时才取 filename，查询参数不参与判定。分类不是字节或玩法检查。entry_url 是移除查询参数的诊断线索，不是原件下载地址；试玩、分享与下载分开。新游戏已通过 HTML 原件下载、画布内 Play、原生方向键收集、胜利及 Restart 验证；修改版本已实测新阈值、Space 暂停、Pause/Resume 按钮和 P 快捷键；暂停时角色位置不变，恢复可移动，Restart 恢复起点与零分。已核对应 HTML 和脚本原件；渲染循环仍更新不表示游戏未暂停。其它产物仍须分别检查依赖和玩法，图片/模型检查器不能验游戏。game.credits 来自节点运行，PENDING/未知不等于零，任务终态不证明 SETTLED。费用归属独立核准确 run/turn/node/step，attribution_scope=node_run_record；ledger_attribution=not_checked 表示未做账号流水匹配，不能按类型、时间或金额猜绑。修改版本已有 SETTLED 正例，首次生成仍为 PENDING，不能把整个创作链视为已结算。 |
 | 聊天后画布审计 | `canvas audit` 只读准确画布、可选会话/回合、目标节点与资产，前后复核快照；expect核类型、数量和精确资产。单次≤100节点/1,000资产身份，超限缩小范围。artifact_ready/met可为null，跨图挂载可下载不证明READY；仅报告运行/等待/阻塞/待审，`requirements_met=null`。分别报告 run_attribution、current_selection_association 与 turn_attribution：当前选中资产可来自旧运行，生成归属还须匹配可信原件路径中的准确任务/步骤身份。已证生图、HD 基础/有纹理模型、贴图模型与 Holy HTML 的受限路径；有纹理 HD 的原件目录和文件名内任务 ID 均须匹配准确步骤，不接任意同目录文件名；新增完整、一对一的多节点 run 支持，真实 CHAT 双图、双步骤生成归属已通过。Smart Mesh、拓扑、绑定、PBR 与 Smart UV 增加已取证 task→原件目录合同，但既有样本来自 CANVAS run、无 turnId，不能算聊天归属已实测。同节点多步骤可用唯一准确 `currentStepId`，须全部run节点覆盖且step/task身份无歧义，不能按时间、序号或retryNo选最新；真实SemanticSplit三节点四步骤的运行与当前选择已通过，内部task到原图UUID仍缺证据，因此生成归属保留unknown。scope 只汇总所选产物，不证明整图、原件字节、视觉或账单流水；历史完整性另验。 |
 | 原件与目标验收 | `studio artifact-inspect` 解码PNG/JPEG/WebP及自包含GLB/glTF，以下载回执SHA绑定原件，画布指纹不能代替。`requirements_status:failed`是正常未通过报告，不能只看退出码；无条件仅报告事实，条件通过不证明用户目标。Agent须实际看图或按需用本地snapshot审视角/动作，缺证据保留未检查。 |
@@ -178,13 +178,13 @@ full MCP 的 `ai_modeling_usage` 统一返回 `usage`、`missed`、`errors`、`u
 | --- | --- | --- | --- |
 | P0 | Holy Stop 的真实停止结果 | CLI 与网页原生节点 Stop 均已记录准确停止请求，但 Holy 服务仍可能 DONE/FAILED；普通 Agent 的 CancelTurn→StopRun 已有 STOPPED 正例，不能替代 Holy 节点验收 | 只在新的明确测试意图出现有效停止样本时核对；须原 nodeRun 有停止/取消终态。不能把受理、stopping 或助手文案当完成。 |
 | P0 | Holy 原生节点 Retry | Studio Free Retry 已完成合法样本的提交、生成、原件和网页加载；Holy 样本仍不满足 retryable=true | 遇到服务给出的合资格原节点才单次提交，核准确新运行、原件和费用；不改字段制造资格，Free Retry 不能替代 Holy Retry。 |
-| P1 | 价格快照持续维护 | 0.1.8 内置重新核对的43个网页常量、5个派生数值及3项无预报价声明，7份当前来源已联网校验；内置快照于2026-12-01 14:06:51 UTC到期。历史包和旧Release快照不变 | 按 `pricing status` 的实际期限重新取证，发布新快照及固定来源摘要；不简单延期旧表、不把缺价写0。无预报价仍需显式同意且省略数字预算，过期继续阻止新提交。 |
+| P1 | 价格快照持续维护 | 0.1.9 内置重新核对的43个网页常量、5个派生数值及3项无预报价声明，7份当前来源已联网校验；内置快照于2026-12-01 14:06:51 UTC到期。历史包和旧Release快照不变 | 按 `pricing status` 的实际期限重新取证，发布新快照及固定来源摘要；不简单延期旧表、不把缺价写0。无预报价仍需显式同意且省略数字预算，过期继续阻止新提交。 |
 | P1 | 待结算及缺唯一归属的费用 | 首次 Holy 运行仍 PENDING；稳定完整分页账单仍含无法关联的全零 operator，部分图片、导入和 Free Retry 无准确匹配。两个准确旧停止模型账单已补证 cancelled | 继续以准确 run/node/operator 对账；已结算节点与 fulfilled 流水有重叠，不重复累加。缺记录不记0，cancelled 不宣称整回合免费或已退款。 |
 | P1 | 稀有卡型、超长历史与内部生成归属 | 已补数字5计划卡、六状态历史读取和 currentStepId 多步骤归属；三个真实会话59消息/15回合一致，Parts三节点四步骤的运行与当前选择通过。内部 task→原图UUID仍缺证据，服务器历史截断与全部罕见卡型仍未穷尽 | 仅按新准确证据扩大生成归属；不按时间/序号选“最新”。真实历史与离线大样本分开，history_complete 保持 null；未知卡或内部产物不补造身份。 |
 | P2 | 官方效果差异 E23-01…E23-14 | Gaussian、图片参数、自动尺度/对齐、算法版本、复杂分割/变换、贴图/UV/动画等尚有未等价范围 | 按上方官方差异矩阵逐项寻找效果相同的网页链；每项须请求、原件及效果证明。网页前端计算可提供已披露的本地对应，不能换 API 钱包或悄悄忽略参数。 |
 | P2 | 网页和环境边界 W23-01…W23-12 | 全菜单条件、特殊格式、DCC/宿主/原生系统及任意输入不能由当前样本覆盖 | 用实际入口、所需权限、准确输入和原生环境复验；缺设备/权限/可用样本或服务拒绝分别记录，不以目录和离线测试充作现场通过。 |
 
-本轮新增闭环包括：有效审阅价格与无预报价同意合同、完整UV四步压缩链及网页对照、独立Studio Free Retry生成/原件/网页加载、真实会话逐消息一致性和多步骤准确运行归属。Holy更早停止仍为FAILED，生成语义、内部图片来源和未结算费用继续独立记录。高级差异逐项复核了当前网页代码；缺新原生合同、合资格状态、原件或目标环境的项目没有改成已完成。上述新增能力纳入0.1.8；不同入口、平台和输入范围仍按各自证据验收，未通过项不会因发布而变为完成。
+本轮新增闭环包括：有效审阅价格与无预报价同意合同、完整UV四步压缩链及网页对照、独立Studio Free Retry生成/原件/网页加载、真实会话逐消息一致性和多步骤准确运行归属。Holy更早停止仍为FAILED，生成语义、内部图片来源和未结算费用继续独立记录。高级差异逐项复核了当前网页代码；缺新原生合同、合资格状态、原件或目标环境的项目没有改成已完成。上述新增能力纳入0.1.9；不同入口、平台和输入范围仍按各自证据验收，未通过项不会因发布而变为完成。
 
 ## 本地对应、交接与恢复
 
