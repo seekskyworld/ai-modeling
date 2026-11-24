@@ -9,9 +9,89 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
-import { JsonStore } from '../studio/auth/credentials.ts';
+import fs from 'node:fs/promises';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { syncBuiltinESMExports } from 'node:module';
+import { JsonStore, MemoryCredentials } from '../studio/auth/credentials.ts';
 import { logoutLogin } from '../cli/auth/coordinator.ts';
-import { readState } from '../cli/auth/state.ts';
+import { startLoginBroker } from '../cli/auth/broker.ts';
+import { loginStateFile, readState, withLoginLock, writeState } from '../cli/auth/state.ts';
+import type { LoginState } from '../cli/auth/types.ts';
+
+test(
+  'login broker serializes slow revocation reads and observes cancellation',
+  { timeout: 30000 },
+  async (t) => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ai-modeling-login-monitor-'));
+    const config = {
+      dataDir: directory,
+      credentialProfile: path.basename(directory),
+      inputRoots: [],
+      outputDir: '',
+    };
+    const initial: LoginState = {
+      version: 1,
+      profile: config.credentialProfile,
+      login_id: randomUUID(),
+      status: 'checking',
+      started_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 60000).toISOString(),
+      pid: process.pid,
+      nonce: randomBytes(32).toString('hex'),
+      control: randomBytes(32).toString('hex'),
+    };
+    await withLoginLock(config, () => writeState(config, initial));
+    const file = await loginStateFile(config);
+    const broker = await startLoginBroker(
+      { config, loginId: initial.login_id, expected: undefined, open: false },
+      {
+        store: new MemoryCredentials(),
+        browser: async () => {},
+        verify: async () => {
+          throw new Error('This test never authenticates a candidate.');
+        },
+      },
+    );
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered!: () => void;
+    const reading = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let released = false;
+    let overlappingReads = 0;
+    const originalLstat = fs.lstat;
+    const mocked = t.mock.method(fs, 'lstat', async (...args: unknown[]) => {
+      if (args[0] === file && !released) {
+        overlappingReads++;
+        entered();
+        await gate;
+      }
+      return Reflect.apply(originalLstat, fs, args);
+    });
+    syncBuiltinESMExports();
+    t.after(async () => {
+      released = true;
+      release();
+      mocked.mock.restore();
+      syncBuiltinESMExports();
+      await broker.close();
+      await rm(file, { force: true });
+      await rm(directory, { recursive: true, force: true });
+    });
+    await reading;
+    // A private-state read can span several 250 ms polling ticks on Windows.
+    await delay(650);
+    assert.equal(overlappingReads, 1, 'An unfinished revocation read must not accumulate more reads.');
+    // Future writer inspections may proceed while the already-blocked monitor still waits on gate.
+    released = true;
+    await withLoginLock(config, () => writeState(config, { ...initial, status: 'cancelled' }));
+    release();
+    await broker.closed;
+  },
+);
 
 test(
   'logout cannot be undone when a credential read blocks the login lock heartbeat',
@@ -61,6 +141,10 @@ test(
           error_code:
             typeof value.error_code === 'string' && /^[A-Z_]{2,64}$/.test(value.error_code)
               ? value.error_code
+              : undefined,
+          error_origin:
+            typeof value.error_origin === 'string' && /^[a-zA-Z]{1,64}$/.test(value.error_origin)
+              ? value.error_origin
               : undefined,
           status:
             typeof value.status === 'string' && /^[a-z_]{1,32}$/.test(value.status)

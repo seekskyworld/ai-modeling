@@ -1,9 +1,24 @@
 /** Synthetic child process; diagnostics include only fixed stages, codes and elapsed time. */
 import path from 'node:path';
-import { JsonStore } from '../studio/auth/credentials.ts';
-import { beginLogin } from '../cli/auth/coordinator.ts';
-import { startLoginBroker } from '../cli/auth/broker.ts';
+import { registerHooks } from 'node:module';
 import type { BrowserLoginOptions, LoginRuntime } from '../cli/auth/types.ts';
+
+const observer = new URL('./login-lock-stall-observer.ts', import.meta.url).href;
+const observedModules = new Set([
+  new URL('../cli/auth/state.ts', import.meta.url).href,
+  new URL('../cli/auth/transport.ts', import.meta.url).href,
+]);
+registerHooks({
+  resolve(specifier, context, next) {
+    const resolved = next(specifier, context);
+    return observedModules.has(resolved.url) && context.parentURL !== observer
+      ? { url: observer, shortCircuit: true }
+      : resolved;
+  },
+});
+const { JsonStore } = await import('../studio/auth/credentials.ts');
+const { beginLogin } = await import('../cli/auth/coordinator.ts');
+const { startLoginBroker } = await import('../cli/auth/broker.ts');
 
 const started = performance.now();
 let phase = 'starting';

@@ -77,7 +77,8 @@ try {
     replace
       ? `# ReplaceFile preserves the destination DACL and permits readers of the old file to finish.
   # Never delete first, ignore metadata failures, create a backup or retry a partial replacement.
-  [IO.File]::Replace([string]$requests[1].path, [string]$requests[2].path, $null)
+  # PowerShell coerces $null to an empty string for string parameters; the backup must be actual null.
+  [IO.File]::Replace([string]$requests[1].path, [string]$requests[2].path, [NullString]::Value)
   $location = [string]$requests[2].path
   $attributes = [IO.File]::GetAttributes($location)
   if (($attributes -band ([IO.FileAttributes]::ReparsePoint -bor [IO.FileAttributes]::Directory)) -ne 0) { throw 'Changed replacement' }

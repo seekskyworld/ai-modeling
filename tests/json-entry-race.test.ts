@@ -123,7 +123,9 @@ test('Windows atomic replacement is restricted to private siblings and never ret
         const script = Buffer.from(args.at(-1)!, 'base64').toString('utf16le');
         assert.equal(script.match(/\[IO\.File\]::Replace/g)?.length, 1);
         assert.ok(
-          script.includes('[IO.File]::Replace([string]$requests[1].path, [string]$requests[2].path, $null)'),
+          script.includes(
+            '[IO.File]::Replace([string]$requests[1].path, [string]$requests[2].path, [NullString]::Value)',
+          ),
         );
         assert.equal(script.includes('[IO.File]::Delete'), false);
         assert.equal(script.includes('[IO.File]::Copy'), false);
