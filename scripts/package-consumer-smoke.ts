@@ -46,7 +46,6 @@ interface LockMismatch {
   actual?: string;
 }
 
-const installationTimeoutMs = 300000;
 const startupTimeoutMs = 30000;
 // npm reopens and extracts local TGZ metadata even when its npx installation is cached.
 const fileSpecTimeoutMs = 600000;
@@ -413,7 +412,7 @@ export async function installConsumerRoutes(
       ],
       directory,
       env,
-      installationTimeoutMs,
+      fileSpecTimeoutMs,
     ),
   );
   const local = await inspectConsumer(consumer);
