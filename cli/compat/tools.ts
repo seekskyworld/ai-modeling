@@ -4,8 +4,9 @@ import type { ToolSpec, StudioReads } from '../commands.ts';
 import { toolApplication, type Dependency } from '../tool-dependencies.ts';
 import type { TaskService } from '../core/service.ts';
 import { makePlan } from './planning.ts';
+import { classifyMakeInputs } from './make-input.ts';
 import { executePlan, resolveJob, taskResult, waitTask, downloadTask, historyResult } from './runtime.ts';
-import { text, object, array } from '../../studio/contracts/errors.ts';
+import { text, object, array, TripoError } from '../../studio/contracts/errors.ts';
 export function compatibleTools(
   service: Dependency<TaskService>,
   studio: Dependency<StudioReads>,
@@ -22,7 +23,26 @@ export function compatibleTools(
           scenario: z.string().optional(),
           then: z.string().optional(),
           model: z.string().optional(),
-          pbr: z.boolean().default(false),
+          pbr: z
+            .boolean()
+            .default(false)
+            .describe(
+              'PBR for image/text generation or texture steps from existing tasks. For a model file, use an explicit then texture:pbr=true step.',
+            ),
+          accept_variable_cost: z
+            .literal(true)
+            .optional()
+            .describe(
+              'Explicitly accept unknown Studio charges for the initial model-file import under a current reviewed snapshot. Omit max_estimated_credits. For a later UV compression step, pass accept_variable_cost=true inside that then step; this does not grant blanket consent to the chain.',
+            ),
+          max_estimated_credits: z
+            .number()
+            .finite()
+            .nonnegative()
+            .optional()
+            .describe(
+              'Maximum reviewed estimate per step, not an upstream spending cap. Cannot be combined with explicitly accepted unquoted import/apply steps.',
+            ),
           output_dir: z.string().optional(),
           request_id: z.string().optional(),
           timeout: z.number().int().min(0).max(7200).default(1800),
@@ -32,11 +52,27 @@ export function compatibleTools(
         .strict(),
       readOnly: false,
       run: async (x) => {
+        const modelInput = classifyMakeInputs([text(x.input)]).kind === 'model';
+        if (x.accept_variable_cost === true && !modelInput)
+          throw new TripoError(
+            'STUDIO_CAPABILITY_UNAVAILABLE',
+            'Top-level accept_variable_cost only applies to an initial model-file import. For a later unquoted processing step, set accept_variable_cost=true inside that then step.',
+            'not_submitted',
+          );
+        if (modelInput && x.pbr === true)
+          throw new TripoError(
+            'STUDIO_CAPABILITY_UNAVAILABLE',
+            'Importing a model file does not generate PBR textures. Omit top-level pbr and select an explicit then texture:pbr=true step.',
+            'not_submitted',
+          );
         const flags = {
           for: x.scenario,
           then: x.then,
           model: x.model,
-          param: { pbr: x.pbr, ...(x.pbr ? { texture: true } : {}) },
+          param: modelInput
+            ? { ...(x.accept_variable_cost === true ? { accept_variable_cost: true } : {}) }
+            : { pbr: x.pbr, ...(x.pbr ? { texture: true } : {}) },
+          ...(x.max_estimated_credits === undefined ? {} : { maxCredits: x.max_estimated_credits }),
           out: x.output_dir,
           requestId: x.request_id,
           timeout: x.timeout,

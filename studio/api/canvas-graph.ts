@@ -162,6 +162,16 @@ function graphOutputs(node: Node, checkLabState: boolean): Record<string, Port> 
   return ports(node).outputs;
 }
 
+/** Saved Agent edges omit a single output port. Resolve its type without rewriting the saved JSON. */
+function graphOutput(node: Node, name: string, checkLabState: boolean): Port | undefined {
+  const outputs = graphOutputs(node, checkLabState);
+  if (name) return outputs[name];
+  // Lab keeps its selected-output contract; an unselected asset is not an implicit output.
+  if (node.type === 'NODE_TYPE_AI_3D_LAB') return outputs.output;
+  const candidates = Object.values(outputs);
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
 function hasSourceArtifact(node: Node, port: string): boolean {
   if (node.type !== 'NODE_TYPE_AI_3D_LAB')
     return [...array(node.nodeAssets), ...array(node.inputMount)].some((asset) => text(object(asset).url));
@@ -217,11 +227,8 @@ function connectionPorts(
       !['NODE_TYPE_HOLY_MOLLY', 'NODE_TYPE_AI_3D_LAB'].includes(target?.type ?? ''))
   )
     return {};
-  // 网页新建 Lab 连线省略 source.port，服务读回为空串。
-  const sourcePort =
-    source?.type === 'NODE_TYPE_AI_3D_LAB' && !edge.source.port ? 'output' : edge.source.port;
   return {
-    from: source && graphOutputs(source, checkLabState)[sourcePort],
+    from: source && graphOutput(source, edge.source.port, checkLabState),
     to: target && ports(target).inputs[edge.target.port],
   };
 }

@@ -38,6 +38,6 @@ CLI 是基础执行接口。Skills 提供使用说明、示例和流程指导；
 - 选择需要的步骤即可，已有输入直接进入相应操作。前一步失败或结果未知时停止依赖步骤；下载失败恢复原任务，不重新付费生成。
 - Canvas Agent 回复结束后，交付前通过 `canvas audit` 回读准确画布、会话和回合，核对所需节点与资产；再下载准确原件。图片/模型用 `studio artifact-inspect` 检查并审阅外观；HolyMolly 用 `expect.kind:"html"` 核候选身份，再独立验原件、依赖与玩法，不能送进图片/模型检查器。MCP 使用对应工具。聊天终态、资产可读、用户目标与费用结算分别报告；节点账单不自动归属本次聊天。
 - 编辑画布先查实时 `canvas tools` 的 `cli_support`（MCP 对应 `ai_modeling_canvas_tools`），再读取准确图。`graph-edit` 可直接接收读回 JSON，使用身份/版本守卫和 `patch_params` 做局部修改，保存与运行分开。HolyMolly 用显式 `capabilities:["holy_molly"]` 的 Agent 请求、素材 refs 和可选游戏目标 node_id；不是普通 `canvas-run`。目录或协议映射不表示游戏效果已验，详细流程按需加载下方参考资料。
-- Holy 空正文须有显式能力、准确已保存 Holy 目标且无普通附件；网页历史 retry 的原目标未知时保持阻塞，不覆盖猜补。节点 stop/retry 与历史消息重试分开：沿准确 revision/run 的持久 job 执行，预检非原子，未知写不重提；stop 不清零原账单，retry 需可变费用授权。新增节点操作为 Unreleased，真实验收边界和完整参数按需读取[画布交付验收](references/pipelines.md#canvas-agent-交付验收)。
+- Holy 空正文须有显式能力、准确已保存 Holy 目标且无普通附件；网页历史 retry 的原目标未知时保持阻塞，不覆盖猜补。节点 stop/retry 与历史消息重试分开：沿准确 revision/run 的持久 job 执行，预检非原子，未知写不重提；stop 不清零原账单，retry 需可变费用授权。节点操作从 0.1.5 提供；Holy Stop 和合资格原生 Retry 的真实验收仍未完成，边界和完整参数按需读取[画布交付验收](references/pipelines.md#canvas-agent-交付验收)。
 
 交付实际文件位置、任务状态和已确认的限制。能力缺失时明确报告，不静默换钱包、模型提供方或调用入口。

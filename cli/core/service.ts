@@ -144,6 +144,11 @@ import { needsExportTransform } from '../../studio/contracts/export-options.ts';
 import { resolveDestination } from '../artifacts/destination.ts';
 import { creativeCanvasOperations, variableCanvasOperations } from '../../studio/contracts/canvas-agent.ts';
 import { canvasAcceptanceView } from './canvas-acceptance.ts';
+import {
+  acceptsUnquotedBudget,
+  assertCurrentUnquotedQuote,
+  isUnquotedOperation,
+} from '../../studio/contracts/unquoted-pricing.ts';
 import { taskType } from '../../studio/contracts/task-type.ts';
 import { hasModelResults, reconcileModelResults } from '../../studio/api/model-results.ts';
 import { reconcileExportBatch } from '../../studio/api/export-batch.ts';
@@ -249,6 +254,25 @@ function requireVerifiedReceipts(status: RemoteStatus): void {
       'Some receipts could not be verified. Keep the original job and retry verification with the same receipts.',
     );
 }
+/** 上传或授权等待可能耗尽固定报价期限；只有最终写入前仍有效的报价可用于新提交。 */
+function assertCurrentFixedQuote(job: Job): void {
+  if (
+    !job.quote.known ||
+    job.quote.credits === undefined ||
+    job.quote.variable === true ||
+    variableCanvasOperations.has(job.operation) ||
+    ['canvas_node_stop', 'refine_submit', 'project_edit', 'uv_commit'].includes(job.operation)
+  )
+    return;
+  const expires = Date.parse(job.quote.expires_at);
+  if (!Number.isFinite(expires) || expires <= Date.now())
+    throw new TripoError(
+      'PRICE_UNKNOWN',
+      'The fixed credit estimate expired or has an invalid expiry before submission. Obtain a current reviewed quote before starting a new request.',
+      'not_submitted',
+      { quote_expires_at: job.quote.expires_at },
+    );
+}
 export class TaskService {
   jobs: JobStore;
   gateway: Gateway;
@@ -332,15 +356,17 @@ export class TaskService {
     operation: Operation,
     input: Record<string, unknown>,
     quote: Quote,
-    maximum: number,
+    maximum: number | undefined,
   ): Promise<void> {
     // 停止已有执行不创建新的创作；不能要求接受新费用才允许停止，也不把原费用报价成零。
     if (operation === 'canvas_node_stop') return;
+    const unquoted = acceptsUnquotedBudget(operation, input, quote, maximum);
     const variable =
-      (variableCanvasOperations.has(operation) || operation === 'refine_submit') &&
-      input.accept_variable_cost === true &&
-      quote.variable === true;
-    if (!variable && (!Number.isFinite(maximum) || maximum < 0))
+      unquoted ||
+      ((variableCanvasOperations.has(operation) || operation === 'refine_submit') &&
+        input.accept_variable_cost === true &&
+        quote.variable === true);
+    if (!variable && (maximum === undefined || !Number.isFinite(maximum) || maximum < 0))
       throw new TripoError(
         'INVALID_INPUT',
         'max_estimated_credits must be a finite nonnegative number.',
@@ -348,7 +374,7 @@ export class TaskService {
       );
     if ((!quote.known || quote.credits === undefined) && !variable)
       throw new TripoError('PRICE_UNKNOWN', quote.explanation, 'not_submitted');
-    if (quote.credits !== undefined && quote.credits > maximum)
+    if (quote.credits !== undefined && maximum !== undefined && quote.credits > maximum)
       throw new TripoError(
         'ESTIMATE_EXCEEDS_BUDGET',
         'Estimated credits exceed max_estimated_credits.',
@@ -367,7 +393,7 @@ export class TaskService {
     operation: Operation,
     requestId: string,
     parameters: unknown,
-    maximum: number,
+    maximum?: number,
   ): Promise<Record<string, unknown>> {
     this.jobs.recoverExpired();
     const account = this.accountRef();
@@ -466,6 +492,9 @@ export class TaskService {
         () => {
           this.own(job);
           const current = this.jobs.get(job.job_id);
+          if (isUnquotedOperation(current.operation) && current.quote.variable === true)
+            assertCurrentUnquotedQuote(current.quote);
+          assertCurrentFixedQuote(current);
           if (
             current.state !== 'submitting' ||
             current.account_ref !== job.account_ref ||

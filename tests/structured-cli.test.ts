@@ -99,7 +99,7 @@ test('the production CLI passes a reordered login ID and discovers tools without
     for (const [toolset, count] of [
       ['default', 6],
       ['full', 26],
-      ['studio', 181],
+      ['studio', 182],
     ] as const) {
       const tools = await invoke(['tools', '--toolset', toolset]);
       assert.equal(tools.length, count);

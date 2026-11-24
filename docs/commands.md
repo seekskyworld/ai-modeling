@@ -1,6 +1,8 @@
 # CLI 命令参考
 
-源码版本 0.1.4，含 Unreleased 改动。以下保留实际 Commander 命令树的 238 条路径（含分组）、参数与选项；已发布安装包以本机 `--help` 为准。CLI 是底层执行接口，MCP 工具在内部调用 CLI，Skills 为所选入口提供流程指导。命令存在不等于所有官方 API 效果均已实现，支持条件见[兼容与限制](compatibility.md)。安装、登录、MCP 和恢复流程见[使用指南](usage.md)。
+版本 0.1.5。以下保留实际 Commander 命令树的 239 条路径（含分组）、参数与选项；已发布安装包以本机 `--help` 为准。CLI 是底层执行接口，MCP 工具在内部调用 CLI，Skills 为所选入口提供流程指导。命令存在不等于所有官方 API 效果均已实现，支持条件见[兼容与限制](compatibility.md)。安装、登录、MCP 和恢复流程见[使用指南](usage.md)。
+
+需要导入外部模型或进行 UV 压缩的兼容处理链，使用 `-p accept_variable_cost=true` 接受有效审阅快照中明确标注的未知费用；省略 `--max-credits`，数字 0 也不能代表未知费用。Studio 结构化工具的同意字段在 `parameters` 内，full MCP 对应处理工具使用顶层字段。详见[费用合同](usage.md#费用任务与恢复)。
 
 ## 查找命令
 
@@ -54,7 +56,7 @@ ai-modeling tools --toolset studio
 
 MCP 用户优先读取 `ai-modeling://guides/commands/index` 与相关命令分片，仍可读取同源的 `usage`、`commands`、`pipelines` 资源，并通过 MCP 工具执行；无需自行启动 CLI。
 
-MCP 的 Studio 工具集新增 `ai_modeling_auth_begin`、`ai_modeling_auth_status`、`ai_modeling_auth_wait`、`ai_modeling_auth_cancel`，共 176 项；default 为 6 项（含独立生图），full 为 26 项（启用实验 mesh edit 后 27 项）。三个工具集均可读取 `ai-modeling://auth/status` 资源，资源经同包 CLI 查询且不读取或返回凭据。单次 MCP 等待最多 60 秒，完整登录流程最多 15 分钟。
+MCP 的 Studio 工具集新增 `ai_modeling_auth_begin`、`ai_modeling_auth_status`、`ai_modeling_auth_wait`、`ai_modeling_auth_cancel`，含当前网页扩展共 182 项；default 为 6 项（含独立生图），full 为 26 项（启用实验 mesh edit 后 27 项）。三个工具集均可读取 `ai-modeling://auth/status` 资源，资源经同包 CLI 查询且不读取或返回凭据。单次 MCP 等待最多 60 秒，完整登录流程最多 15 分钟。
 
 流程结果标记 `scope: login_flow`，`credential_store_check` 和 `studio_session_check` 均为 `not_checked`。`authenticated`、`login_required`、余额与到期时间仅属于该流程记录；已完成记录可在流程期限后继续存在。接续时必须匹配原 `AUTH_REQUIRED` 返回的 `login_id`，不能把任意历史成功当作当前认证可用。`auth login` 直接验证已有会话成功时返回 `scope: verified_session` 及两项 `verified`；实时账号查询使用 `auth status` 或 MCP 的 `ai_modeling_balance`。
 
@@ -855,6 +857,20 @@ Read a creative planning session.
 --input <json>  validated operation parameters as JSON [default: "{}"]
 --session-id <value>  sessionId
 ```
+
+## `ai-modeling canvas session-history`
+
+Cross-check returned session history against all six known turn statuses and exact turn details in two stable read snapshots. Reports missing, changed or reordered messages and local limits; does not claim complete server history. Read full messages with session-get.
+
+```text
+--input <json>  validated operation parameters as JSON [default: "{}"]
+--canvas-id <value>  canvasId
+--session-id <value>  sessionId
+--max-turns <value>  maxTurns (default 50, maximum 100)
+--max-messages <value>  maxMessages (default 2000, maximum 10000)
+```
+
+`observed_history_consistent` 核已返回数据，`history_complete` 保持 `null`；分页提示或超限用 `incomplete` 明确报告。
 
 ## `ai-modeling canvas session-mode`
 
@@ -1852,12 +1868,15 @@ save per-triangle segment labels and names from inline arrays or a bound segment
 --max-credits <n>  Studio extension: maximum estimated credits per step
 --dry-run  plan + validate only; no network calls, uploads or credits
 --input <json>  validated operation parameters as JSON [default: "{}"]
+--accept-variable-cost [boolean]  explicitly accept an unquoted Studio charge under a current reviewed snapshot; omit max-credits
 --project-id <value>  project_id
 --expected-operator-id <value>  expected_operator_id
 --indices-path <value>  Segmentation editor state JSON, bound to this project/operator; alternative to inline labels.
 --part-indices <value>  Mesh name → one segment label (0–255) for each triangle in original order.
 --part-indices-name <value>  Segment label → part display name.
 ```
+
+无预报价合同及预算限制见[费用、任务与恢复](usage.md#费用任务与恢复)。
 
 ## `ai-modeling studio retry`
 
@@ -2011,10 +2030,13 @@ import an external model into the Studio workspace
 --max-credits <n>  Studio extension: maximum estimated credits per step
 --dry-run  plan + validate only; no network calls, uploads or credits
 --input <json>  validated operation parameters as JSON [default: "{}"]
+--accept-variable-cost [boolean]  explicitly accept an unquoted Studio charge under a current reviewed snapshot; omit max-credits
 --model-path <value>  model_path
 --transform-matrix <value>  transform_matrix
 --use-original-uv [boolean]  use_original_uv
 ```
+
+无预报价合同及预算限制见[费用、任务与恢复](usage.md#费用任务与恢复)。
 
 ## `ai-modeling studio uv-generate`
 
@@ -2099,10 +2121,13 @@ apply baked per-part Magic Brush textures to the current model (may consume cred
 --max-credits <n>  Studio extension: maximum estimated credits per step
 --dry-run  plan + validate only; no network calls, uploads or credits
 --input <json>  validated operation parameters as JSON [default: "{}"]
+--accept-variable-cost [boolean]  explicitly accept an unquoted Studio charge under a current reviewed snapshot; omit max-credits
 --project-id <value>  project_id
 --expected-operator-id <value>  expected_operator_id
 --image-map <value>  image_map
 ```
+
+无预报价合同及预算限制见[费用、任务与恢复](usage.md#费用任务与恢复)。
 
 ## `ai-modeling studio motion`
 

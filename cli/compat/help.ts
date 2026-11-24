@@ -55,7 +55,7 @@ const labSourceHelp =
   'Studio extension -p source_representation=studio_normalized explicitly selects the actual Studio representation of a verified Lab mesh-edit or explicitly projected-segmentation task. Projected sources additionally preserve every original named face group. The original Lab artifact/proof stays unchanged; centering/scaling, quantized normals and metadata differences are frozen and disclosed. A new selected source is copied from its exact historical operator; the copied GLB bytes are verified before downstream processing, with a separate possible cost. This new copy plus processing requires waiting; old requests keep their original frozen layout. Omit this selection to retain the original source restriction. Unverified Lab tasks and processing combinations are not implicitly accepted.';
 for (const command of [
   'model texture',
-  'model rig',
+  'anim rig',
   'model convert',
   'mesh decimate',
   'mesh uv',
@@ -64,6 +64,21 @@ for (const command of [
   'mesh smartsegment',
 ])
   differences[command] = [differences[command], labSourceHelp].filter(Boolean).join(' ');
+const unquotedSourceHelp =
+  'New file/URL imports and UV compression imports require -p accept_variable_cost=true plus a current reviewed unquoted declaration. Omit --max-credits for an unquoted operation; a numeric value, including zero, is rejected because Studio provides no verified advance price or spending cap. Known-price steps still use their ordinary budget checks. This consent is validated locally and never forwarded to the Studio model request. Existing submitted or unknown steps retain their original receipts.';
+for (const command of [
+  'model import',
+  'model texture',
+  'anim check',
+  'anim rig',
+  'model convert',
+  'mesh decimate',
+  'mesh uv',
+  'mesh segment',
+  'mesh edit',
+  'mesh smartsegment',
+])
+  differences[command] = [differences[command], unquotedSourceHelp].filter(Boolean).join(' ');
 export function applyOfficialHelp(command: Command, prefix = ''): void {
   for (const child of command.commands) {
     const path = `${prefix} ${child.name()}`.trim();

@@ -100,16 +100,14 @@ function uniqueRunSteps(run: RecordValue, nodeIds: string[]): { steps?: RecordVa
   const steps = run.steps.map(object);
   if (steps.some((step) => ![step.stepId, step.nodeId, step.taskId].every(validIdentity)))
     return { reason: 'step_identity_incomplete' };
-  if (
-    new Set(steps.map((step) => step.stepId)).size !== steps.length ||
-    new Set(steps.map((step) => step.nodeId)).size !== steps.length
-  )
+  if (new Set(steps.map((step) => step.stepId)).size !== steps.length)
     return { reason: 'run_steps_ambiguous' };
   if (new Set(steps.map((step) => step.taskId)).size !== steps.length)
     return { reason: 'run_tasks_ambiguous' };
   if (steps.some((step) => !nodeIds.includes(text(step.nodeId))))
     mismatch('Audit run step belongs to a node outside its exact source run.');
-  if (steps.length !== nodeIds.length) return { reason: 'run_steps_incomplete' };
+  if (nodeIds.some((nodeId) => !steps.some((step) => step.nodeId === nodeId)))
+    return { reason: 'run_steps_incomplete' };
   return { steps };
 }
 function identifiedRunStep(
@@ -125,9 +123,11 @@ function identifiedRunStep(
   if (!run.nodeIds.includes(nodeId)) mismatch('Audit run does not belong to the selected node.');
   const identified = uniqueRunSteps(run, run.nodeIds);
   if (!identified.steps) return { reason: identified.reason };
-  const step = identified.steps.find((step) => step.nodeId === nodeId)!;
   if (!validIdentity(current.currentStepId)) return { reason: 'step_identity_incomplete' };
-  if (step.stepId !== current.currentStepId)
+  // Repeated node steps may represent retries. Only the saved explicit identity selects one;
+  // array order, retry count, sequence and timestamps are never used to infer the current step.
+  const step = identified.steps.find((step) => step.stepId === current.currentStepId);
+  if (!step || step.nodeId !== nodeId)
     mismatch('Audit current node step does not match its exact source run step.');
   return { step };
 }

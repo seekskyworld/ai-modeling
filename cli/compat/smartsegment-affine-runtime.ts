@@ -27,6 +27,7 @@ import { freezePlanReferences } from './source-policy.ts';
 import { assertScaleAccount } from './smartsegment-scale.ts';
 import { assertUneditedScaleMetadata } from './smartsegment-scale-steps.ts';
 import { freezeAffineIntent, prepareAffineSource, readAffineCache } from './smartsegment-affine-source.ts';
+import { affineBillingParameters } from './smartsegment-affine-billing.ts';
 
 function componentPlan(app: Application, parent: string, stage: 'first' | 'second'): Plan {
   const { intent, source, preparation } = affineSource(app.service.jobs, app.service.accountRef(), parent),
@@ -212,6 +213,13 @@ export async function executeSmartSegmentAffine(
     for (const stage of ['first', 'merge', 'second'] as const) {
       assertScaleAccount(app, account);
       const child = stage === 'merge' ? await mergePlan(app, parent) : componentPlan(app, parent, stage);
+      if (stage !== 'second') {
+        const index = stage === 'merge' ? 3 : 0;
+        child.steps[0] = {
+          ...child.steps[0]!,
+          parameters: affineBillingParameters(app, plan, parent, index, child.steps[0]!.parameters, true),
+        };
+      }
       last = await executePlan(app, child, {
         ...flags,
         requestId: affineGroupRequest(parent, stage),

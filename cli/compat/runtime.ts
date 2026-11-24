@@ -25,7 +25,8 @@ import type { Plan, PlannedStep, Flags } from './planning.ts';
 import { prepareExportEdits } from './export-edits.ts';
 import { expandSegmentationPlan } from './segmentation-plan.ts';
 import { materializeInputs } from '../artifacts/source.ts';
-import { executionExitCode, validateExecutionOptions } from './execution-policy.ts';
+import { executionExitCode, validateExecutionOptions, validatePlanCostLimit } from './execution-policy.ts';
+import { preflightUnquotedPlan, unquotedWithoutMaximum } from './unquoted-plan.ts';
 import { validateCompatibilityChain } from './chain-policy.ts';
 import { verifiedArtifactBytes } from '../artifacts/recover-download.ts';
 import { checkedRigChain } from './rig-chain.ts';
@@ -712,6 +713,7 @@ async function submitStep(
   )
     throw new TripoError('PRICE_UNKNOWN', quote.explanation);
   const maximum = typeof flags.maxCredits === 'number' ? flags.maxCredits : (quote.credits ?? 0);
+  const unquoted = unquotedWithoutMaximum(step.operation, params, quote, flags);
   const deadline = Date.now() + Math.min(180, Number(flags.timeout ?? 180)) * 1000;
   for (;;) {
     if (transformAccount && app.service.accountRef() !== transformAccount)
@@ -722,7 +724,7 @@ async function submitStep(
       );
     const job = step.frontendConvert
       ? await executeFrontendConvert(app, step, params, requestId, maximum)
-      : await app.service.submit(step.operation, requestId, params, maximum);
+      : await app.service.submit(step.operation, requestId, params, unquoted ? undefined : maximum);
     // --no-wait 跳过远端生成等待，不跳过本机提交槽；否则并行候选只会真正提交第一项。
     if (job.state !== 'prepared' || Date.now() >= deadline) return job;
     await delay(500);
@@ -740,8 +742,10 @@ export async function executePlan(
   flags: Flags,
 ): Promise<Record<string, unknown>> {
   validateExecutionOptions(flags);
+  validatePlanCostLimit(plan, flags);
   const request = text(flags.requestId) || randomUUID();
   flags = { ...flags, requestId: request };
+  await preflightUnquotedPlan(app, plan, flags, request);
   assertLabReferenceEditPlan(app.service.jobs, app.service.accountRef(), request, plan);
   if (plan.labReferenceEdit) return await executeLabReferenceEdit(app, plan, flags, request);
   if (plan.multiviewEdit) return await executeMultiviewEdit(app, plan, flags);

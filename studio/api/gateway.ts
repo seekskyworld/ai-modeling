@@ -169,10 +169,11 @@ export class StudioGateway implements Gateway {
   ): Promise<{ remote_ids: RemoteIds; status?: RemoteStatus }> {
     beforeSubmit();
     if (['export_lite', 'refine_submit'].includes(job.operation))
-      return await submitServiceAction(this.client.forAccount(job.account_ref), job);
+      return await submitServiceAction(this.client.forAccount(job.account_ref), job, beforeSubmit);
     const client = this.client.forAccount(job.account_ref);
     if (job.operation === 'uv_commit') return await this.commitUv(client, job, beforeSubmit);
-    if (job.operation === 'export_batch') return await submitExportBatch(client, this.roots, job);
+    if (job.operation === 'export_batch')
+      return await submitExportBatch(client, this.roots, job, beforeSubmit);
     if (creativeCanvasOperations.has(job.operation))
       return await submitCreativeTask(client, job, beforeSubmit);
     if (job.operation === 'canvas_run') return await submitCanvasRun(client, job, beforeSubmit);

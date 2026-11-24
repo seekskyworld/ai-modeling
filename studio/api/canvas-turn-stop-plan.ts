@@ -106,8 +106,9 @@ function planNodes(messages: RecordValue[], reasons: string[]): string[] {
   const ids = new Set<string>();
   let visited = 0;
   for (const message of messages) {
-    const raw = text(message.cardJson);
-    if (!raw && message.cardType !== 'CARD_TYPE_PLAN_STEPS') continue;
+    const raw = text(message.cardJson),
+      declaredPlan = message.cardType === 'CARD_TYPE_PLAN_STEPS' || message.cardType === 5;
+    if (!raw && !declaredPlan) continue;
     let card: RecordValue;
     try {
       if (raw.length > 100000) throw new Error('bounded');
@@ -116,7 +117,7 @@ function planNodes(messages: RecordValue[], reasons: string[]): string[] {
       reasons.push('message_card_unreadable');
       continue;
     }
-    if (message.cardType !== 'CARD_TYPE_PLAN_STEPS' && card.type !== 'plan_steps') continue;
+    if (!declaredPlan && card.type !== 'plan_steps') continue;
     if (!['MESSAGE_ROLE_AGENT', 'assistant'].includes(text(message.role))) {
       reasons.push('plan_card_not_assistant');
       continue;

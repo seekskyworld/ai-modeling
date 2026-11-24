@@ -55,7 +55,7 @@ test('version, help, guides, tool discovery and offline setup do not load unavai
   assert.match(f.run(['mcp', '--help']), /toolset/);
   assert.match(f.run(['guides', 'list']), /ai-modeling:\/\/guides\/usage/);
   assert.equal(JSON.parse(f.run(['tools', '--toolset', 'default'])).length, 6);
-  assert.equal(JSON.parse(f.run(['tools', '--toolset', 'studio'])).length, 181);
+  assert.equal(JSON.parse(f.run(['tools', '--toolset', 'studio'])).length, 182);
   const setup = JSON.parse(f.run(['setup', '--offline', '--check', '--json'], [0, 1]));
   assert.equal(setup.login_started, false);
   assert.equal(

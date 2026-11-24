@@ -18,6 +18,7 @@ import { resolveCanvasAnswerPlan } from './canvas-answer-plan.ts';
 import { resolveCanvasTurnPlan } from './canvas-turn-plan.ts';
 import { resolveCanvasTurnStopPlan } from './canvas-turn-stop-plan.ts';
 import { canvasAuditSchema, auditCanvas } from './canvas-audit.ts';
+import { canvasHistorySchema, inspectCanvasSessionHistory } from './canvas-history.ts';
 import { canvasToolCoverage } from './canvas-capabilities.ts';
 import { inspectLabTaskInstructions } from './canvas-lab-instructions.ts';
 
@@ -116,6 +117,13 @@ const spec = (
   readOnly,
 });
 export const canvasResources: CanvasSpec[] = [
+  spec(
+    'session_history',
+    'Session',
+    'GetSession',
+    canvasHistorySchema,
+    'Cross-check returned session history against the turn inventory and exact turn details in two stable read snapshots. Reports missing, changed or reordered messages and local limits; does not claim complete server history, invent pagination, answer cards or submit work. Read full messages with session-get.',
+  ),
   spec(
     'audit',
     'Canvas',
@@ -285,6 +293,7 @@ export async function callCanvas(
     });
   }
   if (spec.name === 'audit') return await auditCanvas(studio, input);
+  if (spec.name === 'session_history') return await inspectCanvasSessionHistory(studio, input);
   if (spec.name === 'turn_plan') return await resolveCanvasTurnPlan(studio, input);
   if (spec.name === 'turn_stop_plan') return await resolveCanvasTurnStopPlan(studio, input);
   if (spec.name === 'answer_plan') return await resolveCanvasAnswerPlan(studio, input);

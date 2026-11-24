@@ -8,10 +8,10 @@ English readers can start with the [English quick tutorial](usage.md#quick-start
 | --- | --- |
 | [使用指南](usage.md) | 安装与客户端配置、登录、Canvas 编辑和验收、配置、恢复与排障 |
 | [命令参考](commands.md) | 由命令树生成的参数、选项与结构化工具入口 |
-| [兼容与限制](compatibility.md) | 官方 CLI 与网页功能对照、支持条件、未完成项和 Unreleased 范围 |
+| [兼容与限制](compatibility.md) | 官方 CLI 与网页功能对照、支持条件、未完成项和版本适用范围 |
 | [开发指南](development.md) | CLI/MCP/Studio 架构、验证、导出和发布维护 |
 
-MCP 客户端配置、批处理和 Skill 导入集中在[示例目录](../examples/README.md)。具体版本的变更见 [CHANGELOG](../CHANGELOG.md)；标记为 Unreleased 的能力不能假定已包含在 npm 包中。
+MCP 客户端配置、批处理和 Skill 导入集中在[示例目录](../examples/README.md)。本组文档对应 0.1.5，具体版本的变更见 [CHANGELOG](../CHANGELOG.md)。旧 0.1.4 包不包含本次新增的 Canvas 验收与历史入口；后续标记为 Unreleased 的能力仍不能假定已包含在 npm 包中。
 
 CLI 使用 `ai-modeling docs` 读取使用指南，或以 `--topic commands`、`--topic compatibility`、`--topic development` 选择文档；`commands/*`、`examples/*` 和 `common-errors` 支持按主题查找。
 

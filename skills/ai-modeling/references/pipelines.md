@@ -47,7 +47,7 @@ ai-modeling task get TASK_ID --download --out /absolute/path/to/new-output --jso
 
 ## Canvas Agent 交付验收
 
-本节新增的 `canvas audit` / `studio artifact-inspect`、实时目录诊断、查询结果导入、参数补丁及 HolyMolly 聊天和节点 stop/retry 扩展当前为源码 Unreleased 能力，需要包含它们的构建；先通过已安装程序的命令帮助或 Studio 工具发现确认，MCP 则查看客户端当前工具列表。既有 npm 0.1.4 包缺少入口或字段时不能假设本节能力可用，也不虚构一个后续发布版本。
+本节的 `canvas audit` / `studio artifact-inspect`、`canvas session-history`、实时目录诊断、查询结果导入、参数补丁及 HolyMolly 聊天和节点 stop/retry 扩展已在 0.1.5 提供。先通过已安装程序的命令帮助或 Studio 工具发现确认，MCP 则查看客户端当前工具列表。旧 npm 0.1.4 包不包含这些新增入口；升级运行包后同时更新 Skill 或 MCP 配置并重新加载。Holy Stop、合资格原生 Retry 和其它未验收项仍保留下文的限制，不因命令已发布而宣称通过。
 
 停止正在执行的 Agent 工作时，先用 `canvas turn-stop-plan`（MCP：`ai_modeling_canvas_turn_stop_plan`）准备准确回合的停止顺序。按返回动作先 `turn-cancel`，读回 CANCELLED 后再准备、停止仍活动的准确运行；停止后再次读取。此准备只读，发现不完整或快照变化时不提供写动作，不能将一次空 `runs` 响应当成完整历史。回合取消、运行停止、自然完成和失败分别验收；未知回执保留，不自动重发。Holy 节点自己的 Stop 按后文独立分支处理。
 
@@ -102,7 +102,7 @@ ai-modeling studio snapshot --model-path /absolute/path/to/output/model.glb \
 
 MCP 用户通过 Studio 工具集的 `ai_modeling_canvas_audit`、`ai_modeling_asset_download`、`ai_modeling_artifact_inspect` 和按需的 `ai_modeling_snapshot` 执行上述计划。先读取各工具 schema；例如 audit 使用 `canvasId`，文件检查使用 `file_path`，不能统一猜字段大小写。所有工具继续经同包 CLI 执行，Agent 不为验收自行改用 shell。默认轻量工具集没有这些 Canvas 工具；当前入口不提供时报告缺少能力，不静默更换入口。
 
-已有会话和回合历史可用于定位来源，但长历史完整性与分页尚未普遍验证；当前快照和验收报告不补造缺失历史。发现不符合要求时，在原授权范围内选择修正步骤并保留旧回执；新的生成、分享或删除不由验收流程自动授权。
+已有会话用 `canvas session-history --canvas-id CANVAS_ID --session-id SESSION_ID` 核对；MCP 使用 `ai_modeling_canvas_session_history`。六种已知回合状态全部显式读取，逐消息比较两端身份、内容、顺序和状态。默认最多 50 回合/2,000 消息，可设至 100/10,000；服务分页提示或本地超限明确 `incomplete`。`observed_history_consistent:true` 仍不证明服务器全量留存，`history_complete:null` 保留未知，不补造历史。发现不符合要求时，在原授权范围内选择修正步骤并保留旧回执；新的生成、分享或删除不由验收流程自动授权。
 
 需要修正画布时，`canvas graph-edit` 可直接读取已保存的 `canvas get` 完整 JSON（也接受 CLI `result` 包装），以 `expected_canvas_id`、`expected_project_id`、`expected_revision` 约束所选文件；这些守卫不自动拉取新图。用 `patch_params` 的 `set` / `unset` 修改指定顶层参数，保留其它配置；嵌套值整体替换，`null` 是值，`params` 则替换整个参数对象。编辑仅产生本地状态文件和 `save_input`，后者供独立 `canvas save` 使用；保存后读取新 revision，按需要检查、运行，再重新验收。不要把带历史的状态文件当保存请求，也不要把本地 undo 当远端撤销。
 

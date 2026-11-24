@@ -194,75 +194,107 @@ test('UV错误产物保留远端成功回执，缺证明及更换身份均不能
   }
 });
 
-test('完整兼容运行器串接三真实步骤，无下载终态验收且重入不追加提交', async () => {
-  const f = await fixture();
-  try {
-    const source = await sourceFor(f),
-      native = await uvImportFixture(true),
-      nativePath = path.join(f.dir, 'imported.glb');
-    await writeFile(nativePath, native);
-    f.gateway.submit = async (job) => {
-      f.gateway.posts++;
-      return {
-        remote_ids: {
-          project_id: job.operation === 'import_model' ? 'imported' : 'project',
-          operator_id: job.operation,
-        },
-        status: {
-          state: 'succeeded' as const,
-          progress: 100,
-          artifacts:
-            job.operation === 'uv_generate'
-              ? []
-              : job.operation === 'uv_commit'
-                ? source.artifacts
-                : [
-                    {
-                      artifact_id: 'model',
-                      kind: 'model' as const,
-                      format: 'glb',
-                      index: 0,
-                      local_path: nativePath,
-                      sha256: hash(native),
-                      bytes: native.length,
-                    },
-                  ],
-        },
+for (const unquoted of [false, true])
+  test(`完整兼容运行器串接三步骤，无下载终态验收且重入不追加提交（未预报价=${unquoted}）`, async () => {
+    const f = await fixture();
+    try {
+      const submitted: Array<{ operation: string; maximum: number | undefined }> = [];
+      const submit = f.service.submit.bind(f.service);
+      f.service.submit = async (operation, request, params, maximum) => {
+        submitted.push({ operation, maximum });
+        return await submit(operation, request, params, maximum);
       };
-    };
-    const client = {
-      request: async () => {
-        throw Error('No network read needed for an exact local source');
-      },
-    } as unknown as StudioClient;
-    const app = { service: f.service, studio: { client } } as Application,
-      plan = processingPlan('uv', source.job_id, { param: { bake: false, compress: 'geometry' } }),
-      flags = { requestId: 'full-uv', wait: true, download: false };
-    const first = await executePlan(app, plan, flags);
-    assert.equal(first.status, 'success');
-    assert.equal(first.type, 'smart_uv');
-    assert.equal((first.uv_compression_validation as Record<string, unknown>).status, 'verified');
-    assert.equal(f.gateway.posts, 3);
-    await rm(source.artifacts[0]!.local_path!);
-    f.gateway.artifactUrl = async () => {
-      throw Error('Recovery must use frozen files');
-    };
-    const again = await executePlan(app, plan, flags);
-    assert.equal(again.task_id, first.task_id);
-    assert.equal(f.gateway.posts, 3);
-    await assert.rejects(
-      executePlan(app, processingPlan('texture', String(first.task_id), {}), {
-        requestId: 'bad-continuation',
-        download: false,
-      }),
-      { code: 'UV_COMPRESSION_CONTINUATION_UNVERIFIED' },
-    );
-    assert.equal(f.gateway.posts, 3);
-  } finally {
-    f.jobs.close();
-    await rm(f.dir, { recursive: true, force: true });
-  }
-});
+      if (unquoted)
+        f.service.pricing.quote = async (operation) =>
+          operation === 'import_model'
+            ? { ...quote, known: false, credits: undefined, variable: true }
+            : quote;
+      const source = await sourceFor(f),
+        native = await uvImportFixture(true),
+        nativePath = path.join(f.dir, 'imported.glb');
+      await writeFile(nativePath, native);
+      f.gateway.submit = async (job) => {
+        f.gateway.posts++;
+        return {
+          remote_ids: {
+            project_id: job.operation === 'import_model' ? 'imported' : 'project',
+            operator_id: job.operation,
+          },
+          status: {
+            state: 'succeeded' as const,
+            progress: 100,
+            artifacts:
+              job.operation === 'uv_generate'
+                ? []
+                : job.operation === 'uv_commit'
+                  ? source.artifacts
+                  : [
+                      {
+                        artifact_id: 'model',
+                        kind: 'model' as const,
+                        format: 'glb',
+                        index: 0,
+                        local_path: nativePath,
+                        sha256: hash(native),
+                        bytes: native.length,
+                      },
+                    ],
+          },
+        };
+      };
+      const client = {
+        request: async () => {
+          throw Error('No network read needed for an exact local source');
+        },
+      } as unknown as StudioClient;
+      const app = { service: f.service, studio: { client } } as Application,
+        plan = processingPlan('uv', source.job_id, {
+          param: { bake: false, compress: 'geometry', ...(unquoted ? { accept_variable_cost: true } : {}) },
+        }),
+        flags = { requestId: 'full-uv', wait: true, download: false };
+      const first = await executePlan(app, plan, flags);
+      assert.equal(first.status, 'success');
+      assert.equal(first.type, 'smart_uv');
+      assert.equal((first.uv_compression_validation as Record<string, unknown>).status, 'verified');
+      assert.equal(f.gateway.posts, 3);
+      assert.deepEqual(submitted, [
+        { operation: 'uv_generate', maximum: 10 },
+        { operation: 'uv_commit', maximum: 10 },
+        { operation: 'import_model', maximum: unquoted ? undefined : 10 },
+      ]);
+      await rm(source.artifacts[0]!.local_path!);
+      f.gateway.artifactUrl = async () => {
+        throw Error('Recovery must use frozen files');
+      };
+      if (unquoted)
+        f.service.pricing.quote = async () => {
+          throw Error('Already-submitted original jobs must recover without requiring a new price review.');
+        };
+      const again = await executePlan(app, plan, flags);
+      assert.equal(again.task_id, first.task_id);
+      assert.equal(f.gateway.posts, 3);
+      if (unquoted)
+        await assert.rejects(
+          executePlan(
+            app,
+            processingPlan('uv', source.job_id, { param: { bake: false, compress: 'geometry' } }),
+            flags,
+          ),
+          { code: 'IDEMPOTENCY_CONFLICT' },
+        );
+      await assert.rejects(
+        executePlan(app, processingPlan('texture', String(first.task_id), {}), {
+          requestId: 'bad-continuation',
+          download: false,
+        }),
+        { code: 'UV_COMPRESSION_CONTINUATION_UNVERIFIED' },
+      );
+      assert.equal(f.gateway.posts, 3);
+    } finally {
+      f.jobs.close();
+      await rm(f.dir, { recursive: true, force: true });
+    }
+  });
 
 test('静态布局前置约束在首个UV付费前拒绝，不产生半条收费链', async () => {
   const f = await fixture();

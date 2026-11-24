@@ -9,7 +9,7 @@ ai-modeling 通过你的 Tripo Studio 网页会话提供建模功能，使用网
 Install Node.js **24+** and npm, then install the single runtime package:
 
 ```sh
-npm install --global @seekskyworld/ai-modeling@0.1.4
+npm install --global @seekskyworld/ai-modeling@0.1.5
 ai-modeling --version
 ai-modeling doctor --offline --json
 ```
@@ -37,8 +37,8 @@ The dry run checks local inputs and does not submit or quote a live task. Remove
 To avoid a global installation, use the complete prefix for every command:
 
 ```sh
-npx --yes --package @seekskyworld/ai-modeling@0.1.4 ai-modeling --version
-npx --yes --package @seekskyworld/ai-modeling@0.1.4 ai-modeling skill install --target claude-code
+npx --yes --package @seekskyworld/ai-modeling@0.1.5 ai-modeling --version
+npx --yes --package @seekskyworld/ai-modeling@0.1.5 ai-modeling skill install --target claude-code
 ```
 
 Use the same pinned package when the Skill invokes CLI through npx. To upgrade, select a published version, update the runtime, then update the Skill in the same destination or the MCP configuration. Do not assume an existing client reloads automatically. Node/npm or the installed command must be on the client's PATH; GUI applications may need an absolute executable path.
@@ -49,7 +49,7 @@ Use the same pinned package when the Skill invokes CLI through npx. To upgrade, 
 
 Use `pricing status` to inspect price provenance and expiry offline. For updates, copy the command from a Release's **Reviewed pricing snapshot** section: it supplies an immutable JSON URL, **Source JSON SHA-256** and review/expiry dates. Use that original-file digest, not the runtime TGZ digest or `canonical_sha256`. These commands do not generate assets or extend expiry automatically; see [pricing maintenance](#价格快照更新).
 
-For optional features, run `doctor --offline --feature render`, `video`, or `frontend-export`. Blender 4.5+, FFmpeg/libx264 and the fixed conversion runtime are needed only for those operations. Review [capability status](compatibility.md#能力状态--capability-status); Canvas features marked **Unreleased** require a build containing them and must not be assumed available in the published 0.1.4 package.
+For optional features, run `doctor --offline --feature render`, `video`, or `frontend-export`. Blender 4.5+, FFmpeg/libx264 and the fixed conversion runtime are needed only for those operations. Review [capability status](compatibility.md#能力状态--capability-status). Version 0.1.5 includes the Canvas audit, history and node-control extensions documented here; the older 0.1.4 package does not include these additions. An available command does not establish successful HolyMolly node stopping, an eligible native node Retry, or full website parity.
 
 ## 安装
 
@@ -62,7 +62,7 @@ For optional features, run `doctor --offline --feature render`, `video`, or `fro
 从 [npm](https://www.npmjs.com/package/@seekskyworld/ai-modeling) 安装固定版本：
 
 ```sh
-npm install --global @seekskyworld/ai-modeling@0.1.4
+npm install --global @seekskyworld/ai-modeling@0.1.5
 ai-modeling --version
 ai-modeling doctor --offline --json
 ```
@@ -71,7 +71,7 @@ ai-modeling doctor --offline --json
 
 一个运行包包含 CLI、MCP 和 Skill 指导；原生及平台依赖由 npm 安装，不手工拼装其它平台的原生包。CLI 用户可直接继续，Skill 用户另做目标安装，MCP 用户按[客户端配置](#mcp-客户端配置)添加服务。
 
-不做全局安装时，每次用 `npx --yes --package @seekskyworld/ai-modeling@0.1.4 ai-modeling` 替换命令前缀。比如 `npx --yes --package @seekskyworld/ai-modeling@0.1.4 ai-modeling skill install --target claude-code`；此时 Skill 的 CLI 调用也沿用同一完整前缀。MCP 可直接使用[npx 配置](../examples/mcp-npx.json)。
+不做全局安装时，每次用 `npx --yes --package @seekskyworld/ai-modeling@0.1.5 ai-modeling` 替换命令前缀。比如 `npx --yes --package @seekskyworld/ai-modeling@0.1.5 ai-modeling skill install --target claude-code`；此时 Skill 的 CLI 调用也沿用同一完整前缀。MCP 可直接使用[npx 配置](../examples/mcp-npx.json)。
 
 `ai-modeling update` 离线显示更新指引，`ai-modeling update --check` 查询 scoped npm 的最新版本；它们不自动安装。升级时选择已发布版本，重新安装运行包，并在原目标/范围执行 `skill install` 更新指导；MCP 固定版本配置也需更新并重启。多版本环境用 `command -v ai-modeling` 或 PowerShell `Get-Command ai-modeling -All` 检查实际入口，避免新 Skill 调用旧程序。首次账号操作用 `ai-modeling setup` 引导连接，不把 Token 放进 MCP 配置。
 
@@ -239,7 +239,7 @@ ai-modeling task watch @concept --download --out ./assets --json
 
 ### Canvas 功能发现与图编辑
 
-`cli_support`、查询结果导入、`patch_params`、`canvas audit`、`studio artifact-inspect` 及 HolyMolly 聊天和节点停止/重试扩展属于源码 **Unreleased** 能力；既有 npm 0.1.4 包不能据相同源码版本号假定包含它们。先检查所用构建的帮助、schema 和返回字段。节点映射、HolyMolly、容量及未完成项统一见[Canvas 兼容表](compatibility.md#canvaslab-会话与模板)。
+0.1.5 提供 `cli_support`、查询结果导入、`patch_params`、`canvas audit`、`canvas session-history`、`studio artifact-inspect` 及 HolyMolly 聊天和节点停止/重试扩展；旧 npm 0.1.4 包不包含这些新增能力。先检查所用版本的帮助、schema 和返回字段；存在节点控制命令不表示 Holy Stop 或原生 Retry 已通过真实验收。节点映射、HolyMolly、容量及未完成项统一见[Canvas 兼容表](compatibility.md#canvaslab-会话与模板)。
 
 先读取本地入口和当前服务能力：
 
@@ -271,6 +271,8 @@ Lab 说明由服务管理保存。`canvas lab-instructions` 返回原说明及 `
 
 继续已有对话时，先用 `canvas sessions` / `canvas session-get` 读取准确会话。需要新对话才调用 `canvas session-create`：服务会创建新的 ACTIVE 会话，将其设为项目默认会话，并把原会话归档为 ARCHIVED；原消息历史仍可按原 `sessionId` 读取。重新加载项目网页后，右侧 Agent 会显示新的默认会话，旧标签未刷新时可能仍显示旧聊天。
 
+需要核对会话历史时，使用 `canvas session-history --canvas-id CANVAS_ID --session-id SESSION_ID`（MCP：`ai_modeling_canvas_session_history`）。它显式查询六种已知回合状态，并在两次稳定快照中逐条核对会话与回合详情的消息身份、内容、顺序和状态。`observed_history_consistent:true` 只证明已返回数据一致；`history_complete:null` 保留服务留存/截断未知。发现分页提示或超过 `maxTurns` / `maxMessages` 时返回 `incomplete`，不猜游标或补造历史；正文仍用 `session-get` 读取。
+
 停止 Agent 工作前，先运行 `canvas turn-stop-plan --canvas-id CANVAS_ID --turn-id TURN_ID`。它只读核对准确回合及发现的运行，返回分步工具参数：先取消回合，读回 CANCELLED 后重新准备仍活动的准确 `run-stop`，最后复核状态。发现不完整、身份不明或前后快照变化时不提供写动作；不能把空运行列表或受理回执当作已经停止。当前快照不证明完整历史，也不保证之后没有新运行；未知写入只查原身份，不自动重发。
 
 收到待答卡后，用 `canvas answer-plan` 核对准确回合和卡片。`selection` 传实际选项 ID；普通 `confirmation` 确认时省略 `selectedOptionIds`，修改意见用 `otherText`，跳过用 `action:skip`。按卡型处理，不凭“确认”按钮文字判断；Skip 可能继续收费创作，取消用 `canvas turn-cancel`。已答卡或出现更新卡时，准备返回 `ready:false`，应读取当前卡，不能重复提交旧答案。
@@ -291,7 +293,7 @@ ai-modeling canvas turn-plan --canvas-id CANVAS_ID --session-id SESSION_ID \
 
 新游戏已通过真实附件、HTML 下载和画布内试玩验收。指定目标修改会保留原节点并交付新版本节点；已有成功样本核对了请求目标、修改后的颜色和收集阈值。后续修改还通过了 Space 暂停时角色不移动、恢复后可移动，以及暂停中 Restart 恢复零分的实际操作检查。验收先确认原目标，再跟随本轮 `turn`、`run`、新版本节点及准确资产，不要求覆盖旧节点，也不把无关新增节点当结果。完整边界见[兼容表](compatibility.md#canvaslab-会话与模板)。
 
-`studio canvas-node-stop` 和 `studio canvas-node-retry` 是另外两个 Unreleased 节点操作，只作用于已保存的 HolyMolly 节点，均要求准确 `canvas_id`、`node_id`、十进制字符串 `revision` 和 `expected_run_id`。stop 要求原节点/运行仍活跃，不要求新增生成预算，也不将原账单清零；retry 要求原节点/运行已终态且 `retryable:true`，并显式接受 `accept_variable_cost:true`。两者保存本地 job，但提交前检查不是上游原子条件；未知写入不重发，目前也无可验证的未知回执对账绑定，不能按最新运行补认成功。
+`studio canvas-node-stop` 和 `studio canvas-node-retry` 是 0.1.5 提供的两个节点操作，只作用于已保存的 HolyMolly 节点，均要求准确 `canvas_id`、`node_id`、十进制字符串 `revision` 和 `expected_run_id`。stop 要求原节点/运行仍活跃，不要求新增生成预算，也不将原账单清零；retry 要求原节点/运行已终态且 `retryable:true`，并显式接受 `accept_variable_cost:true`。两者保存本地 job，但提交前检查不是上游原子条件；未知写入不重发，目前也无可验证的未知回执对账绑定，不能按最新运行补认成功。
 
 Stop 的已观察回执是准确原 `runId` 与 `status:"accepted"`，CLI 保存为 `accepted_run`，直接查询原运行，不再将它当作 `turnId`；既有独立 turn 回执继续按自身合同核验。受理不等于停止：实际样本虽记录 `stopRequestedTime` 并出现 `stopping` 事件，终态出现 FAILED；再次实测也有受理后仍 DONE/SUCCEEDED 的结果，两者均保留 `STOP_NOT_CONFIRMED`。只有准确原 nodeRun 的停止/取消状态才可通过；DONE、FAILED 或其他运行的状态均不足以证明。原生节点 Retry 仍未获得符合 `retryable:true` 的线上正例，不能用历史消息重试替代该项验收。
 
@@ -481,7 +483,11 @@ node --env-file=.env dist/cli/main.js mcp --toolset studio
 
 提交前检查有效报价；普通任务价格未知或过期时停止。`--max-credits` 是逐步估算门槛，不是整条链或服务端扣费硬上限。Canvas/Lab 可变费用需要显式接受；分割、复制、贴图、UV、导出等组合步骤可能分别收费，账单未匹配不代表免费。
 
-价格未知或过期时，按[价格快照更新](#价格快照更新)取得经过审核的版本，不修改日期绕过校验。
+当前有效审阅快照仅对 `import_model`、`modification`、`retexture_apply` 声明无数值预报价。需要这些步骤时，已获相应费用授权的调用可显式设置 `accept_variable_cost:true`；兼容处理命令使用 `-p accept_variable_cost=true`；Studio 结构化工具放在 `parameters` 内，full MCP 的对应处理工具使用顶层 `accept_variable_cost:true`。必须省略 `--max-credits` / `max_estimated_credits`，包括 0；数字阈值无法限制未知金额，会返回 `UNQUOTED_BUDGET_UNSUPPORTED`。这不是免费估算或扣费上限，不使过期快照有效，也不适用于其它未知价格。整条链会在首个上传/收费前检查这些步骤，执行各步时再验证；恢复已提交任务仍沿原身份。旧七步仿射链中从未冻结的导入/合并步骤可显式接受未知费用；已有 prepared/input/scale 冻结记录且原意图未含同意时，保留 `UNQUOTED_CONSENT_FROZEN`，不能改原身份或换请求重提，须等有效数值报价恢复。
+
+default MCP 的 `ai_modeling_make` 顶层 `accept_variable_cost:true` 只授权初始模型文件/URL导入，不授权后续步骤。后续UV压缩须在对应 `then` 中明确设置，例如 `uv:bake=false;compress=geometry;accept_variable_cost=true`。已有任务和图片/文本输入不能使用顶层导入同意；它们按对应处理步骤表达。导入本身不生成PBR纹理，模型文件的 `pbr:true` 须改为明确的后续 `texture:pbr=true`，不静默忽略。
+
+其它价格未知或快照过期时，按[价格快照更新](#价格快照更新)取得经过审核的版本，不修改日期绕过校验。
 
 - 同一意图重用原 `--request-id`；改变参数会触发 `IDEMPOTENCY_CONFLICT`。自动来源首次绑定后，不随新历史漂移。
 - `outcome_unknown` 表示回执不明；查询并核对原任务，不创建替代请求。重新登录不会重放已经发送的写操作。
@@ -531,7 +537,7 @@ ai-modeling pricing status
 
 也可下载已审阅 JSON，再执行 `pricing verify FILE --sha256 SHA256 --network` 与 `pricing import FILE --sha256 SHA256 --network`。摘要须核对维护者发布值，不能用刚下载文件的自行计算值作为独立信任依据。远程更新仅接受直接 HTTPS、不跟随重定向，并核验证据；本地导入原子写入，不登录或生成素材。文件摘要匹配不代替公式审核；过期、未来日期、摘要不符或证据不可读取时保留错误，不修改期限解锁。
 
-截至 2026-11-24 的复查，当前包内快照和最新 Release 引用均已到期，未配置更新快照的定价操作可能返回 `PRICE_UNKNOWN`；重复下载同一发布文件不能解决。维护者须先重新核对公式和证据，再提供新的有效快照。只审阅部分操作的快照只可用于对应范围，不能把缺失价格当成零或完整通用价表。
+0.1.5 内置 2026-11-24 重新审阅的快照：43 个网页常量、5 个派生数值及上述 3 项无预报价操作，并联网核对 7 个官方证据文件。该快照于 2026-12-01 14:06:51 UTC 到期，仍需定期重新取证；没有直接延期旧表。升级运行包或导入新快照后，用 `pricing status` 核对实际选中版本与期限。0.1.4 及更早安装包和旧 Release 的快照保持原样，重复下载旧文件不能解决过期。缺失价格不能视为零。
 
 MCP 用户保持工具入口，由运行环境维护者更新价格；已有任务仍沿原身份查询和恢复，不重新生成。
 

@@ -12,6 +12,7 @@ export async function submitExportBatch(
   client: StudioClient,
   roots: string[],
   job: Job,
+  beforeSubmit?: () => void,
 ): Promise<{ remote_ids: RemoteIds }> {
   const projects = array(job.input.projects).map(text);
   for (const project_id of projects) {
@@ -32,7 +33,7 @@ export async function submitExportBatch(
         with_animation: false,
         animations: [],
       },
-      { paid: true, timeoutMs: 90000 },
+      { paid: true, timeoutMs: 90000, beforeSend: beforeSubmit },
     ),
   );
   const rows = array(result.result).map(object);

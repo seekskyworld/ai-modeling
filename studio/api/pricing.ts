@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { Operation, Quote } from '../contracts/types.ts';
 import { text, object, array } from '../contracts/errors.ts';
 import { variableCanvasOperations } from '../contracts/canvas-agent.ts';
+import { isUnquotedOperation, unquotedOperations } from '../contracts/unquoted-pricing.ts';
 export const priceSchema = z
   .object({
     reviewed_at: z.iso.datetime(),
@@ -11,8 +12,22 @@ export const priceSchema = z
     source: z.string().min(1),
     credits: z.record(z.string(), z.number().nonnegative()),
     evidence: z.array(z.object({ url: z.url(), sha256: z.string().regex(/^[a-f0-9]{64}$/) })).default([]),
+    unquoted_operations: z
+      .array(z.enum(unquotedOperations))
+      .max(unquotedOperations.length)
+      .refine((values) => new Set(values).size === values.length, 'Unquoted operations must be unique.')
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) => !value.unquoted_operations?.some((operation) => unquotedPriceKey[operation] in value.credits),
+    'An operation cannot have both a numeric price and an unquoted declaration.',
+  );
+const unquotedPriceKey = {
+  import_model: 'ImportOwnModel',
+  modification: 'SaveSegmentation',
+  retexture_apply: 'ApplyTextureBasic',
+} as const;
 export type PriceSnapshot = z.infer<typeof priceSchema>;
 export interface Pricing {
   quote(operation: Operation, input: Record<string, unknown>): Promise<Quote>;
@@ -133,6 +148,36 @@ function invalidReviewExplanation(snapshot: PriceSnapshot, now: Date): string {
     ? `Pricing review is dated in the future (reviewed_at ${snapshot.reviewed_at}). Check the system clock, then run "ai-modeling pricing status".`
     : `Pricing review expired at ${snapshot.expires_at}. Run "ai-modeling pricing status", then install a newer reviewed snapshot with "ai-modeling pricing update" from the latest Release notes.`;
 }
+function unquotedQuote(snapshot: PriceSnapshot, operation: Operation, base: Quote): Quote | undefined {
+  if (
+    !isUnquotedOperation(operation) ||
+    !snapshot.unquoted_operations?.includes(operation) ||
+    snapshot.evidence.length === 0
+  )
+    return undefined;
+  return {
+    ...base,
+    variable: true,
+    source: snapshot.source,
+    expires_at: new Date(Math.min(Date.parse(snapshot.expires_at), Date.now() + 300000)).toISOString(),
+    explanation:
+      'The current reviewed Studio webpage submits this operation without an advance price. Explicit accept_variable_cost=true is required, and max_estimated_credits must be omitted. The actual charge is unknown; this is not free or a spending cap.',
+  };
+}
+function reviewedOperationQuote(
+  snapshot: PriceSnapshot,
+  operation: Operation,
+  base: Quote,
+  now: Date,
+): Quote | undefined {
+  if (Date.parse(snapshot.expires_at) <= now.getTime() || Date.parse(snapshot.reviewed_at) > now.getTime())
+    return {
+      ...base,
+      source: snapshot.source,
+      explanation: invalidReviewExplanation(snapshot, now),
+    };
+  return unquotedQuote(snapshot, operation, base);
+}
 export class PricingService implements Pricing {
   private file: string;
   private fallback?: PriceSnapshot;
@@ -223,12 +268,8 @@ export class PricingService implements Pricing {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || !this.fallback) return base;
       snapshot = this.fallback;
     }
-    if (Date.parse(snapshot.expires_at) <= now.getTime() || Date.parse(snapshot.reviewed_at) > now.getTime())
-      return {
-        ...base,
-        source: snapshot.source,
-        explanation: invalidReviewExplanation(snapshot, now),
-      };
+    const reviewed = reviewedOperationQuote(snapshot, operation, base, now);
+    if (reviewed) return reviewed;
     let keys: string[];
     if (operation === 'image')
       keys = [

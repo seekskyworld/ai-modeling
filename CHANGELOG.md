@@ -4,11 +4,18 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 ## Unreleased
 
+## 0.1.5 — 2026-11-24
+
 ### Added
 
+- Live Canvas validation completed native Smart Low Poly plus Smart UV in one Retopology node and one step, preserving the existing graph. The textured model reduced from about 1.98 million faces to 1,106, with usable UVs, baked textures, webpage views and an exact 35-credit charge. This is a limited default-engine result, not an exact 1,000-face or material-preservation guarantee.
+- Read-only `canvas session-history` compares two session/turn-detail snapshots, explicitly requests all six turn states, and detects message, identity, order and completeness hints. Three live sessions with 59 messages and 15 turns matched; stable reads do not prove server-side history completeness.
+- Refresh the reviewed pricing source from current webpage evidence: 43 constants, five verified derived numeric prices and three explicitly unquoted operations. Import, modification and retexture application require a valid unquoted declaration plus explicit variable-cost consent, with numeric budgets omitted. Unknown cost is never reported as zero; older published snapshots are unchanged.
+- Validate Studio Free Retry separately from HolyMolly node Retry: an eligible project completed submission, generation, original inspection and webpage loading. The output did not strictly satisfy its prompt, and missing exact billing remains unknown.
+
 - Read-only `canvas turn-stop-plan` composes the webpage Agent cancellation sequence using exact turn/run ownership, bounded discovery and stable snapshots. It requires confirmed turn cancellation before preparing active run stops, preserves unknown writes and separates cancellation from natural completion. Live webpage cancellation reached STOPPED; a separate CLI cancellation also reached CANCELLED with its exact run stopped, requiring no redundant stop request.
-- Canvas audits now verify complete one-to-one multi-node runs; a live two-image chat run passed exact output attribution. Textured HD originals require matching task IDs in both their directory and exact filename. Verified original-path contracts cover additional model operations while preserving unknown attribution for repeated-node steps, unbound Canvas runs and internal split tasks without a proven original-file mapping.
-- Live checks validated a non-indexed fixture through native webpage import, CLI UV generation/application, original geometry and UV inspection, and webpage layout/model views. A freshly reviewed UV-only snapshot enabled that test; bundled pricing remains expired, and the full import/compression chain remains unverified without current import-price evidence.
+- Canvas audits now verify complete one-to-one multi-node runs; a live two-image chat run passed exact output attribution. Textured HD originals require matching task IDs in both their directory and exact filename. Exact `currentStepId` now resolves repeated-node steps when complete run coverage and unique task identities hold. Internal split outputs without a proven original-file mapping and unbound Canvas runs still retain unknown generation attribution.
+- A live non-indexed fixture completed file import, UV generation/application and native Meshopt compression, with decoded geometry/UV inspection and webpage model/layout checks. The final file preserves the applied UV geometry within the documented quantization bound. The initial import still fails the stricter original-attribute normalization proof, and Blender 4.5.16 requires a separate decoded copy for Meshopt input; neither limitation is hidden.
 - Live card checks cover plan confirmation, detected-part renaming, candidate selection through textured HD generation, original inspection and webpage views, and the HolyMolly recommendation selection protocol. The recommendation sample ended without HTML delivery; successful continuation does not imply successful generation.
 
 - Canvas audits separate run ownership, current selection and generated-output provenance. Supported image, HD-model, texture and HolyMolly originals must match exact task/step identities; selecting an old output does not attribute it to the current run. Run reads join both snapshots, while node credit ownership stays separate from account-ledger verification and settlement.
@@ -24,6 +31,12 @@ This file records user-facing changes. Unreleased changes describe the source tr
 - Saved HolyMolly node stop/retry operations preserve a durable request, exact source run and revision guards. Stop confirmation is separate from turn completion; retry requires variable billing consent. Unknown receipts are retained without replay or unproven turn reconciliation. A live accepted stop ending in FAILED remains unconfirmed; native node Retry has no eligible live success example.
 
 ### Fixed
+
+- Recheck reviewed fixed-price expiry immediately before a new remote write, after preparation or authentication delays. Already submitted and unknown receipts remain recoverable without replay.
+- Preserve valid webpage-generated graph connections with an empty source port when the source has exactly one output. Keep original graph JSON, Lab selection requirements and ambiguous-output rejection; a real saved graph passed local editing and remote save/readback without changing existing nodes or edges.
+- Expose unquoted-operation consent on applicable full MCP tools and on the default model-file import entry. Default model imports no longer inherit the unrelated PBR generation flag; later processing steps require their own explicit consent.
+- Preserve unquoted-operation consent across native CLI tools and multi-step processing, preflight the complete new chain before uploads or billable work, and recheck each new submission. Existing submitted/unknown receipts are recovered without replay.
+- Recognize the current numeric plan-card alias and retain exact current-step attribution while keeping selected-output association separate from generation provenance.
 
 - `anim retarget` with the default JPEG export no longer fails with `IDEMPOTENCY_CONFLICT` before export submission. Animations created earlier in the chain are now merged into the export parameters before the JPEG intent is frozen, so the pre-submit check compares the same intent. A live Studio run exported one GLB with both requested preset motions and verified JPEG textures.
 - Studio uploads scale their per-request timeout with the body size (60 seconds plus the transfer time at 32 KiB/s, capped at 10 minutes), allowing more time for 10 MiB parts and large reference images on slower or proxied connections.
@@ -57,7 +70,7 @@ This file records user-facing changes. Unreleased changes describe the source tr
 - Keep publication-note failures free of raw JSON, private file paths and subprocess diagnostics; compare the complete original pricing object before schema normalization so extra fields cannot hide a source/runtime difference.
 - Retry private login-state reads when a concurrent login worker atomically replaces the file, while retaining ownership, permission, link and bounded-size checks.
 
-Version 0.1.4 is prepared for maintainer-authorized manual publication while GitHub hosted checks are blocked. Native Windows validation and the first GitHub OIDC upload remain unverified. Existing 0.1.3 artifacts and version tags are unchanged.
+Version 0.1.4 is available on npm. Native Windows validation and the first GitHub OIDC upload remain unverified; npm availability does not establish those results. Existing 0.1.3 artifacts and version tags are unchanged.
 
 ## 0.1.3 — 2026-11-17
 

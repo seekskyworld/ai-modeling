@@ -77,6 +77,12 @@ export function affineParameters(input: Record<string, unknown>): Record<string,
   delete parameters._smartsegment_affine;
   return parameters;
 }
+/** Billing consent is separate from source/merge semantics, but remains in every immutable input fingerprint. */
+function affineBusinessParameters(input: Record<string, unknown>): Record<string, unknown> {
+  const parameters = { ...input };
+  delete parameters.accept_variable_cost;
+  return parameters;
+}
 export const affineFail = (message: string): never => {
   throw new TripoError('SMARTSEGMENT_AFFINE_UNVERIFIED', message, 'not_submitted');
 };
@@ -245,7 +251,10 @@ export function prepareAffineComponent(
     return fail('The affine operation changed.');
   if (index === 0) {
     const expected = object(context.source.first_parameters);
-    if (fingerprint(affineParameters(parameters)) !== fingerprint(expected))
+    if (
+      fingerprint(affineBusinessParameters(affineParameters(parameters))) !==
+      fingerprint(affineBusinessParameters(expected))
+    )
       return fail('The first affine operation changed its exact original source.');
   }
   if (index === 3) {
@@ -255,7 +264,7 @@ export function prepareAffineComponent(
       part_indices: first!.stage.part_indices,
       part_indices_name: first!.stage.part_indices_name,
     };
-    if (fingerprint(parameters) !== fingerprint(expected))
+    if (fingerprint(affineBusinessParameters(parameters)) !== fingerprint(expected))
       return fail('The native affine merge labels or exact source changed.');
   }
   if (

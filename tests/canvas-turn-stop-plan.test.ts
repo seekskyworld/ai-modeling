@@ -297,6 +297,35 @@ test('missing messages, mismatched session history and unresolved plan nodes sta
   }
 });
 
+test('numeric plan card type 5 preserves node discovery even without a JSON type field', async () => {
+  for (const nodeId of ['owned', 'unresolved']) {
+    const { result } = await prepare(({ method, result }) => {
+      if (!['GetTurnDetail', 'GetSession'].includes(method)) return;
+      const card = object(array(result.messages)[1]);
+      card.cardType = 5;
+      card.cardJson = JSON.stringify({ data: { groups: [{ steps: [{ nodeIds: [nodeId] }] }] } });
+    });
+    assert.deepEqual(result.plan_node_ids, [nodeId]);
+    assert.equal(result.incomplete, nodeId === 'unresolved');
+    if (nodeId === 'unresolved') {
+      assert.ok(reasons(result).includes('plan_node_run_unresolved'));
+      assert.deepEqual(writes(result), []);
+    }
+  }
+});
+
+test('a numeric plan card without readable JSON cannot silently disappear from the stop plan', async () => {
+  const { result } = await prepare(({ method, result }) => {
+    if (!['GetTurnDetail', 'GetSession'].includes(method)) return;
+    const card = object(array(result.messages)[1]);
+    card.cardType = 5;
+    card.cardJson = '';
+  });
+  assert.equal(result.incomplete, true);
+  assert.ok(reasons(result).includes('message_card_unreadable'));
+  assert.deepEqual(writes(result), []);
+});
+
 test('a new run, changed turn or replaced current execution during discovery blocks stale actions', async () => {
   const edits: NonNullable<Parameters<typeof fixture>[0]>[] = [
     ({ method, count, result }) => {

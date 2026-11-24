@@ -1,6 +1,7 @@
 /** 执行选项在上传和提交前统一校验；候选汇总保留每项的不确定、等待及交付失败状态。 */
 import { array, object, text, TripoError } from '../../studio/contracts/errors.ts';
-import type { Flags } from './planning.ts';
+import { isUnquotedOperation } from '../../studio/contracts/unquoted-pricing.ts';
+import type { Flags, Plan } from './planning.ts';
 
 /** CLI 的 Number 解析可产生 NaN；不能等到付费提交后的轮询阶段才发现无效值。 */
 export function validateExecutionOptions(flags: Flags): void {
@@ -17,6 +18,22 @@ export function validateExecutionOptions(flags: Flags): void {
     (typeof flags.maxCredits !== 'number' || !Number.isFinite(flags.maxCredits) || flags.maxCredits < 0)
   )
     throw new TripoError('INVALID_INPUT', 'max-credits must be finite and nonnegative.', 'not_submitted');
+}
+
+/** 未预报价步骤可能在处理链末尾；数值预算必须在任何前置上传/付费步骤前拒绝。 */
+export function validatePlanCostLimit(plan: Plan, flags: Flags): void {
+  if (
+    flags.maxCredits !== undefined &&
+    (plan.legacyAffineUnquotedConsent ||
+      plan.steps.some(
+        (step) => isUnquotedOperation(step.operation) && step.parameters.accept_variable_cost === true,
+      ))
+  )
+    throw new TripoError(
+      'UNQUOTED_BUDGET_UNSUPPORTED',
+      'max-credits cannot constrain import/apply operations without an advance quote. Omit the numeric budget only when explicitly accepting the unknown Studio charge for the complete processing plan.',
+      'not_submitted',
+    );
 }
 
 /** 仅真实进行中的状态归为 queued；结果未知及登录/输入要求不能被成功的兄弟任务掩盖。 */

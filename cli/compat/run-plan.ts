@@ -9,7 +9,8 @@ export { validatePlanFiles } from './plan-files.ts';
 import type { Flags, Plan } from './planning.ts';
 import { expandSegmentationPlan } from './segmentation-plan.ts';
 import { selectAffinePlan } from './smartsegment-affine-transfer-plan.ts';
-import { candidateSummary, validateExecutionOptions } from './execution-policy.ts';
+import { candidateSummary, validateExecutionOptions, validatePlanCostLimit } from './execution-policy.ts';
+import { preflightUnquotedPlan } from './unquoted-plan.ts';
 import {
   candidateGeneration,
   freezeGenerationLayout,
@@ -22,6 +23,7 @@ export function validateExecution(
   interactive = Boolean(process.stdin.isTTY),
 ): number {
   validateExecutionOptions(flags);
+  validatePlanCostLimit(plan, flags);
   const count = Number(flags.candidates ?? 1);
   if (!Number.isInteger(count) || count < 1 || count > 4)
     throw new TripoError('INVALID_INPUT', 'candidates must be 1–4.');
@@ -38,6 +40,7 @@ export function validateExecution(
 }
 
 export async function dryRunPlan(plan: Plan, flags: Flags): Promise<Record<string, unknown>> {
+  validateExecution(plan, flags);
   plan = await expandSegmentationPlan(plan, []);
   const count = validateExecution(plan, flags);
   const inputs = await validatePlanFiles(plan);
@@ -79,6 +82,8 @@ function labSourcePreparationPreview(plan: Plan): Record<string, unknown> {
 
 /** 带固定 request 的旧 CLI 调用先只读/绑定本机布局，再做 no-wait 校验和展示；没有上传或报价。 */
 export function executionPreview(app: Application, plan: Plan, flags: Flags): Plan {
+  validateExecutionOptions(flags);
+  validatePlanCostLimit(plan, flags);
   plan = selectAffinePlan(app, plan, text(flags.requestId));
   const count = validateExecution(plan, { ...flags, wait: true });
   const request = text(flags.requestId);
@@ -111,6 +116,7 @@ export async function executeCandidates(
   const count = validateExecution(plan, { ...flags, wait: true });
   const request = text(flags.requestId) || randomUUID();
   if (count === 1) return await executePlan(app, plan, { ...flags, requestId: request });
+  await preflightUnquotedPlan(app, plan, flags, request);
   const prefixLength = generationPrefixLength(plan);
   if (flags.wait === false && plan.steps.length > prefixLength)
     throw new TripoError('INVALID_INPUT', '--no-wait cannot execute a processing chain.');

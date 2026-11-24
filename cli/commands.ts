@@ -26,6 +26,7 @@ import { runtimeTools } from './runtime/tools.ts';
 import { authenticationTools } from './auth/tools.ts';
 import { toolApplication, type Dependency } from './tool-dependencies.ts';
 import { assetsListSchema, listAssets } from './assets/list.ts';
+import { isUnquotedOperation } from '../studio/contracts/unquoted-pricing.ts';
 
 const operations = z.enum(Object.keys(operationSchemas) as [Operation, ...Operation[]]);
 const pagination = {
@@ -139,7 +140,7 @@ export function toolRegistry(
     {
       name: 'ai_modeling_quote',
       description:
-        'Estimate credits before discounts from reviewed current evidence. Unknown prices block submission. Estimates are not an upstream spending cap.',
+        'Estimate credits before discounts from reviewed current evidence. Unknown prices block submission except for explicitly accepted unquoted operations named by a current reviewed snapshot. Estimates are not an upstream spending cap.',
       schema: z.object({ operation: operations, parameters: z.record(z.string(), z.unknown()) }).strict(),
       readOnly: true,
       run: async (x) => await context.service.quote(x.operation as Operation, x.parameters),
@@ -264,7 +265,12 @@ function nativeOperationTool(operation: Operation, context: ReturnType<typeof to
       operation === 'canvas_node_stop' ||
       operation === 'refine_submit'
         ? z.object({ request_id: id, parameters: operationSchemas[operation] }).strict()
-        : submissionSchema.extend({ parameters: operationSchemas[operation] }),
+        : isUnquotedOperation(operation)
+          ? submissionSchema.extend({
+              max_estimated_credits: submissionSchema.shape.max_estimated_credits.optional(),
+              parameters: operationSchemas[operation],
+            })
+          : submissionSchema.extend({ parameters: operationSchemas[operation] }),
     readOnly: false,
     run: async (x) => await submitOperation(context.service, context.studio, operation, x),
   };
@@ -285,7 +291,9 @@ async function submitOperation(
     if (plan.steps.length > 1) {
       const result = await executePlan({ service, studio } as Application, plan, {
         requestId: text(input.request_id),
-        maxCredits: Number(input.max_estimated_credits ?? 0),
+        ...(input.max_estimated_credits === undefined
+          ? {}
+          : { maxCredits: Number(input.max_estimated_credits) }),
         wait: true,
         download: false,
         timeout: 180,
@@ -301,7 +309,9 @@ async function submitOperation(
     operation,
     text(input.request_id),
     parameters,
-    Number(input.max_estimated_credits ?? 0),
+    input.max_estimated_credits === undefined && isUnquotedOperation(operation)
+      ? undefined
+      : Number(input.max_estimated_credits ?? 0),
   );
 }
 export async function callTool(

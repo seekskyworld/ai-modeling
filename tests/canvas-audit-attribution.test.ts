@@ -322,7 +322,7 @@ test('another turn and incomplete or duplicated node-step mappings remain unveri
     ['turn', 'run_belongs_to_another_turn'],
     ['nodes', 'run_steps_incomplete'],
     ['duplicate-nodes', 'run_nodes_ambiguous'],
-    ['steps', 'run_steps_ambiguous'],
+    ['steps', 'run_tasks_ambiguous'],
     ['duplicate-steps', 'run_steps_ambiguous'],
   ]) {
     const f = fixture((method, response) => {
@@ -907,14 +907,13 @@ test('multi-node runs prove exact per-node outputs independently of step array o
   }
 });
 
-test('multi-node proof requires a complete unique mapping and never chooses the latest retry', async () => {
+test('multi-node proof requires complete step and task identities', async () => {
   for (const [mode, reason] of [
     ['missing-step', 'run_steps_incomplete'],
     ['missing-task', 'step_identity_incomplete'],
     ['duplicate-node', 'run_nodes_ambiguous'],
     ['duplicate-step', 'run_steps_ambiguous'],
     ['duplicate-task', 'run_tasks_ambiguous'],
-    ['repeated-node-retry', 'run_steps_ambiguous'],
     ['missing-turn', 'run_identity_incomplete'],
     ['different-turn', 'run_belongs_to_another_turn'],
   ]) {
@@ -927,14 +926,6 @@ test('multi-node proof requires a complete unique mapping and never chooses the 
       if (mode === 'duplicate-node') run.nodeIds = ['game', 'other', 'game'];
       if (mode === 'duplicate-step') steps[1]!.stepId = steps[0]!.stepId;
       if (mode === 'duplicate-task') steps[1]!.taskId = steps[0]!.taskId;
-      if (mode === 'repeated-node-retry')
-        array(run.steps).push({
-          ...steps[0],
-          stepId: identities.previous!.step,
-          taskId: identities.previous!.task,
-          retryNo: 7,
-          seqNo: 99,
-        });
       if (mode === 'missing-turn') run.turnId = '';
       if (mode === 'different-turn') run.turnId = 'previous-turn';
     });
