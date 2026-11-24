@@ -1,6 +1,6 @@
 # CLI 命令参考
 
-版本 0.1.6。以下保留实际 Commander 命令树的 239 条路径（含分组）、参数与选项；已发布安装包以本机 `--help` 为准。CLI 是底层执行接口，MCP 工具在内部调用 CLI，Skills 为所选入口提供流程指导。命令存在不等于所有官方 API 效果均已实现，支持条件见[兼容与限制](compatibility.md)。安装、登录、MCP 和恢复流程见[使用指南](usage.md)。
+版本 0.1.7。以下保留实际 Commander 命令树的 239 条路径（含分组）、参数与选项；已发布安装包以本机 `--help` 为准。CLI 是底层执行接口，MCP 工具在内部调用 CLI，Skills 为所选入口提供流程指导。命令存在不等于所有官方 API 效果均已实现，支持条件见[兼容与限制](compatibility.md)。安装、登录、MCP 和恢复流程见[使用指南](usage.md)。
 
 需要导入外部模型或进行 UV 压缩的兼容处理链，使用 `-p accept_variable_cost=true` 接受有效审阅快照中明确标注的未知费用；省略 `--max-credits`，数字 0 也不能代表未知费用。Studio 结构化工具的同意字段在 `parameters` 内，full MCP 对应处理工具使用顶层字段。详见[费用合同](usage.md#费用任务与恢复)。
 

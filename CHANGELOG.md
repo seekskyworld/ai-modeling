@@ -4,7 +4,7 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 ## Unreleased
 
-## 0.1.6 — 2026-11-25
+## 0.1.7 — 2026-11-25
 
 ### Added
 
@@ -56,9 +56,13 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 - New Canvas chat submissions validate standalone and mixed attachment identity/readiness; continuations require a turn waiting for user input. Run preparation verifies the exact Canvas and unique Lab outputs, while Lab reuse rejects explicitly unavailable selected assets. Submitted jobs query their original receipts; uncertain creative submissions remain unbound without resubmission.
 
+## 0.1.6 — Unpublished candidate
+
+The `v0.1.6` tag is retained at its original source commit as a failed release candidate. The Windows local-TGZ npm consumer check exceeded its 300-second budget before publication. Candidate preparation, npm publication and channel promotion were skipped; no npm upload or GitHub Release was created by that run. Its changes are carried forward to 0.1.7.
+
 ## 0.1.5 — Unpublished candidate
 
-The `v0.1.5` tag is retained as a failed release candidate. Windows installation validation failed before publication; no npm upload or GitHub Release was created. Its changes are carried forward to 0.1.6.
+The `v0.1.5` tag is retained as a failed release candidate. Windows installation validation failed before publication; no npm upload or GitHub Release was created. Its changes are carried forward to 0.1.7.
 
 ## 0.1.4 — 2026-11-17
 

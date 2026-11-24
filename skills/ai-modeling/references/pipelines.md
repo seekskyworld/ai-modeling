@@ -47,7 +47,7 @@ ai-modeling task get TASK_ID --download --out /absolute/path/to/new-output --jso
 
 ## Canvas Agent 交付验收
 
-本节的 `canvas audit` / `studio artifact-inspect`、`canvas session-history`、实时目录诊断、查询结果导入、参数补丁及 HolyMolly 聊天和节点 stop/retry 扩展已在 0.1.6 提供。先通过已安装程序的命令帮助或 Studio 工具发现确认，MCP 则查看客户端当前工具列表。旧 npm 0.1.4 包不包含这些新增入口；升级运行包后同时更新 Skill 或 MCP 配置并重新加载。Holy Stop、合资格原生 Retry 和其它未验收项仍保留下文的限制，不因命令已发布而宣称通过。
+本节的 `canvas audit` / `studio artifact-inspect`、`canvas session-history`、实时目录诊断、查询结果导入、参数补丁及 HolyMolly 聊天和节点 stop/retry 扩展已在 0.1.7 提供。先通过已安装程序的命令帮助或 Studio 工具发现确认，MCP 则查看客户端当前工具列表。旧 npm 0.1.4 包不包含这些新增入口；升级运行包后同时更新 Skill 或 MCP 配置并重新加载。Holy Stop、合资格原生 Retry 和其它未验收项仍保留下文的限制，不因命令已发布而宣称通过。
 
 停止正在执行的 Agent 工作时，先用 `canvas turn-stop-plan`（MCP：`ai_modeling_canvas_turn_stop_plan`）准备准确回合的停止顺序。按返回动作先 `turn-cancel`，读回 CANCELLED 后再准备、停止仍活动的准确运行；停止后再次读取。此准备只读，发现不完整或快照变化时不提供写动作，不能将一次空 `runs` 响应当成完整历史。回合取消、运行停止、自然完成和失败分别验收；未知回执保留，不自动重发。Holy 节点自己的 Stop 按后文独立分支处理。
 

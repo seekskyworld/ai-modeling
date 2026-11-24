@@ -1,6 +1,6 @@
 {
   "name": "@seekskyworld/ai-modeling",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "ai-modeling: CLI execution, MCP tools and Agent Skill guidance for Tripo Studio",
   "type": "module",
   "private": false,
