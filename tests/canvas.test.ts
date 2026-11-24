@@ -374,7 +374,8 @@ test('Canvas graph round-trips derived fields and rejects cycles or missing node
   );
   assert.throws(() => canvasSaveSchema.parse({ ...graph, nodes: nodes.slice(0, 1) }));
 });
-test('Canvas prices follow Smart Mesh and 8K texture formulas without inventing defaults', async () => {
+test('Canvas prices follow Smart Mesh and 8K texture formulas without inventing defaults', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse(reviewedPrices.reviewed_at) });
   const pricing = new PricingService('/missing-prices.json', reviewedPrices);
   const model = canvasNodeQuote(
     {
@@ -608,7 +609,10 @@ test('continuation uses a new persisted answer key and stopped runs are terminal
   const f = await fixture();
   let sent = 0;
   const client = canvasClient((method, body) => {
-    if (method.endsWith('/GetTurnDetail')) return { turn: { turnId: 'turn', requestId: 'original-create' } };
+    if (method.endsWith('/GetTurnDetail'))
+      return {
+        turn: { turnId: 'turn', requestId: 'original-create', status: 'TURN_STATUS_WAITING_FOR_USER' },
+      };
     if (method.endsWith('/ContinueTurn')) {
       sent++;
       assert.notEqual(body.requestId, 'original-create');

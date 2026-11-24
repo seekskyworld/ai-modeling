@@ -25,16 +25,23 @@ export function canvasAssetBinding(asset: Record<string, unknown>) {
     resource,
   };
 }
-export function isAvailableCanvasOutput(asset: Record<string, unknown>) {
+export function hasUnavailableCanvasOutputStatus(asset: Record<string, unknown>) {
   const bad = /(?:^|_)(queued|running|processing|pending|failed|error|cancelled|canceled)$/i;
-  return Boolean(text(asset.url)) && !bad.test(text(asset.status)) && !bad.test(text(asset.studioState));
+  return bad.test(text(asset.status)) || bad.test(text(asset.studioState));
+}
+export function isAvailableCanvasOutput(asset: Record<string, unknown>) {
+  return Boolean(text(asset.url)) && !hasUnavailableCanvasOutputStatus(asset);
 }
 function inputAssets(graph: TurnGraph, attachments: TurnAttachment[]) {
   const ids = new Set<string>();
   for (const attachment of attachments) {
-    const node = attachment.nodeId ? graph.nodes.find((node) => node.id === attachment.nodeId) : undefined;
-    if (attachment.nodeId && !node)
-      throw new TripoError('CANVAS_CHANGED', 'An attachment node is no longer in the saved Canvas.');
+    const matches = attachment.nodeId ? graph.nodes.filter((node) => node.id === attachment.nodeId) : [];
+    if (attachment.nodeId && matches.length !== 1)
+      throw new TripoError(
+        'CANVAS_CHANGED',
+        'An attachment node is missing or ambiguous in the saved Canvas.',
+      );
+    const node = matches[0];
     if (node?.type === 'NODE_TYPE_UPLOAD_CARD') {
       const matches = array(node.inputMount).filter((value) => object(value).assetId === attachment.assetId);
       if (matches.length !== 1)
@@ -49,6 +56,7 @@ function inputAssets(graph: TurnGraph, attachments: TurnAttachment[]) {
 }
 async function readInputs(client: CanvasClient, projectId: string, ids: string[]) {
   if (!ids.length) return [];
+  if (!projectId) throw new TripoError('CONTRACT_CHANGED', 'Attachment Canvas has no project identity.');
   const result = object(
     await client.call(method('Asset', 'BatchGetInputAssets'), { projectId, assetIds: ids }),
   );

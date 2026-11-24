@@ -228,7 +228,7 @@ for (const [toolset, experimental, count] of [
   ['default', false, 6],
   ['full', false, 26],
   ['full', true, 27],
-  ['studio', false, 176],
+  ['studio', false, 181],
 ] as const) {
   test(
     `MCP ${toolset} experimental=${experimental} preserves its ${count}-tool inventory`,

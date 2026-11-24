@@ -85,6 +85,22 @@ CLI 的 `pricing status` 离线显示来源、到期时间和刷新需求。维�
 - 用原任务 `task get/watch` 查询和下载。需要准确来源时用明确任务/项目版本，避免后续新任务改变 `@last` 的含义。
 - 原件下载、网页服务转换、固定网页引擎的本机转换和普通本地后处理分开说明。存在命令或远端成功不等于全部官方效果、任意提示语义或网页全站等价。
 
+## Canvas 结果检查
+
+HolyMolly 的新消息使用显式 `capabilities:["holy_molly"]`，素材通过准确 `refs` / `attachment_ids`，不接新 materials 图边；独立上传需当前项目 READY，节点结果需准确 node_id + asset_id。修改已有游戏传目标 `node_id`，准备入口 `canvas turn-plan` 则使用 `nodeId`。最终空正文只允许显式能力、已保存 Holy 目标且无普通附件；低层仍须传 `text:""`。它需要独立可变费用授权，不使用普通 `canvas-run`。Holy 历史 retry 只有服务原消息明确记录能力与准确目标且通过当前画布校验时才能准备；缺目标返回 `retry_holy_molly_target_unknown`。不能手补 nodeId/capabilities，CLI 已有 job 继续按原身份恢复。
+
+源码 Unreleased `studio canvas-node-stop/canvas-node-retry` 仅作用于已保存 Holy 节点，要求 canvas_id/node_id/expected_run_id 和十进制字符串 revision；先查实际 schema。stop 不要求新生成预算，原账单不归零；retry 要求 retryable=true、原节点/运行终态及 accept_variable_cost=true。持久 job 和预检不构成上游原子条件，未知写不重提，也无可验证的未知回执对账绑定。这是网页协议映射，尚未完成真实节点 stop/retry 验收；完整流程见下方流水线。
+
+需要停止 Agent 时，使用 `canvas turn-stop-plan`（MCP：`ai_modeling_canvas_turn_stop_plan`）核对准确回合。它只准备 `turn-cancel` → 确认 CANCELLED 并重读 → 停止该回合仍活动的准确运行 → 复核状态，不自动写入。发现不完整或状态变化时不提供写动作，当前快照不保证历史完整；受理和自然完成均不能算停止成功。
+
+Canvas Agent 聊天完成后，交付前先用 `canvas audit`（MCP：`ai_modeling_canvas_audit`）回读准确画布、会话/回合和目标节点。返回结果分为运行中、等待输入、阻塞与待审；即使节点资产就绪，`requirements_met` 仍为 `null`。该读取不证明资产由本次回合创建，也不证明长历史完整；不要用整张画布里的旧产物替代用户要的结果。`canvas review` 是网页 REVIEW 节点批准/撤销的写操作，不是验收命令。
+
+Holy 审计使用 `expect.kind:"html"` 和准确资产身份；HTML 优先按当前结果 URL 路径后缀识别候选，无后缀时才看文件名；分类不证明字节、依赖和玩法。`game.preview.entry_url` 是删除查询参数的诊断线索，不是完整试玩或原件下载链接。HTML 下载后独立验加载、依赖、控制和玩法，不能送进图片/模型检查器。`game.credits` 来源为节点运行，终态不等于 SETTLED，PENDING/未知不等于零费用，`turn_attribution:unknown` 不能归为本次聊天账单。
+
+图片或模型按报告中的准确来源下载，再用 `studio artifact-inspect`（MCP：`ai_modeling_artifact_inspect`）检查图片解码或 GLB 几何、贴图、骨架、动作及明确机器条件；将下载回执的 `sha256` 传为 `expected_sha256`，不要用画布指纹代替。读取结果的 `requirements_status` 和逐项 `checks`；`failed` 也会正常返回检查报告，退出码或 MCP `isError` 不能代替检查结论。Agent 还要实际看图，或按需使用 `studio snapshot` / `ai_modeling_snapshot` 查看模型的合适视角与动作帧，并与用户要求比较。任务结束、文件有效、机器条件通过、视觉/语义满足目标分别记录；没有证据的项保留未检查。
+
+具体命令与状态处理按需读取[画布交付验收](pipelines.md#canvas-agent-交付验收)。MCP 用户使用 Studio 工具集和共用指南，不为此改用 shell；只读检查、下载和本地检查不新建创作任务，修正或重新生成仍按原授权范围执行。
+
 ## 失败与恢复
 
 `request_id` 不是 `task get/watch` 接受的任务 ID。先从原输出或历史确认本地 `job_id` / `task_id`；必要时读取 `ai_modeling_jobs_list` 当前 schema，以 `limit/offset` 分页查找，并核对原请求、意图及子步骤的对应关系，不能只凭前缀或 `-0` 后缀猜身份。确认唯一任务后用其 ID 执行 `task get`；提交结果不明且仍无唯一任务或可靠远端回执时，保留 `outcome_unknown`，不重提。

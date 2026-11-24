@@ -4,6 +4,7 @@ import { id } from '../contracts/primitives.ts';
 import { array, object, text, sanitize, TripoError } from '../contracts/errors.ts';
 import { StudioClient } from './client.ts';
 import { CanvasClient, bindCanvasAccount } from './canvas-client.ts';
+import { hasUnavailableCanvasOutputStatus } from './canvas-turn-assets.ts';
 
 export const labInputsSchema = z
   .object({
@@ -95,7 +96,7 @@ function uploadInput(node: Record<string, unknown>): LabInput[] {
 }
 
 /** BbtNBreL.Ab/Db：多输出保留 slot 顺序，普通单图选 selected，模型优先明确 MODEL。 */
-export function selectLabUpstream(node: Record<string, unknown>, nodeRun: unknown): LabInput[] {
+function selectedUpstream(node: Record<string, unknown>, nodeRun: unknown): LabInput[] {
   const type = text(node.type).replace('NODE_TYPE_', '');
   const assets = array(node.nodeAssets).map(object);
   const current = assets.filter((asset) => asset.role === 'ASSET_ROLE_CURRENT');
@@ -128,6 +129,21 @@ export function selectLabUpstream(node: Record<string, unknown>, nodeRun: unknow
   return selected ? [input(selected, kind)] : [];
 }
 
+export function selectLabUpstream(node: Record<string, unknown>, nodeRun: unknown): LabInput[] {
+  const selected = selectedUpstream(node, nodeRun),
+    assets = array(node.nodeAssets).map(object);
+  if (node.type === 'NODE_TYPE_UPLOAD_CARD') return selected;
+  // 先按网页选当前/选中输出，再核明确失败或处理中；不能回退到另一个旧件冒充选中来源。
+  // 未返回状态不等于失败，Lab 输入也不要求浏览器下载 URL。
+  if (
+    selected.some((input) =>
+      assets.some((asset) => asset.assetId === input.asset_id && hasUnavailableCanvasOutputStatus(asset)),
+    )
+  )
+    return [];
+  return selected;
+}
+
 export async function hydrateLabUpstream(
   client: CanvasClient,
   nodes: Record<string, unknown>[],
@@ -142,7 +158,12 @@ export async function hydrateLabUpstream(
       const found = array(result.nodes)
         .map(object)
         .filter((item) => item.nodeId === node.id);
-      if (found.length !== 1 || array(found[0]?.assets).some((asset) => object(asset).nodeId !== node.id)) {
+      const assets = array(found[0]?.assets).map(object);
+      if (
+        found.length !== 1 ||
+        assets.some((asset) => asset.nodeId !== node.id || !text(asset.assetId)) ||
+        new Set(assets.map((asset) => asset.assetId)).size !== assets.length
+      ) {
         missing.push({ node_id: text(node.id), reason: 'generated_asset_identity_unavailable' });
         node.nodeAssets = [];
       } else node.nodeAssets = array(found[0]!.assets);
@@ -154,12 +175,18 @@ export async function hydrateLabUpstream(
   ];
   const ready = new Map<string, Record<string, unknown>>();
   for (let offset = 0; offset < ids.length; offset += 100) {
+    const assetIds = ids.slice(offset, offset + 100);
     const result = await call(client, 'Asset', 'BatchGetInputAssets', {
       projectId,
-      assetIds: ids.slice(offset, offset + 100),
+      assetIds,
     });
-    for (const asset of array(result.assets).map(object))
-      if (asset.status === 'INPUT_ASSET_STATUS_READY') ready.set(text(asset.assetId), asset);
+    for (const assetId of assetIds) {
+      const matches = array(result.assets)
+        .map(object)
+        .filter((asset) => asset.assetId === assetId);
+      if (matches.length === 1 && matches[0]!.status === 'INPUT_ASSET_STATUS_READY')
+        ready.set(assetId, matches[0]!);
+    }
   }
   for (const node of uploads) {
     const assetId = text(object(array(node.inputMount)[0]).assetId);
@@ -236,11 +263,13 @@ export async function resolveLabInputs(studio: StudioClient, requested: unknown)
     throw new TripoError('CONTRACT_CHANGED', 'Lab input canvas identity is unavailable.');
   if (x.revision !== undefined && String(info.revision) !== x.revision)
     throw new TripoError('CANVAS_CHANGED', 'Read the current Canvas before resolving Lab inputs.');
-  const byId = new Map(
-    array(graph.nodes)
-      .map(object)
-      .map((node) => [text(node.id), node]),
-  );
+  const graphNodes = array(graph.nodes).map(object);
+  if (
+    graphNodes.some((node) => !text(node.id)) ||
+    new Set(graphNodes.map((node) => node.id)).size !== graphNodes.length
+  )
+    throw new TripoError('CONTRACT_CHANGED', 'Lab input Canvas node identities are missing or duplicated.');
+  const byId = new Map(graphNodes.map((node) => [text(node.id), node]));
   if (byId.get(x.nodeId)?.type !== 'NODE_TYPE_AI_3D_LAB')
     throw new TripoError('INVALID_INPUT', 'Select an existing Lab node in this Canvas.');
   const upstreamIds = [

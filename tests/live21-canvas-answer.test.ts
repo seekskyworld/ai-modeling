@@ -244,6 +244,55 @@ test('retry card accepts only explicit continuation with no invented option IDs'
   assert.equal(invalid.ready, false);
 });
 
+test('HolyMolly confirmation preserves the capability explanation and still requires separate billing consent', async () => {
+  const f = fixture({
+    type: 'confirmation',
+    data: { kind: 'holy_molly_confirm', recommendationReason: 'Create a playable game.' },
+  });
+  const result = object(await resolveCanvasAnswerPlan(f.client, input));
+  assert.equal(result.ready, true);
+  assert.equal(object(result.card).holyMollyRecommendation, true);
+  assert.equal(object(result.card).holyMollyReason, 'Create a playable game.');
+  assert.deepEqual(result.parameters, { turn_id: 'turn', selected_option_ids: [] });
+  assert.equal(result.requires_accept_variable_cost, true);
+  assert.equal(object(result.parameters).accept_variable_cost, undefined);
+  assert.equal(result.execution_started, false);
+  assert.deepEqual(new Set(f.calls), new Set(['GetTurnDetail', 'GetSession', 'GetCanvas']));
+});
+
+test('HolyMolly selection needs the actual confirm option and does not infer consent from its capability marker', async () => {
+  const card = {
+    type: 'selection',
+    data: { kind: 'holy_molly_confirm' },
+    options: [
+      { id: 'confirm', label: 'Create game' },
+      { id: '__skip__', label: 'Skip' },
+    ],
+  };
+  const unselected = object(await resolveCanvasAnswerPlan(fixture(card).client, input));
+  assert.equal(unselected.ready, false);
+  assert.equal(unselected.parameters, null);
+  assert.ok((unselected.reasons as string[]).includes('selection_count_out_of_range'));
+  const confirmed = object(
+    await resolveCanvasAnswerPlan(fixture(card).client, { ...input, selectedOptionIds: ['confirm'] }),
+  );
+  assert.equal(confirmed.ready, true);
+  assert.deepEqual(confirmed.parameters, { turn_id: 'turn', selected_option_ids: ['confirm'] });
+  assert.equal(object(confirmed.card).holyMollyReason, undefined);
+  assert.equal(confirmed.requires_accept_variable_cost, true);
+});
+
+test('HolyMolly metadata alone never makes an unknown card type answerable', async () => {
+  const f = fixture(
+    { type: 'holy_molly_confirm', data: { kind: 'holy_molly_confirm' } },
+    (method, result) => {
+      if (method === 'GetTurnDetail')
+        object((result.messages as unknown[])[0]).cardType = 'CARD_TYPE_UNSPECIFIED';
+    },
+  );
+  await assert.rejects(resolveCanvasAnswerPlan(f.client, input), { code: 'UNSUPPORTED_CARD' });
+});
+
 test('parts are never attached to selection or grouped answers and caller edits cannot be silently lost', async () => {
   const card = { ...selection(), data: { parts: ['head', 'body'] } };
   const prepared = object(await resolveCanvasAnswerPlan(fixture(card).client, input));
@@ -431,4 +480,109 @@ test('invalid or unknown answers return explicit reasons instead of silently sel
     resolveCanvasAnswerPlan(fixture({ type: 'astra', data: { requestText: 'Create a cube' } }).client, input),
     { code: 'UNSUPPORTED_CARD' },
   );
+});
+
+test('plan presentation is sanitized and never becomes continuation parameters or a billing quote', async () => {
+  const f = fixture({
+    type: 'confirmation',
+    intent: 'plan',
+    title: 'Review https://user:password@cdn.example/preview.png?signature=private#secret',
+    subtitle: 'Bearer synthetic-secret',
+    data: {
+      fullGroups: [{ name: 'Build', steps: [{ id: 'model', label: 'Create a model', status: 'completed' }] }],
+      question: 'Proceed?',
+      requirements: ['A blue robot', 'Inspect https://cdn.example/model.glb?token=secret'],
+      estimate: { creditsMin: 2, creditsMax: 12 },
+      authorization: 'hidden-credential',
+      parameters: { request_id: 'not-an-answer-key', accept_variable_cost: true },
+    },
+  });
+  const result = object(await resolveCanvasAnswerPlan(f.client, input)),
+    card = object(result.card);
+  assert.equal(result.ready, true);
+  assert.equal(card.title, 'Review https://cdn.example/preview.png');
+  assert.equal(card.subtitle, '[redacted authorization]');
+  assert.deepEqual(card.requirements, ['A blue robot', 'Inspect https://cdn.example/model.glb']);
+  assert.deepEqual(card.estimate, { creditsMin: 2, creditsMax: 12, diagnosticOnly: true });
+  assert.deepEqual(result.quote, { known: false, variable: true });
+  assert.equal(result.requires_accept_variable_cost, true);
+  assert.deepEqual(result.parameters, { turn_id: 'turn', selected_option_ids: [] });
+  for (const secret of ['synthetic-secret', 'hidden-credential', 'not-an-answer-key', '?token='])
+    assert.ok(!JSON.stringify(result).includes(secret));
+  assert.equal(card.data, undefined);
+  assert.equal(result.execution_started, false);
+});
+
+test('option descriptions do not change selections or become executable parameters', async () => {
+  const card = selection();
+  const f = fixture({
+    ...card,
+    options: card.options.map((option) => ({
+      ...option,
+      subtitle: 'Inspect https://cdn.example/option.png?signature=secret',
+    })),
+  });
+  const result = object(await resolveCanvasAnswerPlan(f.client, input));
+  assert.deepEqual(result.parameters, { turn_id: 'turn', selected_option_ids: ['cat'] });
+  const options = object(result.card).options as Record<string, unknown>[];
+  assert.equal(options[0]!.subtitle, 'Inspect https://cdn.example/option.png');
+});
+
+test('presentation-only changes invalidate the complete original card snapshot', async () => {
+  const card = {
+    type: 'confirmation',
+    intent: 'plan',
+    title: 'Initial title',
+    subtitle: 'Initial description',
+    data: {
+      fullGroups: [{ name: 'Build', steps: [{ id: 'model', label: 'Create a model' }] }],
+      question: 'Proceed?',
+      requirements: ['A blue robot'],
+      estimate: { creditsMin: 2, creditsMax: 12 },
+    },
+  };
+  const changes = [
+    (value: typeof card) => {
+      value.title = 'Changed title';
+    },
+    (value: typeof card) => {
+      value.subtitle = 'Changed description';
+    },
+    (value: typeof card) => {
+      value.data.fullGroups[0]!.steps[0]!.label = 'Different output';
+    },
+    (value: typeof card) => {
+      value.data.question = 'Proceed with a different plan?';
+    },
+    (value: typeof card) => {
+      value.data.requirements[0] = 'A red robot';
+    },
+    (value: typeof card) => {
+      value.data.estimate.creditsMax = 24;
+    },
+  ];
+  for (const change of changes) {
+    const f = fixture(card, (method, result, count) => {
+      if (method !== 'GetTurnDetail' || count !== 2) return;
+      const changed = structuredClone(card);
+      change(changed);
+      object((result.messages as unknown[])[0]).cardJson = JSON.stringify(changed);
+    });
+    await assert.rejects(resolveCanvasAnswerPlan(f.client, input), { code: 'CANVAS_CHANGED' });
+  }
+  const changedOption = fixture(selection(), (method, result, count) => {
+    if (method !== 'GetTurnDetail' || count !== 2) return;
+    const card = selection();
+    object((result.messages as unknown[])[0]).cardJson = JSON.stringify({
+      ...card,
+      options: card.options.map((option) => ({ ...option, subtitle: 'A different result' })),
+    });
+  });
+  await assert.rejects(resolveCanvasAnswerPlan(changedOption.client, input), { code: 'CANVAS_CHANGED' });
+});
+
+test('oversized decision context cannot yield a ready answer plan', async () => {
+  const f = fixture({ type: 'confirmation', title: 'x'.repeat(17000) });
+  await assert.rejects(resolveCanvasAnswerPlan(f.client, input), { code: 'CONTRACT_CHANGED' });
+  assert.deepEqual(f.calls, ['GetTurnDetail']);
 });

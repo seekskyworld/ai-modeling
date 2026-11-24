@@ -109,12 +109,16 @@ test('Canvas CreateTurn sends every reference and checks source nodes in the ses
     if (method === 'GetCanvas') {
       assert.deepEqual(body, { canvasId: 'canvas' });
       return {
-        canvas: { canvasId: 'canvas' },
+        canvas: { canvasId: 'canvas', projectId: 'project' },
         nodes: [
           { id: 'left', type: 'NODE_TYPE_GENERATE_HD_MODEL' },
           { id: 'right', type: 'NODE_TYPE_GENERATE_HD_MODEL' },
         ],
       };
+    }
+    if (method === 'BatchGetInputAssets') {
+      assert.deepEqual(body, { projectId: 'project', assetIds: ['uploaded'] });
+      return { assets: [{ assetId: 'uploaded', status: 'INPUT_ASSET_STATUS_READY' }] };
     }
     if (method === 'ListNodesAssets') {
       assert.deepEqual(body, { nodeIds: ['left', 'right'] });
@@ -141,7 +145,13 @@ test('Canvas CreateTurn sends every reference and checks source nodes in the ses
     return { turnId: 'turn' };
   });
   assert.deepEqual(await submitCreativeTask(gateway, turnJob({ refs })), { remote_ids: { task_id: 'turn' } });
-  assert.deepEqual(calls, ['GetSession', 'GetCanvas', 'ListNodesAssets', 'CreateTurn']);
+  assert.deepEqual(calls, [
+    'GetSession',
+    'GetCanvas',
+    'BatchGetInputAssets',
+    'ListNodesAssets',
+    'CreateTurn',
+  ]);
 });
 
 test('uploaded references retain the webpage kind normalization without requiring a source node', async () => {
@@ -149,6 +159,12 @@ test('uploaded references retain the webpage kind normalization without requirin
   const expected = ['image/png', 'image', 'model', 'file'];
   let submissions = 0;
   const gateway = client((method, body) => {
+    if (method === 'GetSession') return { session: { sessionId: 'session', canvasId: 'canvas' } };
+    if (method === 'GetCanvas') return { canvas: { canvasId: 'canvas', projectId: 'project' }, nodes: [] };
+    if (method === 'BatchGetInputAssets') {
+      assert.deepEqual(body, { projectId: 'project', assetIds: ['asset'] });
+      return { assets: [{ assetId: 'asset', status: 'INPUT_ASSET_STATUS_READY' }] };
+    }
     assert.equal(method, 'CreateTurn');
     assert.deepEqual(body.attachmentIds, ['asset']);
     assert.deepEqual(body.refs, [{ assetId: 'asset', kind: expected[submissions++] }]);
@@ -159,9 +175,15 @@ test('uploaded references retain the webpage kind normalization without requirin
   assert.equal(submissions, 4);
 });
 
-test('legacy attachment-only turns keep their request shape and avoid reference lookups', async () => {
+test('attachment-only turns keep their request shape while checking independent uploads', async () => {
   let submitted = 0;
   const gateway = client((method, body) => {
+    if (method === 'GetSession') return { session: { sessionId: 'session', canvasId: 'canvas' } };
+    if (method === 'GetCanvas') return { canvas: { canvasId: 'canvas', projectId: 'project' }, nodes: [] };
+    if (method === 'BatchGetInputAssets') {
+      assert.deepEqual(body, { projectId: 'project', assetIds: ['existing'] });
+      return { assets: [{ assetId: 'existing', status: 'INPUT_ASSET_STATUS_READY' }] };
+    }
     assert.equal(method, 'CreateTurn');
     assert.deepEqual(body.attachmentIds, ['existing']);
     assert.equal(Object.hasOwn(body, 'refs'), false);

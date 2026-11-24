@@ -30,6 +30,7 @@ import { brushPickOperations } from './brush-pick.ts';
 import { segmentationOperations } from './segmentation.ts';
 import { uvOperations } from './uv.ts';
 import { localMetadataSchema, metadataOperations } from './model-metadata.ts';
+import { artifactInspectSchema, inspectArtifact } from './artifact-inspect.ts';
 
 const destination = { destination_path: z.string().min(1) };
 const modelInput = { model_path: z.string().min(1), blender: z.string().min(1).optional() };
@@ -351,6 +352,14 @@ async function share(config: Config, input: unknown): Promise<unknown> {
   }
 }
 export const localOperations: LocalSpec[] = [
+  {
+    name: 'artifact_inspect',
+    description:
+      'Inspect an exact local image or self-contained GLB/GLTF: decode content, hash bytes and check dimensions, geometry, textures, skeletons and animations against optional expectations. Read-only, offline; visual and prompt acceptance still require Agent review.',
+    schema: artifactInspectSchema,
+    readOnly: true,
+    run: async (config, input) => await inspectArtifact(input, config.inputRoots),
+  },
   ...canvasEditOperations,
   ...dccOperations,
   ...brushOperations,

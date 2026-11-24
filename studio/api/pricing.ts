@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import type { Operation, Quote } from '../contracts/types.ts';
 import { text, object, array } from '../contracts/errors.ts';
+import { variableCanvasOperations } from '../contracts/canvas-agent.ts';
 export const priceSchema = z
   .object({
     reviewed_at: z.iso.datetime(),
@@ -126,6 +127,12 @@ function metadataQuote(operation: Operation): Quote {
     explanation: 'Apply existing model data without generating a new model.',
   };
 }
+function invalidReviewExplanation(snapshot: PriceSnapshot, now: Date): string {
+  // 说清是过期还是未来日期，以及怎么恢复；不自动延期，也不放行提交。
+  return Date.parse(snapshot.reviewed_at) > now.getTime()
+    ? `Pricing review is dated in the future (reviewed_at ${snapshot.reviewed_at}). Check the system clock, then run "ai-modeling pricing status".`
+    : `Pricing review expired at ${snapshot.expires_at}. Run "ai-modeling pricing status", then install a newer reviewed snapshot with "ai-modeling pricing update" from the latest Release notes.`;
+}
 export class PricingService implements Pricing {
   private file: string;
   private fallback?: PriceSnapshot;
@@ -165,6 +172,16 @@ export class PricingService implements Pricing {
     };
   }
   async quote(operation: Operation, input: Record<string, unknown>): Promise<Quote> {
+    if (operation === 'canvas_node_stop')
+      return {
+        known: false,
+        hard_limit: false,
+        source: 'Studio node execution control',
+        observed_at: new Date().toISOString(),
+        expires_at: new Date().toISOString(),
+        explanation:
+          'This requests stopping the existing node execution. It does not quote or refund the work already started; inspect its original run billing separately.',
+      };
     if (operation === 'uv_commit' || operation === 'project_edit') return metadataQuote(operation);
     if (operation === 'refine_submit')
       return {
@@ -178,7 +195,7 @@ export class PricingService implements Pricing {
           'This submits a human-service request, not a generated model. Studio determines allowance and any required payment; no payment is executed automatically.',
       };
     if (operation === 'export_batch') return await this.batchQuote(input);
-    if (['canvas_turn', 'canvas_continue', 'canvas_lab'].includes(operation))
+    if (variableCanvasOperations.has(operation))
       return {
         known: false,
         variable: true,
@@ -210,7 +227,7 @@ export class PricingService implements Pricing {
       return {
         ...base,
         source: snapshot.source,
-        explanation: 'Pricing review is expired or dated in the future.',
+        explanation: invalidReviewExplanation(snapshot, now),
       };
     let keys: string[];
     if (operation === 'image')

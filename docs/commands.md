@@ -1,6 +1,6 @@
 # CLI 命令参考
 
-版本 0.1.4。以下保留实际 Commander 命令树的 233 条路径（含分组）、参数与选项。CLI 是底层执行接口，MCP 工具在内部调用 CLI，Skills 为所选入口提供流程指导。命令存在不等于所有官方 API 效果均已实现，支持条件见[兼容与限制](compatibility.md)。安装、登录、MCP 和恢复流程见[使用指南](usage.md)。
+源码版本 0.1.4，含 Unreleased 改动。以下保留实际 Commander 命令树的 238 条路径（含分组）、参数与选项；已发布安装包以本机 `--help` 为准。CLI 是底层执行接口，MCP 工具在内部调用 CLI，Skills 为所选入口提供流程指导。命令存在不等于所有官方 API 效果均已实现，支持条件见[兼容与限制](compatibility.md)。安装、登录、MCP 和恢复流程见[使用指南](usage.md)。
 
 ## 查找命令
 
@@ -13,7 +13,7 @@ ai-modeling tools --toolset studio
 
 `--help` 显示当前安装版本的实际帮助；`tools` 离线列出结构化工具定义，不读凭据或创建任务状态。`call TOOL --input-stdin` 和 `--input JSON` 读取对象输入，与 `--toolset`、`--profile` 可正常排列并支持 `--flag=value`；重复、未知、互斥、缺值选项或非对象 JSON 返回 `INVALID_INPUT`。`docs` 默认打开使用指南，另可通过 `--topic` 选择 `commands`、`compatibility` 或 `development`。
 
-以下公共选项适用于各命令，不在每节重复：
+以下公共选项适用于下方 Commander 业务命令，不在每节重复。`call`、`tools`、`guides` 和 `auth` 是独立的结构化入口，按各自参数使用；例如 `call` 已输出 JSON，不接受 `--json`、`--yes` 或 `--no-open`。
 
 | 选项 | 用途 |
 | --- | --- |
@@ -548,6 +548,8 @@ fetch one task (accepts @last/@name)
 --step  include pipeline step details
 ```
 
+已受理任务沿原本地 task 和远端回执查询。Canvas Agent、续答、Lab 及 Holy 节点 stop/retry 若为 `outcome_unknown`，`ai_modeling_job_reconcile` 拒绝用手填 Turn/Lab ID 猜绑，返回 `RECONCILE_UNVERIFIABLE`；远端 ID 存在、同画布或相近时间均不能证明原提交归属。保留原请求与上下文，不新建任务代替恢复。
+
 ## `ai-modeling task watch <task-id>`
 
 block until a task finishes (progress on stderr; stdout carries only the final JSON)
@@ -578,6 +580,23 @@ recent tasks created by this CLI (@name references)
 ## `ai-modeling canvas`
 
 Studio Canvas projects, graph edits and result selection
+
+## `ai-modeling canvas audit`
+
+Audit a saved Canvas after an Agent conversation: verify exact turn/session ownership, node state, expected assets and a stable read snapshot. Read-only; does not approve REVIEW nodes, download files or accept visual quality. Inspect original artifacts before delivery.
+
+```text
+--input <json>  validated operation parameters as JSON [default: "{}"]
+--canvas-id <value>  canvasId
+--session-id <value>  sessionId
+--turn-id <value>  turnId
+--node-ids <value>  Exact nodes to inspect; omitted means the whole saved graph, up to 100 nodes.
+--expect <value>  expect
+```
+
+`expect` 为 JSON 数组，每项包含 `nodeId`，可选 `kind`（image/model/animation/html）、`minAssets`（默认1）及明确的 `assetIds`。报告区分执行状态、资产就绪和仍待 Agent 审阅的内容；没有预期时不判定产物齐备。`html` 候选优先取当前 HolyMolly 结果 URL 路径的后缀，路径无后缀时才取 `filename`；`.html/.htm` 只证明候选分类，查询参数不参与后缀判定。仍须下载原件并分别检查依赖、试玩和费用；不能交给图片/模型 `artifact-inspect` 冒充游戏验证。`canvas review` 是批准工作流节点的写操作，不能代替该检查。验收流程见[可组合流水线](../skills/ai-modeling/references/pipelines.md)。
+
+审计把 `run_attribution`（运行所属回合）、`current_selection_association`（当前选中资产）和 `turn_attribution`（产物生成来源）分开。生成来源还须匹配已验证原件命名空间中的准确 task/step；选择旧结果不证明本轮生成。支持的图片、HD 基础模型、贴图模型和 Holy HTML 路径以兼容表为准；其它来源或复杂运行返回 unknown。`scope.turn_artifact_attribution_scope=selected_generated_outputs` 只覆盖所选产物，费用归属和流水核对另列。
 
 ## `ai-modeling canvas watch`
 
@@ -625,6 +644,8 @@ Prepare a new Canvas composer message or an exact failed-user-message retry. Pre
 --session-id <value>  sessionId
 --action <value>  action (new|retry)
 --agent-mode <value>  agentMode (control|auto)
+--capabilities <value>  Explicit Studio Agent capabilities. Only holy_molly is mapped from the observed webpage protocol; omit for ordinary chat. Not inferred from attachments or target nodes.
+--node-id <value>  Exact saved target node for a new message; omit to request a new game.
 --text <value>  text
 --attachments <value>  attachments
 --source-turn-id <value>  sourceTurnId
@@ -632,6 +653,23 @@ Prepare a new Canvas composer message or an exact failed-user-message retry. Pre
 --expected-revision <value>  expectedRevision
 --copied-nodes <value>  Pre-save copied nodes from an already completed canvas save. Requires its expectedRevision; resolves old output IDs without saving again.
 ```
+
+空正文仅支持新消息显式指定 `holy_molly`、准确已保存 Holy 节点且不含普通附件；只选择插件不能空提交。`action=retry` 读取准确 FAILED 回合的最后 USER 消息；Holy 目标只从服务 `cardJson.capabilities:["holy_molly"]` 与有效 `targetNodeId` 恢复，并核对目标仍属于当前保存图且为 Holy 节点。返回的 `source_target_node_id` 对应准备参数 `node_id`；缺目标仍以 `retry_holy_molly_target_unknown` 阻止准备，不允许调用方覆盖历史。合法 FAILED 的目标恢复、新回合创作及网页玩法已有实测正例；准备本身不提交，实际创作须用新请求身份和独立费用授权。如原任务在本机有准确终态 job，可显式 `redo JOB_ID --request-id NEW_INTENT` 发起新创作，保留原目标和附件，但会按新任务计费。新消息的定向修改传准确 `nodeId`；网页以新版本节点交付并保留原节点，验收须跟随本轮 turn/run/新节点及资产。
+
+## `ai-modeling canvas turn-stop-plan`
+
+Prepare the webpage Agent stop sequence for an exact Canvas turn without submitting writes.
+
+```text
+--input <json>  validated operation parameters as JSON [default: "{}"]
+--canvas-id <value>  canvasId
+--turn-id <value>  turnId
+--expected-revision <value>  expectedRevision
+--max-messages <value>  maxMessages (1–2000, default 500)
+--max-runs <value>  maxRuns (1–500, default 100)
+```
+
+返回 `stages[].actions` 的准确工具与参数。活动回合先请求 `turn-cancel`，读回明确 CANCELLED 后，再重新准备仍属于该回合的活动 `run-stop`；每次停止后重新查询状态。它核对两次发现快照、画布/会话/回合及逐个运行身份，发现变化、分页或身份不全时返回 `ready:false` / `incomplete:true`。`coverage.history_complete:null`：当前返回范围不等于完整历史。DONE/FAILED 回合仍有运行时明确报告，不把自然完成、停止受理或空运行列表当作停止成功。未知写回执不重放。
 
 ## `ai-modeling canvas answer-plan`
 
@@ -643,11 +681,13 @@ Prepare an exact Canvas selection or confirmation card answer, including grouped
 --turn-id <value>  turnId
 --card-message-id <value>  cardMessageId
 --action <value>  action (continue|skip)
---selected-option-ids <value>  Actual option IDs from the card, such as q1:__other__; do not use question IDs here.
+--selected-option-ids <value>  Actual option IDs for selection cards, such as q1:__other__; do not use question IDs. Omit for normal confirmation cards.
 --other-text <value>  Free text for a single selection or confirmation card.
 --other-texts <value>  For grouped questions, map question IDs to text, for example {"q1":"a red panda"}; keys are not option IDs such as q1:__other__.
 --confirmed-parts <value>  confirmedParts
 ```
+
+按实际卡型填写参数：`selection` 用真实选项 ID，即使选项标签表示确认也一样；普通 `confirmation` 使用 `action:continue` 并省略 `selectedOptionIds`，修改意见只传 `otherText`，跳过用 `action:skip`。把确认卡显示的 option ID 填入 `selectedOptionIds` 会返回 `confirmation_does_not_select_options`；准备就绪后另行提交返回参数，Skip 仍可能继续收费创作。
 
 ## `ai-modeling canvas lab-plan`
 
@@ -773,7 +813,7 @@ Read a model asset embedded in a Canvas template. Image assets may be unavailabl
 
 ## `ai-modeling canvas tools`
 
-Read the live creative tools available to the Canvas agent.
+Read live Canvas tools, parameters, ports and capacity, with CLI graph/execution mappings and explicit unmapped or retired nodes. Mapping is not a live execution or output-quality guarantee.
 
 ```text
 --input <json>  validated operation parameters as JSON [default: "{}"]
@@ -800,7 +840,7 @@ List creative planning sessions for a Canvas.
 
 ## `ai-modeling canvas session-create`
 
-Create a creative planning session.
+Create a new ACTIVE creative session as the project default, archiving the previous session while preserving its history. Reload the project webpage to display it.
 
 ```text
 --input <json>  validated operation parameters as JSON [default: "{}"]
@@ -857,7 +897,7 @@ Read the creative agent result or required user choice.
 
 ## `ai-modeling canvas turn-cancel`
 
-Cancel an explicitly selected creative turn.
+Request cancellation of an explicitly selected creative turn. This command sends CancelTurn only; use turn-stop-plan before and after cancellation to identify any still-active owned runs and verify exact final states before sending StopRun.
 
 ```text
 --input <json>  validated operation parameters as JSON [default: "{}"]
@@ -907,12 +947,14 @@ Cancel an explicitly selected 3D Lab creative job.
 
 ## `ai-modeling canvas lab-instructions`
 
-Read the saved creative instructions attached to a Lab node.
+Read server-managed Lab instructions with save-state validation and Copy/Reuse guidance. Does not save or execute instructions.
 
 ```text
 --input <json>  validated operation parameters as JSON [default: "{}"]
 --node-id <value>  nodeId
 ```
+
+返回保留原始 `taskInstructions`，另含 `validation`（状态、版本、异常及复用阻塞）和 `cli_support`。当前网页是服务管理说明的保存，Copy 读取 `saved.instructions`，Reuse 用 `canvas lab-plan --mode reuse_instructions`；没有独立手动保存写入。合法说明状态也不证明上游输入或整个 Lab 计划就绪。
 
 ## `ai-modeling canvas review`
 
@@ -1138,13 +1180,18 @@ Stop a selected Canvas execution.
 
 ## `ai-modeling canvas graph-edit`
 
-edit a saved Canvas graph locally: copy, group, layout, expand image batches, replace uploads and persistent undo/redo; save separately
+edit Canvas get JSON or saved graph state locally: patch parameters, copy, group, layout, expand images, replace uploads and undo/redo; save separately
 
 ```text
---graph-path <value>  graph_path
+--graph-path <value>  Saved canvas get JSON, CLI result wrapper, SaveCanvas input or graph-edit state file.
 --destination-path <value>  destination_path
 --actions <value>  actions
+--expected-canvas-id <value>  Require this exact Canvas identity in the input file; does not replace it.
+--expected-project-id <value>  Require this exact project identity in the input file; does not replace it.
+--expected-revision <value>  Require this exact saved revision in the input file; does not fetch or overwrite a newer one.
 ```
+
+`patch_params` 使用 `set` 修改顶层键、`unset` 删除明确键，其余参数保留；原 `params` 仍是整体替换。输入及历史保留准确图身份和版本，输出的 `save_input` 独立交给 `canvas save`；本地编辑不隐式保存或运行。完整示例见[使用指南](usage.md)。
 
 ## `ai-modeling studio`
 
@@ -1376,6 +1423,18 @@ convert a self-contained GLB locally with Blender; no Studio request or credits
 --flatten-bottom [boolean]  flatten_bottom
 --flatten-bottom-threshold <value>  flatten_bottom_threshold
 ```
+
+## `ai-modeling studio artifact-inspect`
+
+Inspect an exact local image or self-contained GLB/GLTF: decode content, hash bytes and check dimensions, geometry, textures, skeletons and animations against optional expectations. Read-only, offline; visual and prompt acceptance still require Agent review.
+
+```text
+--file-path <value>  Exact local image or self-contained GLB/GLTF to inspect.
+--expected-sha256 <value>  Bind inspection to the SHA-256 returned by the original download.
+--expect <value>  Explicit measurable requirements; never a visual quality verdict.
+```
+
+`expect` 为 JSON 对象，可含 `kind`、`width`、`height`、`min_width`、`min_height`、`min_triangles`、`max_triangles`、`min_meshes`、`min_materials`、`textured`、`skinned`、`animation_names`、`min_animations`。检查失败通过 `requirements_status` 和逐项结果返回；结构可读或机器条件通过不等于外观符合用户要求。支持范围与限制见[兼容说明](compatibility.md)。
 
 ## `ai-modeling studio model-inspect`
 
@@ -1629,9 +1688,58 @@ export owned projects in one native batch, preserving individual receipts
 --export-vertex-colors [boolean]  export_vertex_colors
 ```
 
+## `ai-modeling studio canvas-node-stop`
+
+request stopping an active saved HolyMolly node at the checked run and revision; verify the original node execution stopped, without cancelling already incurred charges
+
+The observed response acknowledges the exact original `runId` with `status:"accepted"`. The CLI stores an `accepted_run` receipt and polls that run; a separate turn receipt retains its own identity checks. Acceptance, `stopRequestedTime`, or a `stopping` event does not prove completion. An original node ending DONE or FAILED reports `STOP_NOT_CONFIRMED`; a replaced execution reports `STOP_STATE_UNAVAILABLE`. Unknown prior submissions remain unresolved and must not be replayed.
+
+```text
+-o, --out <dir>  output directory (default ./ai-modeling-out/...)
+--no-wait  submit only; do not wait for completion
+--no-download  wait but skip downloading artifacts
+--notify  desktop notification when done
+--timeout <seconds>  watch timeout in seconds
+--name <name>  history name for @references
+-p, --param <key=value>  extra API parameter (repeatable) [default: {}]
+--request-id <id>  Studio extension: reuse the original submission intent
+--max-credits <n>  Studio extension: maximum estimated credits per step
+--dry-run  plan + validate only; no network calls, uploads or credits
+--input <json>  validated operation parameters as JSON [default: "{}"]
+--canvas-id <value>  canvas_id
+--node-id <value>  node_id
+--revision <value>  Current saved Canvas revision as a decimal string.
+--expected-run-id <value>  Exact run currently attached to this saved HolyMolly node. These guards are checked before sending; the upstream node RPC has no atomic revision/run condition.
+```
+
+## `ai-modeling studio canvas-node-retry`
+
+retry a saved HolyMolly node only when Studio marks its terminal run retryable; explicitly accept variable billing and audit the returned turn and game separately
+
+This native node operation is separate from retrying a failed Agent message with `canvas turn-plan --action retry`. No eligible live `retryable:true` node example has passed acceptance yet; a successful historical message retry does not establish native node Retry support in that account state.
+
+```text
+-o, --out <dir>  output directory (default ./ai-modeling-out/...)
+--no-wait  submit only; do not wait for completion
+--no-download  wait but skip downloading artifacts
+--notify  desktop notification when done
+--timeout <seconds>  watch timeout in seconds
+--name <name>  history name for @references
+-p, --param <key=value>  extra API parameter (repeatable) [default: {}]
+--request-id <id>  Studio extension: reuse the original submission intent
+--max-credits <n>  Studio extension: maximum estimated credits per step
+--dry-run  plan + validate only; no network calls, uploads or credits
+--input <json>  validated operation parameters as JSON [default: "{}"]
+--accept-variable-cost [boolean]  Accept Studio variable billing; no estimate or hard spending limit is available.
+--canvas-id <value>  canvas_id
+--node-id <value>  node_id
+--revision <value>  Current saved Canvas revision as a decimal string.
+--expected-run-id <value>  Exact run currently attached to this saved HolyMolly node. These guards are checked before sending; the upstream node RPC has no atomic revision/run condition.
+```
+
 ## `ai-modeling studio canvas-turn`
 
-start a Canvas agent turn with explicitly accepted variable cost
+start a Canvas agent turn with explicitly accepted variable cost; capabilities=["holy_molly"] opts into the webpage game workflow, with materials in refs and an optional game node_id; audit exact outputs before delivery
 
 ```text
 -o, --out <dir>  output directory (default ./ai-modeling-out/...)
@@ -1647,8 +1755,9 @@ start a Canvas agent turn with explicitly accepted variable cost
 --input <json>  validated operation parameters as JSON [default: "{}"]
 --accept-variable-cost [boolean]  Accept Studio variable billing; no estimate or hard spending limit is available.
 --session-id <value>  session_id
---text <value>  text
+--text <value>  Message text. Empty text requires explicit holy_molly capability, an existing HolyMolly node_id and no ordinary asset attachments.
 --mode <value>  mode (control|auto)
+--capabilities <value>  Explicit Studio Agent capabilities. Only holy_molly is mapped from the observed webpage protocol; omit for ordinary chat. Not inferred from attachments or target nodes.
 --node-id <value>  node_id
 --attachment-ids <value>  attachment_ids
 --refs <value>  Ordered attachment references preserving names, kinds and source nodes. Derives attachment_ids when omitted; if supplied, attachment_ids must match refs in the same order.
@@ -1657,7 +1766,7 @@ start a Canvas agent turn with explicitly accepted variable cost
 
 ## `ai-modeling studio canvas-continue`
 
-continue a Canvas agent turn using the requested user choice
+continue a Canvas agent turn using the requested user choice; completion still requires Canvas and artifact acceptance
 
 ```text
 -o, --out <dir>  output directory (default ./ai-modeling-out/...)

@@ -16,6 +16,10 @@ import { resolveCanvasExtractionPlan } from './canvas-extraction-plan.ts';
 import type { ExtractionMemory } from './canvas-extraction-memory.ts';
 import { resolveCanvasAnswerPlan } from './canvas-answer-plan.ts';
 import { resolveCanvasTurnPlan } from './canvas-turn-plan.ts';
+import { resolveCanvasTurnStopPlan } from './canvas-turn-stop-plan.ts';
+import { canvasAuditSchema, auditCanvas } from './canvas-audit.ts';
+import { canvasToolCoverage } from './canvas-capabilities.ts';
+import { inspectLabTaskInstructions } from './canvas-lab-instructions.ts';
 
 const empty = z.object({}).strict();
 const project = z.object({ projectId: id }).strict();
@@ -45,6 +49,7 @@ const nodeTypes = [
   'UPLOAD_CARD',
   'ANIMATION',
   'AI_3D_LAB',
+  'HOLY_MOLLY',
 ] as const;
 export const canvasNode = z
   .object({
@@ -111,6 +116,13 @@ const spec = (
   readOnly,
 });
 export const canvasResources: CanvasSpec[] = [
+  spec(
+    'audit',
+    'Canvas',
+    'GetCanvas',
+    canvasAuditSchema,
+    'Audit a saved Canvas after an Agent conversation: verify exact turn/session ownership, node state, expected assets and a stable read snapshot. Read-only; does not approve REVIEW nodes, download files or accept visual quality. Inspect original artifacts before delivery.',
+  ),
   spec(
     'events',
     'Canvas',
@@ -265,12 +277,26 @@ export async function callCanvas(
   input: unknown,
   memory?: ExtractionMemory,
 ): Promise<unknown> {
+  if (spec.name === 'tools') {
+    const result = await new CanvasClient(studio).call(spec.method, spec.schema.parse(input));
+    return sanitize({
+      ...object(result),
+      cli_support: canvasToolCoverage(result, canvasNode.shape.type.options),
+    });
+  }
+  if (spec.name === 'audit') return await auditCanvas(studio, input);
   if (spec.name === 'turn_plan') return await resolveCanvasTurnPlan(studio, input);
+  if (spec.name === 'turn_stop_plan') return await resolveCanvasTurnStopPlan(studio, input);
   if (spec.name === 'answer_plan') return await resolveCanvasAnswerPlan(studio, input);
   if (spec.name === 'extraction_plan') return await resolveCanvasExtractionPlan(studio, input, memory);
   if (spec.name === 'texture_reference') return await resolveCanvasTextureReference(studio, input);
   if (spec.name === 'lab_inputs') return await resolveLabInputs(studio, input);
   if (spec.name === 'lab_plan') return await resolveCanvasLabPlan(studio, input);
+  if (spec.name === 'lab_instructions') {
+    const parameters = object(spec.schema.parse(input));
+    const result = await new CanvasClient(studio).call(spec.method, parameters);
+    return sanitize(inspectLabTaskInstructions(result, String(parameters.nodeId)));
+  }
   if (spec.name === 'events') return await readCanvasEvents(studio, input);
   if (spec.name === 'review') return await reviewCanvas(studio, object(spec.schema.parse(input)));
   if (spec.name === 'template_create')

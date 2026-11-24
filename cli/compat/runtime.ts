@@ -138,6 +138,7 @@ export function taskResult(job: Record<string, unknown>): Record<string, unknown
       [
         'intermediate_artifacts',
         'canvas_output_validation',
+        'canvas_acceptance',
         'lab_reference_edit_validation',
         'lab_projected_segment_validation',
         'source_representation',
@@ -878,6 +879,8 @@ async function executeSequentialPlan(
       step.sourceRepresentation,
       params,
     );
+    // 链上新生成的动作属于导出意图本身，必须先并入参数，再冻结 JPEG 缺省意图；否则提交前核对必然不一致。
+    if (step.animationsFromChain) Object.assign(params, { with_animation: true, animations });
     await prepareDefaultJpeg(app, step, params, `${request}-${i}`, existing);
     recordExecutionPolicy(app, plan, step, `${request}-${i}`, existing);
     if (step.preflight === 'rig') {
@@ -885,7 +888,6 @@ async function executeSequentialPlan(
       if (terminal) return await stoppedPlan(app, plan, flags, terminal, previous, chain, deliveries);
       continue;
     }
-    if (step.animationsFromChain) Object.assign(params, { with_animation: true, animations });
     previous = await submitStep(app, step, `${request}-${i}`, params, flags, transformAccount);
     app.service.jobs.linkStep(app.service.accountRef(), request, i, text(previous.job_id));
     if (i === plan.steps.length - 1)

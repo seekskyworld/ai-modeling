@@ -127,6 +127,12 @@ function ports(node: Node): Ports {
     return { inputs: { image: { ...image, required: true } }, outputs: { text: { type: 'text' } } };
   if (kind === 'REVIEW') return { inputs: { image: { ...image, required: true } }, outputs: { image } };
   if (kind === 'SECTION') return { inputs: {}, outputs: {} };
+  // HolyMolly executes through Agent capabilities; graph links carry HTML, not material attachments.
+  if (kind === 'HOLY_MOLLY')
+    return {
+      inputs: { materials: { type: 'any', multiple: true }, html: { type: 'any' } },
+      outputs: { html: { type: 'any' } },
+    };
   if (kind === 'UPLOAD_CARD') return uploadPorts(node);
   if (kind === 'AI_3D_LAB')
     return {
@@ -195,6 +201,30 @@ function systemResultEdge(source: Node | undefined, target: Node | undefined, ed
   };
   return allowed[source.type]?.includes(target.type) ?? false;
 }
+function connectionPorts(
+  source: Node | undefined,
+  target: Node | undefined,
+  edge: Edge,
+  checkLabState: boolean,
+): { from?: Port; to?: Port } {
+  // The webpage's connection builder routes Holy HTML to html, never materials; rejected saves report 5415.
+  // Material references travel in CreateTurn attachments. Preserve existing saved topology on reads.
+  if (checkLabState && target?.type === 'NODE_TYPE_HOLY_MOLLY' && edge.target.port === 'materials') return {};
+  // ANY materials does not imply arbitrary uploads: the live directory permits only HolyMolly upstream.
+  if (
+    (target?.type === 'NODE_TYPE_HOLY_MOLLY' && source?.type !== 'NODE_TYPE_HOLY_MOLLY') ||
+    (source?.type === 'NODE_TYPE_HOLY_MOLLY' &&
+      !['NODE_TYPE_HOLY_MOLLY', 'NODE_TYPE_AI_3D_LAB'].includes(target?.type ?? ''))
+  )
+    return {};
+  // 网页新建 Lab 连线省略 source.port，服务读回为空串。
+  const sourcePort =
+    source?.type === 'NODE_TYPE_AI_3D_LAB' && !edge.source.port ? 'output' : edge.source.port;
+  return {
+    from: source && graphOutputs(source, checkLabState)[sourcePort],
+    to: target && ports(target).inputs[edge.target.port],
+  };
+}
 export function canvasGraphIssues(nodes: Node[], edges: Edge[], checkLabState = true): string[] {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const issues: string[] = [];
@@ -213,11 +243,7 @@ export function canvasGraphIssues(nodes: Node[], edges: Edge[], checkLabState = 
       adjacency.get(edge.source.nodeId)!.push(edge.target.nodeId);
       continue;
     }
-    // 网页新建 Lab 连线省略 source.port，服务读回为空串；不能把这种真实图判为非法。
-    const sourcePort =
-      source?.type === 'NODE_TYPE_AI_3D_LAB' && !edge.source.port ? 'output' : edge.source.port;
-    const from = source && graphOutputs(source, checkLabState)[sourcePort];
-    const to = target && ports(target).inputs[edge.target.port];
+    const { from, to } = connectionPorts(source, target, edge, checkLabState);
     if (!from || !to) {
       issues.push('Connection references an invalid node or port.');
       continue;

@@ -1,5 +1,7 @@
 /** 历史消息的服务端附件身份及跨阶段失败；不从正文占位或数组长度猜测原素材。 */
 import { array, object, text, TripoError } from '../contracts/errors.ts';
+import { canvasTurnCapabilitiesSchema } from '../contracts/canvas-agent.ts';
+import { id } from '../contracts/primitives.ts';
 import type { TurnAttachment } from './canvas-turn-compose.ts';
 
 function changed(message: string): never {
@@ -28,7 +30,7 @@ function sourceReference(refs: Record<string, unknown>[], assetId: string, index
   return source;
 }
 
-export function historicalAttachments(message: Record<string, unknown>): TurnAttachment[] {
+function historicalCardData(message: Record<string, unknown>) {
   let raw: Record<string, unknown> = {};
   if (text(message.cardJson)) {
     try {
@@ -37,7 +39,37 @@ export function historicalAttachments(message: Record<string, unknown>): TurnAtt
       changed('Historical user attachment references are malformed.');
     }
   }
-  if (raw.turnRefs !== undefined && !Array.isArray(raw.turnRefs))
+  return raw;
+}
+
+/**
+ * 网页 gc 只从用户消息 cardJson.capabilities 恢复；未知能力不能静默丢弃后当普通消息重试。
+ * Holy 特殊 composer 引用不进入 content/attachments/turnRefs：CreateTurn 另发 nodeId，
+ * 持久用户消息已证实另以 cardJson.targetNodeId 回显目标；缺字段仍不能证明原请求是新建。
+ */
+export function historicalCapabilities(message: Record<string, unknown>) {
+  const raw = historicalCardData(message);
+  if (raw.capabilities === undefined) return undefined;
+  const parsed = canvasTurnCapabilitiesSchema.safeParse(raw.capabilities);
+  if (!parsed.success) changed('Historical user message capabilities are unsupported or malformed.');
+  return parsed.data;
+}
+
+/** 只恢复已证实的持久目标字段；同页临时字段、普通素材 refs 和当前唯一 Holy 节点不能代替它。 */
+export function historicalHolyMollyTarget(message: Record<string, unknown>) {
+  const raw = historicalCardData(message);
+  if (raw.targetNodeId === undefined) return undefined;
+  const target = id.safeParse(raw.targetNodeId);
+  if (!target.success) changed('Historical HolyMolly target identity is malformed.');
+  if (!historicalCapabilities(message)?.includes('holy_molly'))
+    changed('Historical target identity has no verified HolyMolly capability.');
+  return target.data;
+}
+
+export function historicalAttachments(message: Record<string, unknown>): TurnAttachment[] {
+  const raw = historicalCardData(message);
+  // 服务对没有普通素材引用的目标修改回显 turnRefs:null；它不包含可推断的目标或附件关系。
+  if (raw.turnRefs !== undefined && raw.turnRefs !== null && !Array.isArray(raw.turnRefs))
     changed('Historical user attachment references are not an array.');
   const refs = array(raw.turnRefs).map(object);
   return array(message.attachments).map((value, index) => {

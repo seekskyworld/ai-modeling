@@ -2,13 +2,34 @@
 import { z } from 'zod';
 import { id } from './primitives.ts';
 import { canvasTurnCharacterCount } from './canvas-turn-text.ts';
-export const variableCanvasOperations = new Set(['canvas_turn', 'canvas_continue', 'canvas_lab']);
+export const canvasNodeOperations = new Set(['canvas_node_stop', 'canvas_node_retry']);
+export const variableCanvasOperations = new Set([
+  'canvas_turn',
+  'canvas_continue',
+  'canvas_lab',
+  'canvas_node_retry',
+]);
+export const creativeCanvasOperations = new Set([...variableCanvasOperations, ...canvasNodeOperations]);
 const consent = {
   accept_variable_cost: z
     .literal(true)
     .describe('Accept Studio variable billing; no estimate or hard spending limit is available.'),
 };
 const ids = z.array(id).max(100);
+const nodeExecutionTarget = {
+  canvas_id: id,
+  node_id: id,
+  revision: z.string().regex(/^\d+$/).describe('Current saved Canvas revision as a decimal string.'),
+  expected_run_id: id.describe(
+    'Exact run currently attached to this saved HolyMolly node. These guards are checked before sending; the upstream node RPC has no atomic revision/run condition.',
+  ),
+};
+export const canvasTurnCapabilitiesSchema = z
+  .array(z.literal('holy_molly'))
+  .max(1)
+  .describe(
+    'Explicit Studio Agent capabilities. Only holy_molly is mapped from the observed webpage protocol; omit for ordinary chat. Not inferred from attachments or target nodes.',
+  );
 const attachmentRef = z
   .object({
     asset_id: id,
@@ -26,13 +47,22 @@ const attachmentRef = z
   .strict();
 const attachmentRebinding = z.object({ node_id: id, from_asset_id: id, to_asset_id: id }).strict();
 export const canvasAgentSchemas = {
+  canvas_node_stop: z.object(nodeExecutionTarget).strict(),
+  canvas_node_retry: z.object({ ...consent, ...nodeExecutionTarget }).strict(),
   canvas_turn: z
     .object({
       ...consent,
       session_id: id,
       // 网页普通消息和 Lab 共用 co(document) 的 200000 Unicode 码点限制；附件节点不计入文字。
-      text: z.string().trim().min(1).max(500000),
+      text: z
+        .string()
+        .trim()
+        .max(500000)
+        .describe(
+          'Message text. Empty text requires explicit holy_molly capability, an existing HolyMolly node_id and no ordinary asset attachments.',
+        ),
       mode: z.enum(['control', 'auto']).default('control'),
+      capabilities: canvasTurnCapabilitiesSchema.optional(),
       node_id: id.optional(),
       attachment_ids: ids.default([]),
       refs: z
@@ -52,6 +82,16 @@ export const canvasAgentSchemas = {
         ),
     })
     .strict()
+    .refine(
+      (x) =>
+        Boolean(x.text) ||
+        (x.capabilities?.includes('holy_molly') === true &&
+          Boolean(x.node_id) &&
+          !x.attachment_ids.length &&
+          !x.refs?.length &&
+          !x.attachment_rebindings?.length),
+      'Empty text requires an explicit HolyMolly target and capability without asset attachments.',
+    )
     .refine(
       (x) =>
         !x.refs?.length ||

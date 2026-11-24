@@ -111,7 +111,8 @@ test('Studio texture sends audited content, separate style and selected original
   assert.equal(preset.body.part_names, undefined);
 });
 
-test('style pricing adds five credits and rejects missing evidence rather than quoting base price', async () => {
+test('style pricing adds five credits and rejects missing evidence rather than quoting base price', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse(reviewedPrices.reviewed_at) });
   const pricing = new PricingService('/missing-editor-prices.json', reviewedPrices);
   for (const key of ['style_image_path', 'style_image_asset', 'style_preset']) {
     const q = await pricing.quote('texture', {
@@ -123,15 +124,12 @@ test('style pricing adds five credits and rejects missing evidence rather than q
   }
   const { TextureStyle: ignored, ...credits } = reviewedPrices.credits;
   assert.equal(ignored, 5);
-  assert.equal(
-    (
-      await new PricingService('/missing-editor-prices.json', { ...reviewedPrices, credits }).quote(
-        'texture',
-        { style_preset: 'wood' },
-      )
-    ).known,
-    false,
-  );
+  const missing = await new PricingService('/missing-editor-prices.json', {
+    ...reviewedPrices,
+    credits,
+  }).quote('texture', { style_preset: 'wood' });
+  assert.equal(missing.known, false);
+  assert.match(missing.explanation, /No verified price for .*TextureStyle/);
 });
 
 test('invalid mixed texture inputs and sparse batches stop before submission', () => {
@@ -252,7 +250,8 @@ test('official size options request a native GLB and declare local conversion in
   );
 });
 
-test('current website pricing includes the Smart Poly base and P2 quad in its fixed price', async () => {
+test('reviewed website pricing includes the Smart Poly base and P2 quad in its fixed price', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse(reviewedPrices.reviewed_at) });
   const pricing = new PricingService('/missing-editor-prices.json', reviewedPrices);
   assert.equal((await pricing.quote('remesh', { smart_poly: true, quad: false })).credits, 35);
   assert.equal((await pricing.quote('remesh', { smart_poly: true, quad: true })).credits, 40);
@@ -264,4 +263,33 @@ test('current website pricing includes the Smart Poly base and P2 quad in its fi
     (await pricing.quote('model', { model_version: 'Nexus-v1.0-20260214', quad: true })).credits,
     40,
   );
+});
+
+test('bundled reviewed prices stop authorizing quotes at expiry and before their review date', async (t) => {
+  const expires = Date.parse(reviewedPrices.expires_at),
+    reviewed = Date.parse(reviewedPrices.reviewed_at),
+    pricing = new PricingService('/missing-editor-prices.json', reviewedPrices);
+  assert.ok(reviewed < expires);
+  t.mock.timers.enable({ apis: ['Date'], now: expires - 1 });
+  const valid = await pricing.quote('remesh', { smart_poly: true, quad: false });
+  assert.equal(valid.known, true);
+  assert.equal(valid.credits, 35);
+  for (const [now, reason, date, recovery] of [
+    [expires, /^Pricing review expired at /, reviewedPrices.expires_at, /ai-modeling pricing update/],
+    [
+      reviewed - 1,
+      /^Pricing review is dated in the future /,
+      reviewedPrices.reviewed_at,
+      /Check the system clock/,
+    ],
+  ] as const) {
+    t.mock.timers.setTime(now);
+    const unavailable = await pricing.quote('remesh', { smart_poly: true, quad: false });
+    assert.equal(unavailable.known, false);
+    assert.equal(unavailable.credits, undefined);
+    assert.match(unavailable.explanation, reason);
+    assert.ok(unavailable.explanation.includes(date));
+    assert.match(unavailable.explanation, /ai-modeling pricing status/);
+    assert.match(unavailable.explanation, recovery);
+  }
 });

@@ -29,7 +29,13 @@ export const operationDescriptions: Record<Operation, string> = {
     'save per-triangle segment labels and names from inline arrays or a bound segmentation state file',
   retry: 'request a free project generation retry only when Studio reports retry_info.can_retry=true',
   canvas_run: 'run selected Canvas nodes with explicit inputs and a checked graph revision',
-  canvas_turn: 'start a Canvas agent turn with explicitly accepted variable cost',
-  canvas_continue: 'continue a Canvas agent turn using the requested user choice',
+  canvas_turn:
+    'start a Canvas agent turn with explicitly accepted variable cost; capabilities=["holy_molly"] opts into the webpage game workflow, with materials in refs and an optional game node_id; audit exact outputs before delivery',
+  canvas_continue:
+    'continue a Canvas agent turn using the requested user choice; completion still requires Canvas and artifact acceptance',
   canvas_lab: 'run a 3D Lab instruction against explicitly attached assets',
+  canvas_node_stop:
+    'request stopping an active saved HolyMolly node at the checked run and revision; verify the original node execution stopped, without cancelling already incurred charges',
+  canvas_node_retry:
+    'retry a saved HolyMolly node only when Studio marks its terminal run retryable; explicitly accept variable billing and audit the returned turn and game separately',
 };

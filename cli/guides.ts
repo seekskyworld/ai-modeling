@@ -22,7 +22,7 @@ const guides = [
     id: 'pipelines',
     name: 'Examples and pipelines',
     description:
-      'Compose reference-to-model, existing-task delivery and independent batch workflows as needed.',
+      'Compose reference-to-model, Canvas Agent acceptance, existing-task delivery and independent batch workflows as needed.',
     file: 'skills/ai-modeling/references/pipelines.md',
   },
 ] as const;

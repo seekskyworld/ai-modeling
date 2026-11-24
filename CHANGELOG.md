@@ -2,6 +2,44 @@
 
 This file records user-facing changes. Unreleased changes describe the source tree and do not imply an npm or hosted release. Run `ai-modeling --version` or read `package.json` for the current version.
 
+## Unreleased
+
+### Added
+
+- Read-only `canvas turn-stop-plan` composes the webpage Agent cancellation sequence using exact turn/run ownership, bounded discovery and stable snapshots. It requires confirmed turn cancellation before preparing active run stops, preserves unknown writes and separates cancellation from natural completion. Live webpage cancellation reached STOPPED; a separate CLI cancellation also reached CANCELLED with its exact run stopped, requiring no redundant stop request.
+- Canvas audits now verify complete one-to-one multi-node runs; a live two-image chat run passed exact output attribution. Textured HD originals require matching task IDs in both their directory and exact filename. Verified original-path contracts cover additional model operations while preserving unknown attribution for repeated-node steps, unbound Canvas runs and internal split tasks without a proven original-file mapping.
+- Live checks validated a non-indexed fixture through native webpage import, CLI UV generation/application, original geometry and UV inspection, and webpage layout/model views. A freshly reviewed UV-only snapshot enabled that test; bundled pricing remains expired, and the full import/compression chain remains unverified without current import-price evidence.
+- Live card checks cover plan confirmation, detected-part renaming, candidate selection through textured HD generation, original inspection and webpage views, and the HolyMolly recommendation selection protocol. The recommendation sample ended without HTML delivery; successful continuation does not imply successful generation.
+
+- Canvas audits separate run ownership, current selection and generated-output provenance. Supported image, HD-model, texture and HolyMolly originals must match exact task/step identities; selecting an old output does not attribute it to the current run. Run reads join both snapshots, while node credit ownership stays separate from account-ledger verification and settlement.
+- Live checks cover grouped Other/per-question Skip, selection confirmation, confirmation gates before model generation and texturing, original-file inspection and webpage comparison. Session creation documents its actual default/active-session switch and retained archived history; confirmation-card guidance distinguishes its arguments from selection cards.
+- Read-only Canvas acceptance audits bind the exact conversation to its Canvas, check node and asset expectations, and verify a stable read snapshot. They do not approve workflow review nodes or infer that current assets were created by the last message.
+- Local artifact inspection decodes image/model content and reports file identity, geometry, textures and animation evidence with optional machine-checkable expectations. Visual and semantic acceptance remains an explicit Agent responsibility.
+- Canvas chat task results now retain acceptance follow-up guidance after remote completion, shared through CLI, MCP and the progressive Skill workflow.
+- Canvas graph editing imports `canvas get` output directly, supports explicit identity/revision guards and patches selected parameter keys without replacing the rest. Undo/redo retains the original graph identity.
+- Live Canvas tool discovery reports CLI graph and execution mappings, retired definitions and unmapped capabilities. HolyMolly uses explicit Agent capabilities and verified attachment preparation; its graph supports HTML-to-HTML/Lab connections.
+- Live HolyMolly checks verified original attachment bytes, HTML download, in-Canvas Play, keyboard movement, collection, victory and restart. Targeted changes preserved the original node and delivered new version nodes with the requested appearance, win threshold and Space pause/resume behavior; later revisions added a Pause/Resume button and P shortcut, verified using player position changes and original dependencies. Restarting while paused also restored the zero-score state. Acceptance follows the exact turn/run/new-node/asset chain. Successful stopping and eligible native node Retry remain unverified, and a settled revision does not settle other pending generation charges.
+- HolyMolly audits expose HTML candidates, game preview diagnostics and separate credit status. Confirmation cards retain game recommendations; historical game retries with no verifiable target remain blocked. Core documentation is consolidated into five maintained guides.
+
+- Saved HolyMolly node stop/retry operations preserve a durable request, exact source run and revision guards. Stop confirmation is separate from turn completion; retry requires variable billing consent. Unknown receipts are retained without replay or unproven turn reconciliation. A live accepted stop ending in FAILED remains unconfirmed; native node Retry has no eligible live success example.
+
+### Fixed
+
+- `anim retarget` with the default JPEG export no longer fails with `IDEMPOTENCY_CONFLICT` before export submission. Animations created earlier in the chain are now merged into the export parameters before the JPEG intent is frozen, so the pre-submit check compares the same intent. A live Studio run exported one GLB with both requested preset motions and verified JPEG textures.
+- Studio uploads scale their per-request timeout with the body size (60 seconds plus the transfer time at 32 KiB/s, capped at 10 minutes), allowing more time for 10 MiB parts and large reference images on slower or proxied connections.
+- Expired or future-dated pricing reviews report when the review expired, or that it is future-dated, and the recovery commands, instead of a generic message.
+
+- Classify HolyMolly HTML candidates by the download URL path suffix first, falling back to the filename only when that path has no suffix. Extensionless display names no longer hide HTML outputs; classification still requires separate content and gameplay checks.
+- Reject manually supplied Turn/Lab IDs for uncertain Canvas creative submissions with `RECONCILE_UNVERIFIABLE`. An existing remote result does not prove request ownership; preserve the original unknown job without replay or guessed receipt binding.
+- Serialize JobStore schema initialization and migration after acquiring the database write lock, with bounded retries for WAL setup contention. Concurrent CLI/MCP startup no longer races partially initialized schemas; this does not retry remote submissions.
+- Accept verified HolyMolly Stop receipts containing the exact original run ID and `status:accepted`, preserving their identity separately from turn receipts. Poll the original node execution and retain stop-request timing as evidence; a DONE or FAILED result remains `STOP_NOT_CONFIRMED`, even after a stopping event. Previously unknown submissions are not rebound or replayed.
+- Recover a failed HolyMolly message's target only from the service's explicit `cardJson.targetNodeId` and matching capability, verifying the saved Canvas node and read snapshot. A live FAILED-message retry completed a new turn, run, node and HTML output with verified original download, attachment bytes, dependency loading, movement, collection threshold, pause/resume and restart. Missing targets remain blocked; callers cannot override historical identity. Accept `turnRefs:null` as no ordinary references without inferring a target from attachments; historical retries remain separate from native node Retry.
+- Validate Lab instruction save states before reuse while preserving the service response and Copy/Reuse guidance. Current webpage instructions are saved by the service; a Canvas snapshot is not a separate manual instruction-save API.
+- Preserve supported Agent card titles, option descriptions, plan groups and requirements for review; displayed cost ranges remain separate from executable pricing and consent.
+- Recheck the durable submission claim after Canvas turn, answer, Lab and graph-run preparation/authentication, immediately before the write.
+
+- New Canvas chat submissions validate standalone and mixed attachment identity/readiness; continuations require a turn waiting for user input. Run preparation verifies the exact Canvas and unique Lab outputs, while Lab reuse rejects explicitly unavailable selected assets. Submitted jobs query their original receipts; uncertain creative submissions remain unbound without resubmission.
+
 ## 0.1.4 — 2026-11-17
 
 ### Added

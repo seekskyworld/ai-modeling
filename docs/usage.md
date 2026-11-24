@@ -16,8 +16,8 @@ ai-modeling doctor --offline --json
 
 The [npm package](https://www.npmjs.com/package/@seekskyworld/ai-modeling) is `@seekskyworld/ai-modeling`; the executable is `ai-modeling`. Keep platform optional dependencies enabled. Choose one entry point:
 
-- **Skill:** run `ai-modeling skill targets`, install with `ai-modeling skill install --target YOUR_CLIENT`, and check the same target with `skill status`. Reload the client's Skills or start a new session, then verify it can read the installed `SKILL.md` and call the CLI. Targets: `codex`, `claude-code`, `cursor`, `copilot`, `gemini-cli`, `opencode`, `golutra-agent`, and shared `agents`. Use `--project-dir` for Golutra Agent, which supports project scope only. See the [destination table](#安装-skill).
-- **MCP:** add the [version-pinned npx configuration](../examples/mcp-npx.json) to your client, or use the [installed executable configuration](../examples/mcp-installed.json) after the global install. [Codex uses TOML](../examples/mcp-codex.toml); other clients have their own configuration locations. Restart/reload the server and confirm six tools plus `ai-modeling://guides/usage`. The default includes GPT Image 2.5 image generation and 3D generation. For asset/editing extensions, append `--toolset studio` to the launch arguments and restart. See [client-specific setup](#mcp-客户端配置).
+- **Skill:** run `ai-modeling skill targets`, install with `ai-modeling skill install --target YOUR_CLIENT`, and check the same target with `skill status`. Reload the client and verify it can read `SKILL.md` and call the CLI. Targets and scopes are listed in the [destination table](#安装-skill); Golutra Agent supports project scope only.
+- **MCP:** add the [version-pinned npx configuration](../examples/mcp-npx.json), or the [installed executable configuration](../examples/mcp-installed.json) after a global install. [Codex uses TOML](../examples/mcp-codex.toml). Reload the server and confirm six tools plus `ai-modeling://guides/usage`. The default includes GPT Image 2.5 and 3D generation; append `--toolset studio` for asset and editing extensions. See [client-specific setup](#mcp-客户端配置).
 - **CLI:** run commands directly as below. Skill and MCP both use this same runtime; installing npm alone does not install a Skill or modify client configuration.
 
 ```sh
@@ -26,13 +26,13 @@ ai-modeling balance
 ai-modeling make "a small toy robot" --model tripo-p2 --dry-run --json
 ```
 
-Account operations use private local JSON files under the OS account's `.ai-modeling-auth` directory. No system keychain, Linux Secret Service or session D-Bus is required for credentials. POSIX directories/files use `0700/0600`; Windows uses protected ACLs for the current user and SYSTEM, checked through system PowerShell. The JSON contains unencrypted credentials and must stay out of repositories, packages and logs. WSL and native Windows use their own OS user homes. Browser login needs an installed Chrome/Edge and a visible desktop. `setup` reuses a valid JSON session and guides login when needed; older keychain entries are not automatically read or migrated. Passwords and verification stay in the browser; do not copy account tokens into MCP configuration. See [storage and upgrades](#本地-json-凭据).
+`setup` reuses a valid session or guides login through an installed Chrome/Edge with a visible desktop. Passwords and verification stay in the browser. CLI and MCP share private JSON credentials for the same OS user and profile, without a system keychain. The files contain unencrypted secrets and require private POSIX permissions or Windows ACLs; do not copy them into repositories, logs or MCP configuration. Older keychain entries are not automatically migrated. See [storage and upgrades](#本地-json-凭据).
 
 For MCP, a missing session returns `AUTH_REQUIRED`, a login URL and `login_id`. The user completes that login; the agent reads `ai-modeling://auth/status` until the same `login_id` reports `authenticated: true`, then continues the original request through MCP with its returned request identity. The resource is a flow snapshot and does not verify current credential access or the remote session; the resumed tool reports its actual authentication result.
 
-If setup returns `CREDENTIAL_STORE_UNAVAILABLE` or `AUTH_DIRECTORY_INVALID`, check the private JSON directory's owner, file permissions and sandbox access. On Windows, ensure system PowerShell is available and the ACL can be verified. Upgrade initialization can tighten legacy ACLs on verified application-owned control directories and login-state files, preserving their contents and cancellation state; credential records and external import files are only checked, never repaired on read. Do not publish the JSON, loosen access for everyone or switch profiles to get past the error. A local storage error does not mean the Studio session expired; retain the original request and any unknown write outcome before retrying.
+For `CREDENTIAL_STORE_UNAVAILABLE` or `AUTH_DIRECTORY_INVALID`, check ownership, private permissions and sandbox access; Windows also needs system PowerShell for ACL verification. A storage error is not evidence of an expired Studio session. Fix access without publishing credentials, loosening permissions or switching profiles, then resume the original request.
 
-The dry run checks local inputs and does not submit or quote a live task. Remove `--dry-run` only when ready to spend Studio web credits, which are separate from the developer API wallet. Use a stable `--request-id` for each new intended submission and retain the returned task identity. `task get TASK_ID` and `task watch TASK_ID --download --out ./assets` inspect or finish that task. `outcome_unknown` requires reconciliation of the original receipt; `needs_attention` requires checking the output mismatch. Neither is a reason to create a paid replacement automatically.
+The dry run checks local inputs and does not submit or quote a live task. Remove `--dry-run` only when ready to spend Studio web credits, which are separate from the developer API wallet. Use a stable `--request-id` for each new intended submission and retain the returned task identity. `task get TASK_ID` and `task watch TASK_ID --download --out ./assets` inspect or finish that task. `outcome_unknown` requires inspecting the original request and any verifiable receipt; a guessed remote ID cannot establish ownership. `needs_attention` requires checking the output mismatch. Neither is a reason to create a paid replacement automatically.
 
 To avoid a global installation, use the complete prefix for every command:
 
@@ -47,15 +47,13 @@ Use the same pinned package when the Skill invokes CLI through npx. To upgrade, 
 
 `setup --check` reports diagnostics without starting login; `setup --offline` also avoids credentials and network. For headless clients, `setup --no-wait --no-open` returns a bounded login status. Query `auth session status` or wait with `auth session wait LOGIN_ID --timeout 30`. A loopback login URL belongs to the machine running the CLI.
 
-Use `pricing status` to inspect price provenance and expiry offline. The maintained [pricing source](https://github.com/seekskyworld/ai-modeling/blob/main/studio/api/reviewed-prices.json) records review dates, prices and official evidence. For an update, use the reviewed commit or release tag and its published SHA-256 as described under [pricing maintenance](#价格快照更新). `pricing verify/import FILE --sha256 SHA256 --network` checks and installs a local snapshot; `pricing update HTTPS_URL --sha256 SHA256` downloads and validates one. These commands do not generate assets. Matching evidence hashes does not replace review of the formulas; expiry is never extended automatically.
+Use `pricing status` to inspect price provenance and expiry offline. For updates, copy the command from a Release's **Reviewed pricing snapshot** section: it supplies an immutable JSON URL, **Source JSON SHA-256** and review/expiry dates. Use that original-file digest, not the runtime TGZ digest or `canonical_sha256`. These commands do not generate assets or extend expiry automatically; see [pricing maintenance](#价格快照更新).
 
-The Release's **Reviewed pricing snapshot** section supplies the immutable JSON URL, **Source JSON SHA-256**, review/expiry dates and a copyable update command. Use that original-file digest, not the runtime TGZ digest or `canonical_sha256` from status/readiness reports. An expired historical snapshot still requires a newer reviewed version.
-
-For optional features, run `doctor --offline --feature render`, `video`, or `frontend-export`. Blender 4.5+, FFmpeg/libx264 and the fixed conversion runtime are required only for their relevant operations. Review [capability status](compatibility.md#能力状态--capability-status) before relying on a particular effect.
+For optional features, run `doctor --offline --feature render`, `video`, or `frontend-export`. Blender 4.5+, FFmpeg/libx264 and the fixed conversion runtime are needed only for those operations. Review [capability status](compatibility.md#能力状态--capability-status); Canvas features marked **Unreleased** require a build containing them and must not be assumed available in the published 0.1.4 package.
 
 ## 安装
 
-需要 Node.js **24+** 和 npm。账号操作使用当前 OS 用户的私有 JSON 文件，支持 macOS/Linux 的 POSIX 权限以及 Windows ACL，不要求系统钥匙串或 Linux Secret Service/D-Bus。Windows 需要系统 PowerShell 执行有界 ACL 检查；WSL 与原生 Windows 各用自身 OS 用户目录。离线工具发现和 Skill 安装管理不需要读取会话。保留 npm 平台可选依赖，不使用 `--omit=optional`。
+需要 Node.js **24+** 和 npm，保留平台可选依赖，不使用 `--omit=optional`。账号操作使用[私有 JSON 凭据](#本地-json-凭据)，无需系统钥匙串或 Linux Secret Service/D-Bus；Windows 需要系统 PowerShell 检查 ACL，WSL 与原生 Windows 使用各自用户目录。离线工具发现和 Skill 安装不需要会话。
 
 自动登录需要已安装 Chrome 或 Edge，并能打开可见窗口。无桌面的 SSH、容器环境不一定具备浏览器；使用已保存 JSON 会话时仍需私有目录权限与网络访问。安装成功不代表所有系统与浏览器组合已完成真实登录验收。
 
@@ -69,9 +67,9 @@ ai-modeling --version
 ai-modeling doctor --offline --json
 ```
 
-0.1.0 预发布版可能在全局安装后缺少原生依赖；使用0.1.4修补版。执行安装后紧接着运行 `ai-modeling --version` 和离线诊断，不能仅凭 npm install 退出码判定程序可用。
+安装后核对版本和离线诊断，确认客户端实际调用的程序可用。
 
-`@seekskyworld/ai-modeling` 是包名，`ai-modeling` 是唯一命令。一个包包含 CLI、MCP 和随包 Skill 指导，不需要分别安装三个运行引擎。发行包随附已审阅的可移植生产依赖，原生包及其平台依赖交由 npm 安装；保留 optional 依赖，不手工拼装其它平台的原生包。CLI 用户直接继续；Skill 用户执行下一节的目标安装；MCP 用户按[客户端配置](#mcp-客户端配置)添加服务。
+一个运行包包含 CLI、MCP 和 Skill 指导；原生及平台依赖由 npm 安装，不手工拼装其它平台的原生包。CLI 用户可直接继续，Skill 用户另做目标安装，MCP 用户按[客户端配置](#mcp-客户端配置)添加服务。
 
 不做全局安装时，每次用 `npx --yes --package @seekskyworld/ai-modeling@0.1.4 ai-modeling` 替换命令前缀。比如 `npx --yes --package @seekskyworld/ai-modeling@0.1.4 ai-modeling skill install --target claude-code`；此时 Skill 的 CLI 调用也沿用同一完整前缀。MCP 可直接使用[npx 配置](../examples/mcp-npx.json)。
 
@@ -124,7 +122,7 @@ ai-modeling skill status --target cursor --scope project --project-dir /path/to/
 
 `agents` 是共享目录选项，不代表所有客户端都会读取它；它与 `codex` 指向相同位置，无需分别安装两份。上述表格记录安装器支持的目录约定，不表示已在每个宿主客户端完成加载实测。客户端自定义配置或其它位置使用 `--dir`，不假定客户端环境变量会改变这些目标路径。
 
-Golutra Agent 的项目目标也使用 `.agents/skills`；本机 0.3.9 的 TUI 按当前工作区扫描 `SKILL.md`，遵守 Git ignore，最多扫描 8 层。该实现没有用户级 Skill 目录；不要把 `~/.golutra-agent/skills` 当作会自动加载的路径。项目发现、TUI 提及与运行时自动注入是不同能力，调用方法见 [Golutra Agent](#golutra-agent)。
+Golutra Agent 的发现方式、调用方法及已知宿主限制见 [Golutra Agent](#golutra-agent)。
 
 自定义位置使用下面的替代命令；`--dir` 与 `--target`、`--scope`、`--project-dir` 互斥：
 
@@ -133,19 +131,17 @@ ai-modeling skill install --dir /path/to/skills
 ai-modeling skill status --dir /path/to/skills
 ```
 
-旧安装不会自动迁移或删除。原先放在 `~/.codex/skills` 或其它自定义位置的内容，仍可通过指向其实际父目录的 `--dir` 查询或管理；不要将旧目录当作新的默认位置。
+既有自定义目录可通过指向实际父目录的 `--dir` 管理，不会自动迁移或删除。
 
 安装后刷新客户端 Skill 列表或重启会话，让 Agent 明确使用 `ai-modeling`；核对其能读取输出目录中的 `SKILL.md` 并运行同版本 CLI。仅 `skill status` 成功不能证明客户端已加载。
 
-安装和状态检查只处理本地 Skill 文件，不需要 Studio 账号，也不修改 MCP 配置。`skill status` 不创建目录，返回目标路径、已安装版本、随包版本和冲突列表；`not_installed` 表示没有安装，`installed` 表示文件与管理记录一致，`unmanaged` 或 `modified` 表示需保留并检查现有内容。新增、修改、缺失文件或不安全的路径都会阻止覆盖，不通过删除用户文件绕过冲突。
-
-再次运行 `skill install` 时，完全相同的内容返回 `current`；本工具管理且未被修改的旧安装可以更新为当前包的指导文件，返回 `updated`。更新运行包不会自动更新已复制的 Skill，应按需要对原目标再运行安装命令。
+`skill status` 不创建目录或读取账号，返回路径、版本和冲突：`not_installed` 为未安装，`installed` 为文件与管理记录一致，`unmanaged` / `modified` 需保留并检查。再次安装时，相同内容返回 `current`，未被修改的受管安装可更新并返回 `updated`；新增、修改、缺失文件或不安全路径都会阻止覆盖。升级运行包后须对原目标重跑 `skill install`，已复制的 Skill 不会自动更新。
 
 需要卸载时，使用 `ai-modeling skill uninstall` 并带回相同的目标、范围与项目目录，或相同的自定义 `--dir`。卸载只处理本工具管理且未被修改的安装；检测到改动或未管理内容时保留文件并返回冲突。它不卸载运行包，也不清除账号、任务或生成素材。
 
 独立的 `ai-modeling-skill-VERSION.zip` 继续支持手动导入：将包含 `SKILL.md` 的 Skill 文件夹及附带参考文件一起导入客户端，并确认 Agent 能调用已安装的 `ai-modeling`。手动复制的内容不会被安装器自动接管。
 
-Skill 提供使用说明、组合示例和流水线指导，不是独立业务引擎，也不包含登录凭据。选择 MCP 时，Agent 使用 MCP 工具，由 MCP 内部调用 CLI，不绕过客户端改跑 shell。只取得 Skill ZIP 时，仍须另行安装上面的运行包。源码入口为 [skills/ai-modeling/SKILL.md](../skills/ai-modeling/SKILL.md)，可用于审阅操作约定。
+Skill 的[源码与约定](../skills/ai-modeling/SKILL.md)可独立审阅；只取得 ZIP 时仍须安装运行包。选择 MCP 的任务保持 `Agent → MCP → CLI`，不自行改为 shell 执行业务。
 
 ### 从源码导出或运行
 
@@ -175,7 +171,7 @@ ai-modeling balance
 
 `login` 先验证已有 JSON 会话，需要时打开独立浏览器窗口。密码、验证码和双重验证由你完成；CLI 验证账号后将会话存入[私有 JSON 文件](#本地-json-凭据)。有效 Cookie 可用于续期，只有 Bearer 的导入会标记 `renewable:false`。`balance` 是联网只读查询，不生成素材。
 
-程序不会自动安装浏览器或读取普通浏览器用户目录。找不到程序时使用 `login --browser-executable /absolute/path/to/chrome-or-edge`。备用入口为 `login --form` 的本机表单、`login --paste` / `auth import --stdin`，或只接受私有普通文件的 `auth import --file PATH`（Unix 权限 0600；Windows 须有仅当前用户 SID 与 SYSTEM 可访问的受保护 ACL，导入不会替外部文件修权限）。凭据不要放入命令行参数、环境文件或 MCP 配置。
+程序不会自动安装浏览器或读取普通浏览器用户目录；找不到程序时指定 `login --browser-executable /absolute/path/to/chrome-or-edge`。备用入口是 `login --form` 本机表单、`login --paste` / `auth import --stdin`，或 `auth import --file PATH`。导入文件须符合[私有 JSON 权限](#本地-json-凭据)，只验证、不代修权限；凭据不放入命令行参数、环境文件或 MCP 配置。
 
 非交互 CLI/MCP 默认返回登录状态；也可主动取得本机入口：
 
@@ -241,6 +237,91 @@ ai-modeling task watch @concept --download --out ./assets --json
 
 批处理入口是 **`ai-modeling batch run MANIFEST`，当前没有批处理 `--dry-run`**。先按[示例](../examples/README.md)用等价的 `make --dry-run` 预览各项。真实批处理会提交网页任务，清单旁的 `.state.json` 保存恢复身份；重跑须保留它。`--fresh` 是新的提交意图，不是未知结果的恢复办法。
 
+### Canvas 功能发现与图编辑
+
+`cli_support`、查询结果导入、`patch_params`、`canvas audit`、`studio artifact-inspect` 及 HolyMolly 聊天和节点停止/重试扩展属于源码 **Unreleased** 能力；既有 npm 0.1.4 包不能据相同源码版本号假定包含它们。先检查所用构建的帮助、schema 和返回字段。节点映射、HolyMolly、容量及未完成项统一见[Canvas 兼容表](compatibility.md#canvaslab-会话与模板)。
+
+先读取本地入口和当前服务能力：
+
+```sh
+ai-modeling tools --toolset studio
+ai-modeling canvas tools
+```
+
+第一条只读本地 schema；第二条使用当前账号查询目录，追加 `cli_support`。按 `graph_edit`、`create_node`、`execution_command` 选择入口，并核对未映射类型及 `max_canvas_nodes`；`execution:mapped` 表示存在执行映射，不代替权限、参数和产物验收。
+
+需要修改画布时，可以直接把 `canvas get` 的完整 JSON 保存为本地文件，再交给 `graph-edit`。路径由调用方选择，下面的 ID、revision、节点与提示词须换成该次读取的实际值：
+
+```sh
+ai-modeling canvas get --canvas-id CANVAS_ID > /absolute/path/to/canvas.json
+ai-modeling canvas graph-edit --graph-path /absolute/path/to/canvas.json \
+  --destination-path /absolute/path/to/edited-canvas.json \
+  --expected-canvas-id CANVAS_ID --expected-project-id PROJECT_ID \
+  --expected-revision SAVED_REVISION \
+  --actions '[{"action":"patch_params","node_id":"NODE_ID","set":{"prompt":"UPDATED_PROMPT"}}]'
+```
+
+导入支持 `GetCanvas` 响应、CLI `result` 包装、SaveCanvas 输入或编辑状态文件，保留原画布、项目和 revision；`expected_*` 只核对文件，不自动拉取新版本。`patch_params.set` 设置顶层键，`unset` 删除键；嵌套对象整体替换，`null` 保留为值。`params` 则替换整个参数对象。
+
+返回的 `save_input` 供独立 `canvas save` 使用；带撤销/重做历史的状态文件不能整体当作保存请求。`remote_saved:false` 表示尚未写入网页。保存后检查业务结果并读回新 revision，再按需要执行 `canvas run-check` / `studio canvas-run`。冲突时重读当前图，不用旧 revision 覆盖远端变化；本地 undo 不是远端撤销。
+
+Lab 说明由服务管理保存。`canvas lab-instructions` 返回原说明及 `validation`，其中状态异常、正在保存、保存失败或正文为空会阻止复用准备；合法说明还须经 `canvas lab-plan --mode reuse_instructions` 核对上游素材和运行状态。网页 Copy/Reuse 不等于存在独立手动 Save 命令。
+
+### Canvas Agent 聊天后的验收
+
+继续已有对话时，先用 `canvas sessions` / `canvas session-get` 读取准确会话。需要新对话才调用 `canvas session-create`：服务会创建新的 ACTIVE 会话，将其设为项目默认会话，并把原会话归档为 ARCHIVED；原消息历史仍可按原 `sessionId` 读取。重新加载项目网页后，右侧 Agent 会显示新的默认会话，旧标签未刷新时可能仍显示旧聊天。
+
+停止 Agent 工作前，先运行 `canvas turn-stop-plan --canvas-id CANVAS_ID --turn-id TURN_ID`。它只读核对准确回合及发现的运行，返回分步工具参数：先取消回合，读回 CANCELLED 后重新准备仍活动的准确 `run-stop`，最后复核状态。发现不完整、身份不明或前后快照变化时不提供写动作；不能把空运行列表或受理回执当作已经停止。当前快照不证明完整历史，也不保证之后没有新运行；未知写入只查原身份，不自动重发。
+
+收到待答卡后，用 `canvas answer-plan` 核对准确回合和卡片。`selection` 传实际选项 ID；普通 `confirmation` 确认时省略 `selectedOptionIds`，修改意见用 `otherText`，跳过用 `action:skip`。按卡型处理，不凭“确认”按钮文字判断；Skip 可能继续收费创作，取消用 `canvas turn-cancel`。已答卡或出现更新卡时，准备返回 `ready:false`，应读取当前卡，不能重复提交旧答案。
+
+HolyMolly 使用 Agent 请求：新消息显式设置 `capabilities:["holy_molly"]`，图片/模型素材通过 `refs` / `attachment_ids` 引用。独立上传必须是当前项目 READY 输入；已有节点产物须使用准确 `node_id` + `asset_id` 并通过唯一性和可用状态检查。修改已有游戏另传准确目标 `nodeId`（提交参数为 `node_id`）。先用只读 `canvas turn-plan` 准备，再在授权可变费用后将返回参数交给 `studio canvas-turn`；不要用普通 `canvas-run` 或把素材连到游戏 `materials` 口。示例仅准备，不提交创作：
+
+```sh
+ai-modeling canvas turn-plan --canvas-id CANVAS_ID --session-id SESSION_ID \
+  --capabilities '["holy_molly"]' --node-id GAME_NODE_ID \
+  --text "Adjust the existing game's controls" --json
+```
+
+新建游戏时省略 `--node-id`。最终提交的正文为空，只允许显式 `holy_molly`、准确已保存的 HolyMolly 目标且没有普通素材附件的请求；单独选择能力不能提交空消息。`turn-plan` 可省略该纯目标引用请求的 `text`，低层 `canvas-turn` 仍需显式传 `text:""`。
+
+网页历史 `retry` 读取准确 FAILED 回合的最后 USER 消息。Holy 消息必须在服务返回的 `cardJson` 中明确包含 `capabilities:["holy_molly"]` 和有效 `targetNodeId`，并且该目标仍是所选画布内的准确 Holy 节点；准备结果保留 `source_target_node_id`，提交参数从该历史字段恢复 `node_id`。缺少目标仍返回 `ready:false`、`parameters:null` 和 `retry_holy_molly_target_unknown`，不据此推定原请求是新建。调用方不能传 `nodeId` 或 `capabilities` 覆盖历史；原附件、失败可重试性和读取快照还须通过核验。CLI 已有任务仍按原输入和请求身份恢复。准确本地终态任务可用 `ai-modeling redo EXACT_LOCAL_JOB_ID --request-id NEW_INTENT --no-wait --no-download --json` 保留原输入重新创作；这是需授权的新费用意图，不是查询原任务。
+
+`turn-plan` 只准备历史重试；实际通过 `studio canvas-turn` 提交时使用新的稳定 `--request-id` 并显式接受可变费用。已有合法 FAILED 正例完成准确 USER 目标恢复、新回合提交及新 run/节点/HTML 交付；原件下载、原附件 SHA-256 一致性和运行依赖加载已核对，网页实测了方向键、收集阈值、暂停/恢复及 Restart 归零。该次运行结算单独确认，不代表原失败或其它生成运行的费用已结算，也不替代原生节点 Retry 的验收。
+
+新游戏已通过真实附件、HTML 下载和画布内试玩验收。指定目标修改会保留原节点并交付新版本节点；已有成功样本核对了请求目标、修改后的颜色和收集阈值。后续修改还通过了 Space 暂停时角色不移动、恢复后可移动，以及暂停中 Restart 恢复零分的实际操作检查。验收先确认原目标，再跟随本轮 `turn`、`run`、新版本节点及准确资产，不要求覆盖旧节点，也不把无关新增节点当结果。完整边界见[兼容表](compatibility.md#canvaslab-会话与模板)。
+
+`studio canvas-node-stop` 和 `studio canvas-node-retry` 是另外两个 Unreleased 节点操作，只作用于已保存的 HolyMolly 节点，均要求准确 `canvas_id`、`node_id`、十进制字符串 `revision` 和 `expected_run_id`。stop 要求原节点/运行仍活跃，不要求新增生成预算，也不将原账单清零；retry 要求原节点/运行已终态且 `retryable:true`，并显式接受 `accept_variable_cost:true`。两者保存本地 job，但提交前检查不是上游原子条件；未知写入不重发，目前也无可验证的未知回执对账绑定，不能按最新运行补认成功。
+
+Stop 的已观察回执是准确原 `runId` 与 `status:"accepted"`，CLI 保存为 `accepted_run`，直接查询原运行，不再将它当作 `turnId`；既有独立 turn 回执继续按自身合同核验。受理不等于停止：实际样本虽记录 `stopRequestedTime` 并出现 `stopping` 事件，终态出现 FAILED；再次实测也有受理后仍 DONE/SUCCEEDED 的结果，两者均保留 `STOP_NOT_CONFIRMED`。只有准确原 nodeRun 的停止/取消状态才可通过；DONE、FAILED 或其他运行的状态均不足以证明。原生节点 Retry 仍未获得符合 `retryable:true` 的线上正例，不能用历史消息重试替代该项验收。
+
+聊天后保留准确画布、会话、回合和目标节点，检查实际产物；`DONE` 或文字总结不代表验收通过。尚在运行或等待输入时，先查询原回合、事件或待答卡，不新建回合替代恢复。先从准确节点资产记录取得 HTML 身份，再执行只读检查：
+
+```sh
+ai-modeling canvas audit --canvas-id CANVAS_ID --session-id SESSION_ID --turn-id TURN_ID \
+  --node-ids '["GAME_NODE_ID"]' \
+  --expect '[{"nodeId":"GAME_NODE_ID","kind":"html","minAssets":1,"assetIds":["HTML_ASSET_ID"]}]'
+```
+
+`expect.kind` 可为 `image`、`model`、`animation` 或 `html`；按实际目标选择。HTML 候选优先按当前 Holy 结果 URL 路径的 `.html/.htm` 后缀识别；URL 路径没有后缀时才用 `filename` 兜底，不检查 URL 查询参数中的扩展名。候选身份不证明字节、依赖或玩法正确。`audit` 读取前后快照并返回 `running`、`waiting_input`、`blocked` 或 `needs_review`；机器就绪仍保留 `requirements_met:null`，资产就绪或期望结果的 `null` 也不能当作通过。`nodes[].run_attribution` 核运行所属回合，`current_selection_association` 核当前选择，`turn_attribution` 还要求可信原件路径中的准确 task/step 身份。切换旧资产可能保留新 run，所以仅选择一致不能通过生成归属。已证范围为生图、HD 基础模型、贴图模型和 Holy HTML 的特定原件路径；其它或复杂运行保持 unknown。`scope.turn_artifact_attribution` 只汇总所选产物，不将整图旧资产计入交付。
+
+Holy 的 `game.preview.entry_url` 是已移除查询参数的诊断线索，不是可直接使用的完整试玩链接，也不是 HTML 原件地址。按准确资产身份下载 HTML 后，仍须独立验证资源依赖、加载、控制和用户要求的玩法；不要送进图片/模型检查器。`game.credits` 来自节点运行：`NODE_CREDITS_STATUS_PENDING` 不等于零费用，终态也不等于已结算；缺失或无效状态保持未知。费用的 `turn_attribution` 独立核准确 run 身份，`attribution_scope:node_run_record` 只覆盖节点运行记录，`ledger_attribution:not_checked` 不表示账号流水已核对。缺少唯一可用的任务身份时，不能按 `holy_molly` 类型、时间或金额猜绑。
+
+图片或模型则根据返回的准确来源使用 `studio asset-download` 取得原件，再用对应检查器：
+
+```sh
+ai-modeling studio artifact-inspect --file-path /absolute/path/to/output/result.png \
+  --expected-sha256 DOWNLOAD_SHA256
+ai-modeling studio artifact-inspect --file-path /absolute/path/to/output/model.glb \
+  --expect '{"kind":"model","min_meshes":1,"max_triangles":10000}'
+```
+
+面数换成用户要求，正式交付时为每个文件传入该文件下载回执的 `sha256`，不能用画布指纹代替。按 `requirements_status` 和 `checks` 判断机器条件；`failed` 仍正常返回检查报告，不能只看退出码或 MCP `isError`。Agent 还须实际看图，或用 `studio snapshot` 检查模型视角和动作时刻，再对照用户目标；未查看的项如实标记未检查。
+
+`canvas review` 会修改 REVIEW 节点，不能代替只读审计。检查失败沿原身份恢复，不自动重新生成。检查范围与文件格式边界见[兼容表](compatibility.md#canvaslab-会话与模板)，完整步骤见[画布交付验收](../skills/ai-modeling/references/pipelines.md#canvas-agent-交付验收)或 `guides read pipelines`。
+
+MCP 使用 Studio 集的 `ai_modeling_canvas_audit`、`ai_modeling_asset_download`、`ai_modeling_artifact_inspect` 和按需的 `ai_modeling_snapshot`，仍经同包 CLI 执行。先读实际 schema；`canvasId` 与 `file_path` 等字段不能从 shell 选项猜测。默认轻量集不包含这些工具。
+
 ## 使用 MCP
 
 先安装运行包，再把导出的 `mcp.json` 合并到支持 `mcpServers` 的客户端。也可使用[安装包配置示例](../examples/mcp-installed.json)：
@@ -272,7 +353,7 @@ Skill 的目标目录与 MCP 配置是两件独立的事；安装 Skill 不注�
 | Codex | [TOML 示例](../examples/mcp-codex.toml)，合并到用户 `config.toml` 或受信任项目的 `.codex/config.toml`，使用 `mcp_servers` 表 | [Codex MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) |
 | Gemini CLI | 使用 `mcpServers`、`command`、`args` 和 `env`；参照[通用 JSON](../examples/mcp-installed.json)的启动字段，按 Gemini 官方配置省略 `type` 字段 | [Gemini CLI MCP](https://geminicli.com/docs/cli/tutorials/mcp-setup/) |
 | OpenCode | [OpenCode JSON](../examples/mcp-opencode.json)，按其配置范围合并 `mcp.servers`；本地服务使用 `type: local`、命令数组和 `environment` | [OpenCode MCP](https://opencode.ai/docs/mcp-servers/) |
-| Golutra Agent | `mcp export` 可生成并注册原生清单；0.3.9 宿主过滤 MCP 工具，当前不能调用，见下文限制 | [Golutra Agent](https://github.com/golutra/golutra-agent) |
+| Golutra Agent | `mcp export` 导出原生清单，另用宿主命令注册；0.3.9 过滤 MCP 工具，见下文限制 | [Golutra Agent](https://github.com/golutra/golutra-agent) |
 | VS Code 旧编辑器管理配置 | [兼容 JSON](../examples/mcp-vscode.json)，用于既有 `.vscode/mcp.json` 或用户配置中的 `servers` 格式；新 Copilot 配置使用通用 `mcpServers` 格式 | [旧 Local 配置说明](https://code.visualstudio.com/docs/agents/reference/mcp-configuration#_editor-managed-configuration-for-local-harness-compatibility) |
 
 VS Code 官方已弃用 Local harness，并计划于 2027 年 2 月移除；旧 `servers` 示例用于维护现有配置，不作为新 Copilot 的推荐入口。起步示例启动 `ai-modeling mcp` 的6工具默认集；需要网页资产与编辑扩展时追加 `--toolset studio`。两者共用同一 CLI 后端。
@@ -289,13 +370,11 @@ VS Code 官方已弃用 Local harness，并计划于 2027 年 2 月移除；旧 
 | `full` | 兼容官方工具框架，受网页能力限制 |
 | `studio` | 网页扩展、本地辅助与登录流程工具 |
 
-`ai-modeling mcp` 默认使用 `default` 工具集，已含 `ai_modeling_image_generate`，其模型、比例、数量、4K、模板和参考图参数与 Studio 集相同；其它网页扩展显式使用 `ai-modeling mcp --toolset studio`。所有工具集提供 `ai-modeling://auth/status`；Studio 集另有 `ai_modeling_auth_begin/status/wait/cancel`，其中 begin 默认不打开窗口，wait 单次为 1–60 秒。
+默认集的 `ai_modeling_image_generate` 与 Studio 集共用模型、比例、数量、4K、模板和参考图参数。所有工具集提供 `ai-modeling://auth/status`；Studio 集另有 `ai_modeling_auth_begin/status/wait/cancel`，begin 默认不打开窗口，wait 单次为 1–60 秒。
 
-默认集首次账号操作也支持登录接续：工具缺会话时返回 `AUTH_REQUIRED`、登录 URL 和 `login_id`，由用户完成浏览器交互。Agent 读取 `ai-modeling://auth/status`，确认返回的是原 `login_id` 且该流程 `authenticated: true`，再携带原 `request_id` 继续尚未提交的操作。资源的 `scope: login_flow`、`credential_store_check: not_checked`、`studio_session_check: not_checked` 表示本次只读流程快照；历史成功、余额或到期时间不证明当前凭据可读或会话可用，ID 不同的流程不能当作本次完成。以接续工具的实际结果为准；需要主动验证时可调用当前工具集的 `ai_modeling_balance`。不换用 shell，不重新提交结果未知的写入；客户端工具调用超时也不能证明任务未执行。
+缺会话时，工具返回 `AUTH_REQUIRED`、登录 URL 和 `login_id`，由用户完成浏览器交互。Agent 读取 `ai-modeling://auth/status`，确认原 `login_id` 的 `authenticated:true`，再携带原 `request_id` 继续尚未提交的操作。该资源只是 `scope:login_flow` 快照，凭据和远端检查仍为 `not_checked`；以接续工具的实际结果为准，主动验证可用 `ai_modeling_balance`。不将其它登录流程、历史余额或客户端超时当作本次成功或未提交的证据，结果未知的写入不重发。
 
-MCP 经同包 CLI 子进程执行业务。它应与 CLI 使用同一 OS 用户、profile 和数据目录；自定义环境须写入客户端的 `env`。MCP 等待 stdio 输入是正常状态，没有网页控制台；不要往 stdout 添加调试日志。
-
-MCP 既提供指导，也提供工具入口。Agent 可先读 `ai-modeling://guides/commands/index`，再按 `ai-modeling://guides/commands/{+command}` 模板读取 `model/convert` 等具体分片；`usage`、`commands`、`pipelines` 仍与 Skill 参考资料及公开命令参考同源。选择 MCP 时保持 `Agent → MCP → CLI` 链路，不为读取指南或执行任务自行改跑 shell CLI。
+MCP 应与 CLI 使用同一 OS 用户、profile 和数据目录，自定义环境放在客户端 `env`。等待 stdio 输入是正常状态；stdout 不写调试日志。Agent 可先读 `ai-modeling://guides/commands/index`，再读取命令分片或同源 `usage` / `pipelines` 指导；选择 MCP 后始终保持 `Agent → MCP → CLI`，不自行改跑 shell。
 
 ### Windows 启动方式
 
@@ -315,11 +394,11 @@ ai-modeling skill status --target golutra-agent --project-dir /absolute/path/to/
 golutra-agent --cwd /absolute/path/to/project
 ```
 
-TUI 输入 `@skill:ai-modeling` 可选择项目内的 Skill。提及本身不会自动注入正文；首次使用时请 Agent 读取 `.agents/skills/ai-modeling/SKILL.md`，再按需读取其参考资料。非交互 `exec` 也须明确要求读取该文件。安装器不提供该客户端的用户范围，不写入 Golutra 桌面的 `.golutra` 目录。
+0.3.9 的 TUI 在工作区扫描 `SKILL.md`，遵守 Git ignore，最多 8 层。输入 `@skill:ai-modeling` 可选择 Skill，但提及不自动注入正文；首次使用或非交互 `exec` 时，须要求 Agent 读取 `.agents/skills/ai-modeling/SKILL.md`。该客户端目标不支持用户范围，也不写入 Golutra 桌面的 `.golutra` 目录。
 
-运行包及其依赖还须位于客户端沙箱可读的位置；已在 macOS 0.3.9 验证项目内安装的 Skill 读取与离线 CLI 调用。工作区外的临时安装路径可能返回 `EPERM`，命令链接存在不等于原文件可读；可将完整运行包安装到所选项目内，或使用宿主已授权的安装位置。真实账号、网络和私有 JSON 凭据目录访问仍须按运行环境另行验收。
+完整运行包与依赖须位于沙箱可读的位置，例如项目内或宿主已授权的安装目录。工作区外路径可能返回 `EPERM`；命令链接存在不保证原文件可读，账号、网络及凭据目录也须能被宿主访问。
 
-**当前 MCP 限制：** 已在原生 0.3.9 验证三包清单 `stage/review/enable` 成功，但其 provider 工具白名单只包含内置工具，MCP 工具不会进入模型可调用列表；`full` 工具模式或审批开关不能修复。下面的导出和注册步骤用于准备接入，不能据此认定 MCP 已可执行。须等待 Golutra Agent 修复工具暴露与调用过滤，并重新验收；尚未确认其它版本已修复。现在可选择上面的 Skill/CLI 路线，选择 MCP 的任务遇到该限制应报告阻塞，不自行改为 shell 执行业务。
+**Golutra Agent 0.3.9 的 MCP 限制：** 宿主工具白名单过滤 MCP 工具，注册成功仍不能让模型调用；切换 `full` 或审批开关无效。以下步骤仅准备接入，须待宿主修复后重新验收，尚未确认其它版本已修复。可选择 Skill/CLI 路线；已选择 MCP 的任务应报告该阻塞，不自行改用 shell。
 
 准备 MCP 清单时，从长期保留的运行包导出到新的目录。下面的环境变量只传递名称，值由启动 Golutra Agent 的进程提供；将示例路径换成自己的绝对路径：
 
@@ -328,7 +407,7 @@ ai-modeling mcp export --target golutra-agent --out /absolute/path/to/new-plugin
   --env AI_MODELING_DATA_DIR --env AI_MODELING_OUTPUT_DIR
 ```
 
-默认 Studio 集的 176 个工具按每包最多 64 个工具拆为三包，目录依次为 `ai_modeling_studio_1`、`ai_modeling_studio_2`、`ai_modeling_studio_3`。每包的 `golutra-agent-plugin.json` 都指向同一个已安装 CLI，保持 `Agent → MCP → CLI`；导出不注册或启用插件。也可用 `--toolset default` 或 `--toolset full` 选择较小的工具集。
+Studio 工具按当前安装版本的能力清单、每包最多 64 个工具分组，目录依次命名为 `ai_modeling_studio_1`、`ai_modeling_studio_2` 等。每包的 `golutra-agent-plugin.json` 都指向同一个已安装 CLI，保持 `Agent → MCP → CLI`；导出不注册或启用插件。也可用 `--toolset default` 或 `--toolset full` 选择较小的工具集。
 
 工具参数 schema 保持完整；若描述超过客户端的 4096 字符限制，清单会明确标注缩短，完整原文保存在导出目录的 `README.md`，摘要返回 `shortened_descriptions` 供审阅。
 
@@ -351,9 +430,9 @@ golutra-agent --cwd /absolute/path/to/project
 
 `--env NAME` 可重复；未使用时清单的 `env` 为空列表。声明的每个变量在运行 Golutra Agent 时都必须存在，不能把未设置的可选变量加入清单。可按需传递 profile、输入根、代理或外部程序路径，不在清单、环境文件或命令参数里放账号 Token。导出记录当前 Node 和同包 CLI 的绝对路径；移动或升级运行包后须重新导出并审阅新 revision。
 
-原生插件进程的当前目录是插件包目录，素材与交付参数应使用绝对路径；工作区写权限不覆盖任意用户目录。账号操作还取决于私有 JSON 凭据及登录协调目录在客户端沙箱中的可用性，工具发现通过不能替代真实账号验收。当前客户端使用 macOS Seatbelt 或 Linux bubblewrap 执行插件，Windows 可以管理清单但尚不能执行这种原生受限 MCP 插件。
+0.3.9 原生插件以插件包为工作目录，素材与交付参数应使用绝对路径；macOS Seatbelt / Linux bubblewrap 权限须覆盖实际文件与凭据目录。Windows 可管理清单，但尚不能执行该版本的原生受限 MCP 插件。
 
-Golutra Agent 当前桥接 MCP 工具，尚不桥接 `ai-modeling://guides/*` 资源；可同时安装上述 Skill 读取指导，业务仍调用 MCP 工具。客户端每次调用重新启动服务，默认工具执行限时约 30 秒；长生成应异步提交，再查询原任务，超时不重新提交付费任务。`.mcp.json` 在该版本仅用于 TUI 提及发现，不代替上述插件注册。停用某包使用 `golutra-agent plugin disable PLUGIN_ID`。
+此版本不桥接 `ai-modeling://guides/*` 资源，可同时安装 Skill 读取指导；业务调用仍受上述 MCP 工具限制。插件每次调用重新启动服务，默认限时约 30 秒；宿主可调用后，长生成应异步提交并查询原任务，不因超时重发。`.mcp.json` 只用于 TUI 提及发现，不能代替插件注册；停用用 `golutra-agent plugin disable PLUGIN_ID`。
 
 ## 重要配置与文件路径
 
@@ -371,17 +450,13 @@ Golutra Agent 当前桥接 MCP 工具，尚不桥接 `ai-modeling://guides/*` �
 
 兼容命令的 profile 优先级为 `--profile` → `AI_MODELING_PROFILE` → 本地 `active_profile` → `default`。先 `ai-modeling login --profile personal`，再 `ai-modeling use personal` 可保存选择；原始 `auth`、`call` 入口和 MCP 使用环境或本地默认值，不假定它们接受兼容层的 `--profile`。
 
-凭据与任务目录分离。OS 用户主目录下的 `.ai-modeling-auth` 保存私有 JSON 凭据、登录协调状态和锁，按同一用户/profile 共享；改变 `AI_MODELING_DATA_DIR` 不隔离同 profile 的凭据或登录流程，改变 profile 也不自动新建任务库。
-
 ### 本地 JSON 凭据
 
-认证根通过 OS 用户信息确定，固定在该用户主目录的 `.ai-modeling-auth`，不受 `HOME`、`TMPDIR`、工作目录或 `AI_MODELING_DATA_DIR` 改变影响，也没有公开环境变量重定位入口。每条凭据位于 `credentials/<service-sha256>/<account-sha256>.json`，使用 `schema_version: 1` JSON envelope；会话按 profile 共享，上传引用、私有产物链接和可选 LLM 密钥也使用独立 JSON 条目。目录名使用摘要不代表文件内容已加密。
+凭据与任务目录分离：认证根固定在 OS 用户主目录的 `.ai-modeling-auth`，不随 `HOME`、`TMPDIR`、工作目录或 `AI_MODELING_DATA_DIR` 改变，也没有公开重定位变量。同一用户/profile 的 CLI 与 MCP 共用会话；改变 profile 不自动新建任务库。会话、上传引用、私有产物链接和可选 LLM 密钥分别存为 JSON 条目，内容未额外加密。
 
-macOS/Linux 要求私有目录 `0700`、文件 `0600`，并核对所有者与文件身份。Windows 使用受保护 DACL，仅允许当前用户 SID 与 SYSTEM；读取前检查所有者、reparse point 和访问规则，不能以 chmod 代替 ACL。升级初始化可在验证归属与文件身份后，收紧应用自有控制目录和登录状态的旧 ACL，保留原状态、nonce 和撤销信息；权限已正确则不重写。凭据 JSON 条目及外部导入文件只验证、不自动修复 ACL。权限无法确认时明确失败，不自动放宽权限。JSON 中包含会话 Token 等秘密，不提交到 Git、放入发布包、粘贴到聊天或写入诊断日志。
+macOS/Linux 要求目录 `0700`、文件 `0600`；Windows 要求受保护 DACL，仅允许当前用户 SID 与 SYSTEM，并验证所有者、文件身份及 reparse point，不能以 chmod 代替 ACL。升级时可在验证归属后收紧应用自有控制目录和登录状态的旧 ACL，保留原状态与撤销信息；凭据条目和外部导入文件只检查、不代修权限。无法确认权限时失败，不自动放宽；JSON 不进入 Git、发布包、聊天或日志。
 
-正常登录会验证会话，再经同 profile 锁和 compare-and-save 原子保存；CLI 与 MCP 可复用同一条目。并发登录、取消、退出和刷新仍保留账号绑定与撤销检查。`ai-modeling://auth/status` 流程资源只读流程快照，不会因为 JSON 存储而成为实时账号验证。
-
-从 0.1.2 或更早版本升级时，不自动读取、迁移或删除旧钥匙串。若没有 JSON 会话，运行 `setup` 或 `login` 正常登录；先前配置的可选 LLM 密钥也需通过相应配置入口重新设置。Windows 的业务数据默认位置也已调整；已有旧目录时可显式设置 `AI_MODELING_DATA_DIR` 指向原业务目录，以保留任务和设置，认证根仍按上述规则共享。旧任务继续绑定原账号和请求身份，不清理任务库或换 profile 强行恢复。`logout` 只清除当前 profile 的会话并撤销登录流程，不自动清除上传引用、产物链接、独立 LLM 密钥或其它 profile；不要为退出而删除整个认证目录。
+从 0.1.2 或更早版本升级时，不自动读取、迁移或删除旧钥匙串；运行 `setup` / `login` 建立 JSON 会话，可选 LLM 密钥通过对应入口重新设置。需保留旧 Windows 业务目录时，显式设置 `AI_MODELING_DATA_DIR`，不清理任务库或换 profile 强行恢复旧任务。`logout` 只清除当前 profile 的会话并撤销登录流程，不清除其它 profile、上传引用、产物链接或独立 LLM 密钥；不要删除整个认证目录代替退出。
 
 ```sh
 ai-modeling config set default_output_dir /absolute/path/to/assets
@@ -406,10 +481,11 @@ node --env-file=.env dist/cli/main.js mcp --toolset studio
 
 提交前检查有效报价；普通任务价格未知或过期时停止。`--max-credits` 是逐步估算门槛，不是整条链或服务端扣费硬上限。Canvas/Lab 可变费用需要显式接受；分割、复制、贴图、UV、导出等组合步骤可能分别收费，账单未匹配不代表免费。
 
-当前价格的维护源是 [`studio/api/reviewed-prices.json`](https://github.com/seekskyworld/ai-modeling/blob/main/studio/api/reviewed-prices.json)，更新方法见[价格快照更新](#价格快照更新)。普通价格过期时应更新经过审核的快照，不修改日期绕过校验。
+价格未知或过期时，按[价格快照更新](#价格快照更新)取得经过审核的版本，不修改日期绕过校验。
 
 - 同一意图重用原 `--request-id`；改变参数会触发 `IDEMPOTENCY_CONFLICT`。自动来源首次绑定后，不随新历史漂移。
 - `outcome_unknown` 表示回执不明；查询并核对原任务，不创建替代请求。重新登录不会重放已经发送的写操作。
+- Canvas Agent、续答、Lab 和 Holy 节点 stop/retry 的未知回执不接受手填 Turn/Lab ID 对账，返回 `RECONCILE_UNVERIFIABLE`。远端 ID 存在或属于同一画布不足以证明该请求产生了它；保留原 `request_id`、本地 job 和上下文，不猜绑或重新提交。
 - `task watch` 失败或超时会退出 6，超时不取消远端任务。下载失败保留原付费任务，恢复查询或下载即可。
 - `needs_attention` 表示来源、产物或交付证明尚不满足要求；远端成功不能代替正确文件，不通过改阈值或删除证明强行交付。
 - 可信缓存恢复只接受已登记且身份、摘要匹配的原件；文件损坏、被替换或来源不符时拒绝。多目录交付不允许覆盖无关文件。
@@ -420,7 +496,7 @@ ai-modeling task watch TASK_ID --json
 ai-modeling task get TASK_ID --download --out /absolute/path/to/new-output --json
 ```
 
-将 `TASK_ID` 换成原任务身份。CLI/MCP 应一起升级；旧程序可能拒绝新任务库，降级使用对应版本的备份，不修改数据库版本号。
+将 `TASK_ID` 换成原任务身份。CLI/MCP 应一起升级；当前源码已修复并发首次启动时的任务库初始化和升级竞争。旧程序可能拒绝新任务库，降级使用对应版本的备份，不修改数据库版本号，也不通过删库重发结果未知的任务。
 
 ## 可选本地程序与网页引擎
 
@@ -453,9 +529,11 @@ ai-modeling pricing update \
 ai-modeling pricing status
 ```
 
-也可以下载已审阅 JSON，再执行 `pricing verify FILE --sha256 SHA256 --network` 与 `pricing import FILE --sha256 SHA256 --network`。文件摘要须与维护者发布的值核对，不能把刚下载文件的自行计算值当成独立信任依据。远程更新仅接受直接 HTTPS、不跟随重定向，并核验官方证据摘要；本地导入采用原子写入，不登录账号或生成素材。历史 Release 保留原审核和到期时间；过期快照仍会被拒绝，应取得更新的审阅版本，不能只修改期限。MCP 用户保持原工具入口，由运行环境维护者完成需要的价格更新，不改用 shell 执行业务。
+也可下载已审阅 JSON，再执行 `pricing verify FILE --sha256 SHA256 --network` 与 `pricing import FILE --sha256 SHA256 --network`。摘要须核对维护者发布值，不能用刚下载文件的自行计算值作为独立信任依据。远程更新仅接受直接 HTTPS、不跟随重定向，并核验证据；本地导入原子写入，不登录或生成素材。文件摘要匹配不代替公式审核；过期、未来日期、摘要不符或证据不可读取时保留错误，不修改期限解锁。
 
-`sha256` 是原文件字节摘要，`canonical_sha256` 是规范化内容摘要，两者不能混用。证据字节匹配不代替公式审核；过期、未来日期、摘要不符或证据不可读取时保留错误，不能自行只改日期来解锁提交。已有任务的查询和恢复沿用原任务，不因此重新生成。
+截至 2026-11-24 的复查，当前包内快照和最新 Release 引用均已到期，未配置更新快照的定价操作可能返回 `PRICE_UNKNOWN`；重复下载同一发布文件不能解决。维护者须先重新核对公式和证据，再提供新的有效快照。只审阅部分操作的快照只可用于对应范围，不能把缺失价格当成零或完整通用价表。
+
+MCP 用户保持工具入口，由运行环境维护者更新价格；已有任务仍沿原身份查询和恢复，不重新生成。
 
 ## 常见问题
 
@@ -465,10 +543,9 @@ ai-modeling pricing status
 | --- | --- |
 | MCP 找不到命令、缺少依赖或 `dist` | 先确认配置选择 npm/npx、全局命令还是源码入口；检查 Node 24+、版本与客户端 PATH。归档安装要保留运行目录及依赖；源码入口必须先构建。`command` 只放可执行文件，参数放 `args`。 |
 | Skill 已导入但无法执行 | Skill 只提供操作说明；另装运行包，确认客户端允许调用 `ai-modeling`，并按原 profile 完成登录。 |
-| `CREDENTIAL_STORE_UNAVAILABLE` / `AUTH_DIRECTORY_INVALID` | 检查 OS 用户认证目录与 JSON 条目的所有者、私有权限、文件类型和沙箱访问；Windows 另核系统 PowerShell 与 ACL。不要上传文件内容、放宽为所有人可读或换 profile 绕过。存储错误不等于网页登录失效；修复权限后沿原请求恢复，写结果未知时先核对。 |
+| `CREDENTIAL_STORE_UNAVAILABLE` / `AUTH_DIRECTORY_INVALID` / `LOGIN_STATE_INVALID` | 检查[私有 JSON](#本地-json-凭据)的所有者、权限、文件类型和沙箱访问，Windows 另核 PowerShell/ACL。保留其它活跃状态，不公开文件、放宽权限或换 profile 绕过；修复后沿原请求恢复，未知写入先核对。 |
 | `BROWSER_NOT_FOUND` / `BROWSER_LOGIN_FAILED` | 核对 Chrome/Edge 绝对路径、可执行权限、可见桌面和浏览器自身网络；可使用上文备用导入。 |
 | `AUTH_REQUIRED` / `LOGIN_BROKER_UNAVAILABLE` | 在原 profile 完成或重新开始登录，再继续原业务请求；`ACCOUNT_MISMATCH` 要先恢复正确账号。 |
-| `AUTH_DIRECTORY_INVALID` / `LOGIN_STATE_INVALID` | 核对 `.ai-modeling-auth` 的所有者、私有权限与文件身份，不通过删其它活跃状态绕开检查。 |
 | `NETWORK_ERROR` / `UPSTREAM_ERROR` / HTTP 403 | 检查代理、权限与服务；保留 `certainty` 和原回执，未知写入不重发，403 不等同于会话过期。 |
 | `PRICE_UNKNOWN` / `ESTIMATE_EXCEEDS_BUDGET` / 额度不足 | 核对完整步骤、有效报价和 Studio 网页积分；未知不是免费，预算调整需明确选择。 |
 | `OUTPUT_EXISTS` / 路径拒绝 | 使用新的空目标或已登记原位置，核对输入白名单、输出根和绝对路径，不覆盖陌生文件。 |

@@ -133,3 +133,87 @@ test('paste into another canvas remaps IDs and drops inbound links outside the c
   assert.ok(!pasted.graph.nodes.some((n) => n.id === original.second));
   assert.equal(pasted.graph.nodes[2]!.params!.prompt, 'robot');
 });
+
+function holySource() {
+  const { state } = source();
+  state.graph = canvasSaveSchema.parse({
+    ...state.graph,
+    nodes: [
+      { id: 'holy1', type: 'NODE_TYPE_HOLY_MOLLY', params: {} },
+      { id: 'holy2', type: 'NODE_TYPE_HOLY_MOLLY', params: {} },
+    ],
+    edges: [
+      {
+        id: 'materials',
+        source: { nodeId: 'holy1', port: 'html' },
+        target: { nodeId: 'holy2', port: 'materials' },
+      },
+    ],
+  });
+  return state;
+}
+
+test('duplicate and cross-canvas paste reject new unverified HolyMolly materials links atomically', () => {
+  const original = holySource(),
+    before = structuredClone(original);
+  assert.throws(
+    () =>
+      editCanvas(original, [
+        {
+          action: 'duplicate',
+          node_ids: ['holy1', 'holy2'],
+          offset: { x: 80, y: 80 },
+          keep_inbound: true,
+        },
+      ]),
+    /Copied HolyMolly connections are unsupported/,
+  );
+  assert.deepEqual(original, before);
+  const target = source().state,
+    targetBefore = structuredClone(target);
+  assert.throws(
+    () =>
+      editCanvas(target, [
+        {
+          action: 'paste',
+          source_graph: original.graph,
+          node_ids: ['holy1', 'holy2'],
+          offset: { x: 80, y: 80 },
+        },
+      ]),
+    /Copied HolyMolly connections are unsupported/,
+  );
+  assert.deepEqual(target, targetBefore);
+  const renamed = editCanvas(original, [
+    { action: 'rename', node_id: 'holy1', name: 'Keep saved link' },
+  ]).state;
+  assert.deepEqual(renamed.graph.edges, original.graph.edges);
+  assert.deepEqual(editCanvas(renamed, [{ action: 'undo' }]).state.graph, original.graph);
+});
+
+test('copying verified HolyMolly HTML links preserves their topology and Lab context handling', () => {
+  const original = holySource();
+  original.graph.edges[0]!.target.port = 'html';
+  original.graph.nodes.push({ id: 'lab', type: 'NODE_TYPE_AI_3D_LAB', params: { sessionId: 'old' } });
+  original.graph.edges.push({
+    id: 'to-lab',
+    source: { nodeId: 'holy1', port: 'html' },
+    target: { nodeId: 'lab', port: 'input' },
+  });
+  const copied = editCanvas(original, [
+    {
+      action: 'duplicate',
+      node_ids: ['holy1', 'holy2', 'lab'],
+      offset: { x: 80, y: 80 },
+      keep_inbound: true,
+    },
+  ]).state;
+  assert.equal(copied.graph.nodes.length, 6);
+  assert.equal(copied.graph.edges.length, 4);
+  assert.equal(copied.graph.edges.filter((edge) => edge.target.port === 'html').length, 2);
+  assert.equal(copied.graph.edges.filter((edge) => edge.target.port === 'input').length, 2);
+  assert.deepEqual(
+    copied.graph.nodes.find((node) => node.type === 'NODE_TYPE_AI_3D_LAB' && node.id !== 'lab')!.params,
+    {},
+  );
+});

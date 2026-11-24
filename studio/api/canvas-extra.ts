@@ -8,6 +8,7 @@ import { textureReferenceSchema } from './canvas-texture-reference.ts';
 import { extractionPlanSchema } from './canvas-extraction-plan.ts';
 import { answerPlanSchema } from './canvas-answer-plan.ts';
 import { turnPlanSchema } from './canvas-turn-plan.ts';
+import { turnStopPlanSchema } from './canvas-turn-stop-plan.ts';
 const empty = z.object({}).strict();
 const node = empty.extend({ nodeId: id });
 const session = empty.extend({ sessionId: id });
@@ -34,6 +35,13 @@ export const extraCanvasResources: CanvasSpec[] = [
     'GetSession',
     turnPlanSchema,
     'Prepare a new Canvas composer message or an exact failed-user-message retry. Preserves attachment markers/order, verifies saved node assets and READY inputs, applies proven saved-copy bindings and checks Unicode/new-composer limits. Does not upload, save, submit or accept variable billing.',
+  ),
+  spec(
+    'turn_stop_plan',
+    'Turn',
+    'GetTurnDetail',
+    turnStopPlanSchema,
+    'Prepare the webpage Agent stop sequence for an exact Canvas turn. Read-only: cancel an active turn first, then re-read after CANCELLED before stopping its proven active runs. Reports incomplete discovery and snapshot changes; never treats an empty run list or an accepted stop request as completed cancellation.',
   ),
   spec(
     'answer_plan',
@@ -123,7 +131,13 @@ export const extraCanvasResources: CanvasSpec[] = [
     empty.extend({ templateId: id, assetId: id }),
     'Read a model asset embedded in a Canvas template. Image assets may be unavailable through this endpoint.',
   ),
-  spec('tools', 'Tool', 'ListTools', empty, 'Read the live creative tools available to the Canvas agent.'),
+  spec(
+    'tools',
+    'Tool',
+    'ListTools',
+    empty,
+    'Read live Canvas tools, parameters, ports and capacity, with CLI graph/execution mappings and explicit unmapped or retired nodes. Mapping is not a live execution or output-quality guarantee.',
+  ),
   spec(
     'input_assets',
     'Asset',
@@ -143,7 +157,7 @@ export const extraCanvasResources: CanvasSpec[] = [
     'Session',
     'CreateSession',
     empty.extend({ canvasId: id }),
-    'Create a creative planning session.',
+    'Create a new ACTIVE creative session as the project default, archiving the previous session while preserving its history. Reload the project webpage to display it.',
     false,
   ),
   spec('session_get', 'Session', 'GetSession', session, 'Read a creative planning session.'),
@@ -191,7 +205,14 @@ export const extraCanvasResources: CanvasSpec[] = [
     'List creative agent turns.',
   ),
   spec('turn_get', 'Turn', 'GetTurnDetail', turn, 'Read the creative agent result or required user choice.'),
-  spec('turn_cancel', 'Turn', 'CancelTurn', turn, 'Cancel an explicitly selected creative turn.', false),
+  spec(
+    'turn_cancel',
+    'Turn',
+    'CancelTurn',
+    turn,
+    'Request cancellation of an explicitly selected creative turn. This command sends CancelTurn only; use turn-stop-plan before and after cancellation to identify any still-active owned runs and verify exact final states before sending StopRun.',
+    false,
+  ),
   spec(
     'lab_inputs',
     'Lab',
@@ -226,6 +247,6 @@ export const extraCanvasResources: CanvasSpec[] = [
     'Lab',
     'GetLabTaskInstructions',
     node,
-    'Read the saved creative instructions attached to a Lab node.',
+    'Read server-managed Lab instructions with save-state validation and Copy/Reuse guidance. Does not save or execute instructions.',
   ),
 ];

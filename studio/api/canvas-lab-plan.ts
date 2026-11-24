@@ -7,6 +7,7 @@ import { canvasAgentSchemas } from '../contracts/canvas-agent.ts';
 import { StudioClient } from './client.ts';
 import { CanvasClient, bindCanvasAccount } from './canvas-client.ts';
 import { hydrateLabUpstream, labNodeRun, selectLabUpstream, type LabInput } from './canvas-lab-inputs.ts';
+import { parseLabTaskInstructions, type LabTaskInstructions } from './canvas-lab-instructions.ts';
 
 export const labPlanSchema = z
   .object({
@@ -111,14 +112,6 @@ function uniqueInputs(inputs: LabInput[]) {
   const seen = new Set<string>();
   return inputs.filter((asset) => !seen.has(asset.asset_id) && (seen.add(asset.asset_id), true));
 }
-function savedInstructions(value: Record<string, unknown>, nodeId: string) {
-  const state = object(value.taskInstructions),
-    saved = object(state.saved);
-  if (saved.nodeId && saved.nodeId !== nodeId)
-    throw new TripoError('CONTRACT_CHANGED', 'Saved Lab instructions belong to another node.');
-  return { state, saved };
-}
-
 type PlanInput = z.infer<typeof labPlanSchema>;
 interface Plan {
   prompt: string;
@@ -126,7 +119,7 @@ interface Plan {
   source: Record<string, unknown>;
   reasons: string[];
   current?: Awaited<ReturnType<typeof upstream>>;
-  instructions?: ReturnType<typeof savedInstructions>;
+  instructions?: LabTaskInstructions;
 }
 
 async function history(client: CanvasClient, input: PlanInput) {
@@ -149,18 +142,13 @@ async function instructionPlan(
   scope: ReturnType<typeof context>,
   accountRef: string,
 ): Promise<Plan> {
-  const reasons: string[] = [];
-  const instructions = savedInstructions(
+  const instructions = parseLabTaskInstructions(
     await call(client, 'Lab', 'GetLabTaskInstructions', { nodeId: input.nodeId }),
     input.nodeId,
   );
-  const { state, saved } = instructions,
-    prompt = text(saved.instructions).trim();
-  if (!prompt) reasons.push('saved_instructions_empty');
-  if (!saved.nodeId || !/^\d+$/.test(text(saved.version)))
-    reasons.push('saved_instructions_identity_missing');
-  if (state.saving === true || text(state.saveStatus).endsWith('SAVING')) reasons.push('instructions_saving');
-  if (text(state.saveStatus).endsWith('FAILED')) reasons.push('instructions_save_failed');
+  const { saved } = instructions,
+    prompt = saved?.instructions?.trim() ?? '',
+    reasons = [...instructions.reuseBlockers];
   const current = await upstream(client, graph, scope),
     inputs = uniqueInputs(current.inputs);
   if (current.missing.length) reasons.push('upstream_input_unavailable');
@@ -170,7 +158,8 @@ async function instructionPlan(
     .update(JSON.stringify([accountRef, input.canvasId, input.nodeId, inputIdentity(current.inputs)]))
     .digest('hex');
   const source = {
-    instructions_version: saved.version ?? null,
+    instructions_version: saved?.version ?? null,
+    instructions_validation: { valid: instructions.valid, issues: instructions.issues },
     input_binding: binding,
     upstream_changed: input.previousInputBinding ? binding !== input.previousInputBinding : null,
     input_change_observation: input.previousInputBinding ? 'caller_baseline' : 'no_local_baseline',
@@ -230,7 +219,7 @@ async function verifySnapshot(
       throw new TripoError('CANVAS_CHANGED', 'Selected Lab input assets changed while preparing the plan.');
   }
   if (plan.instructions) {
-    const reread = savedInstructions(
+    const reread = parseLabTaskInstructions(
       await call(client, 'Lab', 'GetLabTaskInstructions', { nodeId: input.nodeId }),
       input.nodeId,
     );

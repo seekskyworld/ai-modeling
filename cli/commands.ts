@@ -260,7 +260,9 @@ function nativeOperationTool(operation: Operation, context: ReturnType<typeof to
     name: names[operation] ?? `ai_modeling_${operation}`,
     description: `${operationDescriptions[operation]}. Uses your Studio account and a stable request_id. Reuse returns the original job; changed input conflicts; outcome_unknown must never be blindly retried.`,
     schema:
-      variableCanvasOperations.has(operation) || operation === 'refine_submit'
+      variableCanvasOperations.has(operation) ||
+      operation === 'canvas_node_stop' ||
+      operation === 'refine_submit'
         ? z.object({ request_id: id, parameters: operationSchemas[operation] }).strict()
         : submissionSchema.extend({ parameters: operationSchemas[operation] }),
     readOnly: false,

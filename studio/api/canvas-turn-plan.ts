@@ -7,7 +7,12 @@ import { verifyTurnAttachments, type TurnGraph } from './canvas-turn-assets.ts';
 import { array, object, text, sanitize, TripoError } from '../contracts/errors.ts';
 import { canvasAgentSchemas } from '../contracts/canvas-agent.ts';
 import { canvasStateFingerprint } from './canvas-state.ts';
-import { historicalAttachments, historicalFailure } from './canvas-turn-history.ts';
+import {
+  historicalAttachments,
+  historicalCapabilities,
+  historicalFailure,
+  historicalHolyMollyTarget,
+} from './canvas-turn-history.ts';
 import {
   composeCanvasTurn,
   turnPlanSchema,
@@ -33,6 +38,8 @@ function graphContext(value: Record<string, unknown>, input: TurnPlanInput): Tur
   const nodes = value.nodes.map(object);
   if (nodes.some((node) => !text(node.id)) || new Set(nodes.map((node) => node.id)).size !== nodes.length)
     changed('Turn Canvas node identities are missing or duplicated.');
+  if (input.nodeId && !nodes.some((node) => node.id === input.nodeId))
+    throw new TripoError('CANVAS_CHANGED', 'The explicit message target is missing from the saved Canvas.');
   if (input.expectedRevision && canvas.revision !== input.expectedRevision)
     throw new TripoError(
       'CANVAS_CHANGED',
@@ -83,6 +90,10 @@ function retryContext(value: Record<string, unknown>, input: TurnPlanInput) {
   if (failure?.protocol === 'classified' && failure.retryable === false)
     reasons.push('source_failure_not_retryable');
   if (!text(message.content).trim()) reasons.push('historical_content_empty');
+  const capabilities = historicalCapabilities(message),
+    nodeId = historicalHolyMollyTarget(message);
+  // 缺失持久目标不能证明原请求是新建，不可把定向修改退化成无目标创作。
+  if (capabilities?.includes('holy_molly') && !nodeId) reasons.push('retry_holy_molly_target_unknown');
   return {
     turn,
     message,
@@ -91,6 +102,8 @@ function retryContext(value: Record<string, unknown>, input: TurnPlanInput) {
     reasons,
     text: text(message.content),
     attachments: historicalAttachments(message),
+    capabilities,
+    nodeId,
   };
 }
 async function readState(client: CanvasClient, input: TurnPlanInput) {
@@ -110,6 +123,14 @@ async function readState(client: CanvasClient, input: TurnPlanInput) {
     input.action === 'retry'
       ? retryContext(await call(client, 'Turn', 'GetTurnDetail', { turnId: input.sourceTurnId }), input)
       : undefined;
+  if (source?.nodeId) {
+    const target = graph.nodes.find((node) => node.id === source.nodeId);
+    if (!target || target.type !== 'NODE_TYPE_HOLY_MOLLY')
+      throw new TripoError(
+        'CANVAS_CHANGED',
+        'The historical HolyMolly target is missing or has another type in the saved Canvas.',
+      );
+  }
   return { session, graph, active, source };
 }
 async function savedRebindings(studio: StudioClient, input: TurnPlanInput, graph: TurnGraph) {
@@ -155,8 +176,13 @@ function reasonsFor(state: Awaited<ReturnType<typeof readState>>) {
     reasons.push('another_turn_is_running');
   return reasons;
 }
-function fingerprint(state: Awaited<ReturnType<typeof readState>>, attachments: TurnAttachment[]) {
+function fingerprint(
+  state: Awaited<ReturnType<typeof readState>>,
+  attachments: TurnAttachment[],
+  nodeId?: string,
+) {
   const ids = new Set(attachments.map((attachment) => attachment.nodeId).filter(Boolean));
+  if (nodeId) ids.add(nodeId);
   return canvasStateFingerprint({
     session: state.session,
     active: state.active,
@@ -164,6 +190,33 @@ function fingerprint(state: Awaited<ReturnType<typeof readState>>, attachments: 
     canvas: state.graph.canvas,
     nodes: state.graph.nodes.filter((node) => ids.has(text(node.id))),
   });
+}
+function sourceSummary(source: Awaited<ReturnType<typeof readState>>['source'], input: TurnPlanInput) {
+  if (!source) return {};
+  return {
+    source_turn_id: input.sourceTurnId,
+    source_message_id: input.sourceMessageId,
+    ...(source.capabilities !== undefined ? { source_capabilities: source.capabilities } : {}),
+    ...(source.nodeId ? { source_target_node_id: source.nodeId } : {}),
+  };
+}
+function messageReasons(
+  state: Awaited<ReturnType<typeof readState>>,
+  input: TurnPlanInput,
+  composed: ReturnType<typeof composeCanvasTurn>,
+) {
+  // 网页只允许明确引用已有 Holy 节点时省略正文；单选插件能力不能提交空消息。
+  if (
+    composed.text ||
+    input.action !== 'new' ||
+    !input.nodeId ||
+    !input.capabilities?.includes('holy_molly') ||
+    composed.attachments.length
+  )
+    return composed.reasons;
+  if (state.graph.nodes.find((node) => node.id === input.nodeId)?.type !== 'NODE_TYPE_HOLY_MOLLY')
+    return [...composed.reasons, 'empty_message_target_not_holy_molly'];
+  return composed.reasons.filter((reason) => reason !== 'empty_message');
 }
 export async function resolveCanvasTurnPlan(studio: StudioClient, requested: unknown): Promise<unknown> {
   const input = turnPlanSchema.parse(requested);
@@ -173,10 +226,12 @@ export async function resolveCanvasTurnPlan(studio: StudioClient, requested: unk
     initial = await readState(client, input),
     content = initial.source?.text ?? input.text ?? '',
     attachments = initial.source?.attachments ?? input.attachments ?? [],
+    capabilities = initial.source ? initial.source.capabilities : input.capabilities,
+    nodeId = initial.source ? initial.source.nodeId : input.nodeId,
     composed = composeCanvasTurn(content, attachments, input.action),
     mappings = await savedRebindings(studio, input, initial.graph),
     selected = applyRebindings(composed.attachments, mappings.mappings),
-    reasons = [...reasonsFor(initial), ...composed.reasons];
+    reasons = [...reasonsFor(initial), ...messageReasons(initial, input, composed)];
   if (mappings.unresolved.length) reasons.push('copied_assets_unresolved');
   // 仅携带本次选中且已经唯一读回的旧→新关系；正文快照仍保留网页保存前的标记。
   const attachmentRebindings = mappings.mappings.filter((mapping) =>
@@ -188,6 +243,8 @@ export async function resolveCanvasTurnPlan(studio: StudioClient, requested: unk
     session_id: input.sessionId,
     text: composed.text,
     mode: input.agentMode,
+    ...(capabilities !== undefined ? { capabilities } : {}),
+    ...(nodeId ? { node_id: nodeId } : {}),
     attachment_ids: selected.map((attachment) => attachment.assetId),
     refs: turnReferences(selected),
     ...(attachmentRebindings.length ? { attachment_rebindings: attachmentRebindings } : {}),
@@ -197,20 +254,20 @@ export async function resolveCanvasTurnPlan(studio: StudioClient, requested: unk
   const bindings = mappings.unresolved.length
       ? 'unresolved'
       : await verifyTurnAttachments(client, initial.graph, selected),
-    identity = fingerprint(initial, selected),
+    identity = fingerprint(initial, selected, nodeId),
     latest = await readState(client, input),
     latestMappings = await savedRebindings(studio, input, latest.graph),
     latestBindings = latestMappings.unresolved.length
       ? 'unresolved'
       : await verifyTurnAttachments(client, latest.graph, selected);
   if (
-    identity !== fingerprint(latest, selected) ||
+    identity !== fingerprint(latest, selected, nodeId) ||
     bindings !== latestBindings ||
     JSON.stringify(mappings) !== JSON.stringify(latestMappings)
   )
     throw new TripoError(
       'CANVAS_CHANGED',
-      'The session, historical message, Canvas or selected attachments changed while preparing the turn.',
+      'The session, historical message, Canvas, target node or selected attachments changed while preparing the turn.',
     );
   studio.credentials.load();
   return sanitize({
@@ -218,9 +275,7 @@ export async function resolveCanvasTurnPlan(studio: StudioClient, requested: unk
     session_id: input.sessionId,
     action: input.action,
     source_revision: initial.graph.canvas.revision,
-    ...(initial.source
-      ? { source_turn_id: input.sourceTurnId, source_message_id: input.sourceMessageId }
-      : {}),
+    ...sourceSummary(initial.source, input),
     ready: reasons.length === 0,
     reasons: [...new Set(reasons)],
     parameters: reasons.length ? null : params,

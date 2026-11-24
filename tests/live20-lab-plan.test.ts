@@ -5,7 +5,7 @@ import { Command } from 'commander';
 import { resourceOptions, resourceInput } from '../cli/compat/resource-options.ts';
 import { MemoryCredentials } from '../studio/auth/credentials.ts';
 import { StudioClient } from '../studio/api/client.ts';
-import { object } from '../studio/contracts/errors.ts';
+import { array, object } from '../studio/contracts/errors.ts';
 import { callCanvas, canvasResources } from '../studio/api/canvas.ts';
 import { resolveLabInputs } from '../studio/api/canvas-lab-inputs.ts';
 import { labPlanSchema, resolveCanvasLabPlan } from '../studio/api/canvas-lab-plan.ts';
@@ -64,6 +64,7 @@ function fixture(
           saved: { nodeId: 'lab', version: '3', instructions: 'Inspect every attached view.' },
         },
       },
+      BatchGetInputAssets: { assets: [{ assetId: 'uploaded', status: 'INPUT_ASSET_STATUS_READY' }] },
       ListNodesAssets: {
         nodes: [
           {
@@ -101,6 +102,163 @@ function fixture(
 const reuse = { canvasId: 'canvas', nodeId: 'lab', mode: 'reuse_instructions' };
 const again = { canvasId: 'canvas', nodeId: 'lab', mode: 'run_again', jobId: 'history' };
 
+test('Lab plans reject duplicate source assets and unavailable selected outputs without guessing unknown states', async () => {
+  for (const scenario of [
+    'duplicate',
+    'failed',
+    'processing',
+    'cancelled',
+    'unknown',
+    'missing-status',
+    'old-failure',
+  ]) {
+    const f = fixture((method) => {
+      if (method !== 'ListNodesAssets') return;
+      const asset: Record<string, unknown> = {
+        assetId: 'current',
+        nodeId: 'upstream',
+        role: 'ASSET_ROLE_CURRENT',
+        kind: 'ASSET_KIND_IMAGE',
+      };
+      if (scenario === 'failed') asset.status = 'ASSET_STATUS_FAILED';
+      if (scenario === 'processing') asset.studioState = 'STUDIO_ASSET_STATE_PROCESSING';
+      if (scenario === 'cancelled') asset.status = 'ASSET_STATUS_CANCELED';
+      if (scenario === 'unknown') asset.status = 'ASSET_STATUS_NOT_REPORTED';
+      const assets = [asset];
+      if (scenario === 'duplicate') assets.push(structuredClone(asset));
+      if (scenario === 'old-failure')
+        assets.push({
+          ...asset,
+          assetId: 'old',
+          role: 'ASSET_ROLE_HISTORY',
+          status: 'ASSET_STATUS_FAILED',
+        });
+      return { nodes: [{ nodeId: 'upstream', assets }] };
+    });
+    const ready = ['unknown', 'missing-status', 'old-failure'].includes(scenario),
+      inputs = object(await resolveLabInputs(f.client, { canvasId: 'canvas', nodeId: 'lab' })),
+      plan = object(await resolveCanvasLabPlan(f.client, reuse));
+    assert.equal(inputs.missing, !ready);
+    assert.equal(plan.ready, ready);
+    assert.deepEqual(inputs.asset_ids, ready ? ['current'] : []);
+    assert.equal(plan.parameters === null, !ready);
+    if (!ready) assert.ok(array(plan.reasons).includes('upstream_input_unavailable'));
+    if (scenario === 'duplicate')
+      assert.ok(
+        array(inputs.missing_inputs).some(
+          (value) => object(value).reason === 'generated_asset_identity_unavailable',
+        ),
+      );
+  }
+});
+
+test('Lab selection does not silently replace a failed selected image or drop one failed multiview slot', async () => {
+  for (const type of ['NODE_TYPE_GENERATE_IMAGE', 'NODE_TYPE_MULTIVIEW']) {
+    const f = fixture((method) => {
+      if (method === 'GetCanvas') {
+        const current = graph();
+        current.nodes[1]!.type = type;
+        return current;
+      }
+      if (method === 'ListNodesAssets')
+        return {
+          nodes: [
+            {
+              nodeId: 'upstream',
+              assets: [
+                {
+                  assetId: 'failed-selected',
+                  nodeId: 'upstream',
+                  role: 'ASSET_ROLE_CURRENT',
+                  selected: true,
+                  kind: 'ASSET_KIND_IMAGE',
+                  status: 'ASSET_STATUS_FAILED',
+                  slotIndex: 0,
+                },
+                {
+                  assetId: 'other-ready',
+                  nodeId: 'upstream',
+                  role: 'ASSET_ROLE_CURRENT',
+                  selected: false,
+                  kind: 'ASSET_KIND_IMAGE',
+                  status: 'ASSET_STATUS_READY',
+                  slotIndex: 1,
+                },
+              ],
+            },
+          ],
+        };
+    });
+    const plan = object(await resolveCanvasLabPlan(f.client, reuse));
+    assert.equal(plan.ready, false);
+    assert.equal(plan.parameters, null);
+    assert.ok(array(plan.reasons).includes('upstream_input_unavailable'));
+  }
+});
+
+test('Lab input uploads must have one READY response in the current project', async () => {
+  for (const scenario of ['ready', 'duplicate-ready', 'ready-and-pending']) {
+    const f = fixture((method, body) => {
+      if (method === 'GetCanvas')
+        return {
+          ...graph(),
+          nodes: [
+            { id: 'lab', type: 'NODE_TYPE_AI_3D_LAB' },
+            {
+              id: 'upstream',
+              type: 'NODE_TYPE_UPLOAD_CARD',
+              params: { assetType: 'image' },
+              inputMount: [{ assetId: 'uploaded' }],
+            },
+          ],
+        };
+      if (method === 'BatchGetInputAssets') {
+        assert.deepEqual(body, { projectId: 'project', assetIds: ['uploaded'] });
+        return {
+          assets: [
+            { assetId: 'uploaded', status: 'INPUT_ASSET_STATUS_READY' },
+            ...(scenario === 'ready'
+              ? []
+              : [
+                  {
+                    assetId: 'uploaded',
+                    status:
+                      scenario === 'duplicate-ready'
+                        ? 'INPUT_ASSET_STATUS_READY'
+                        : 'INPUT_ASSET_STATUS_PROCESSING',
+                  },
+                ]),
+          ],
+        };
+      }
+    });
+    const inputs = object(await resolveLabInputs(f.client, { canvasId: 'canvas', nodeId: 'lab' })),
+      plan = object(await resolveCanvasLabPlan(f.client, reuse));
+    assert.equal(inputs.missing, scenario !== 'ready');
+    assert.equal(plan.ready, scenario === 'ready');
+    assert.deepEqual(inputs.asset_ids, scenario === 'ready' ? ['uploaded'] : []);
+    if (scenario !== 'ready')
+      assert.ok(
+        array(inputs.missing_inputs).some(
+          (value) => object(value).reason === 'input_asset_not_ready_in_project',
+        ),
+      );
+  }
+});
+
+test('Lab input preparation rejects a duplicate graph source identity', async () => {
+  const f = fixture((method) => {
+    if (method !== 'GetCanvas') return;
+    const current = graph();
+    current.nodes.push(structuredClone(current.nodes[1]!));
+    return current;
+  });
+  await assert.rejects(resolveLabInputs(f.client, { canvasId: 'canvas', nodeId: 'lab' }), {
+    code: 'CONTRACT_CHANGED',
+  });
+  assert.deepEqual(f.calls, ['GetCanvas']);
+});
+
 test('Lab plan is exposed through the same Canvas resource and named CLI options', async () => {
   const spec = canvasResources.find((value) => value.name === 'lab_plan')!;
   assert.equal(spec.readOnly, true);
@@ -119,6 +277,44 @@ test('Lab plan is exposed through the same Canvas resource and named CLI options
   assert.deepEqual(result.quote, { known: false, variable: true });
   assert.equal(result.requires_accept_variable_cost, true);
   assert.equal(Object.hasOwn(object(result.parameters), 'accept_variable_cost'), false);
+});
+
+test('Lab instruction reads preserve the service payload and expose validation through the public Canvas route', async () => {
+  const spec = canvasResources.find((value) => value.name === 'lab_instructions')!;
+  assert.equal(spec.readOnly, true);
+  for (const saveStatus of ['LAB_TASK_INSTRUCTIONS_SAVE_STATUS_SAVED', 'FUTURE_SAVED']) {
+    const taskInstructions = {
+      saveStatus,
+      saved: { nodeId: 'lab', instructions: 'Inspect the current input.' },
+      canSave: true,
+      hasUpdates: true,
+      futureField: 'retain',
+    };
+    const f = fixture((method, body) => {
+      if (method !== 'GetLabTaskInstructions') return;
+      assert.deepEqual(body, { nodeId: 'lab' });
+      return { taskInstructions };
+    });
+    const result = object(await callCanvas(f.client, spec, { nodeId: 'lab' })),
+      validation = object(result.validation),
+      known = saveStatus === 'LAB_TASK_INSTRUCTIONS_SAVE_STATUS_SAVED';
+    assert.deepEqual(f.calls, ['GetLabTaskInstructions']);
+    assert.deepEqual(result.taskInstructions, taskInstructions);
+    assert.equal(validation.valid, known);
+    assert.equal(validation.saved_version, '0');
+    assert.equal(validation.can_save, true);
+    assert.equal(validation.has_updates, true);
+    assert.equal(Object.hasOwn(result, 'ready'), false);
+    assert.equal(object(result.cli_support).manual_save, false);
+    assert.deepEqual(validation.reuse_blockers, known ? [] : ['instructions_state_invalid']);
+  }
+  const wrong = fixture((method) =>
+    method === 'GetLabTaskInstructions'
+      ? { taskInstructions: { saveStatus: 'SAVED', saved: { nodeId: 'other' } } }
+      : undefined,
+  );
+  await assert.rejects(callCanvas(wrong.client, spec, { nodeId: 'lab' }), { code: 'CONTRACT_CHANGED' });
+  assert.deepEqual(wrong.calls, ['GetLabTaskInstructions']);
 });
 
 test('Lab history rerun copies the exact original prompt and attachment order without current-input substitution', async () => {
@@ -204,7 +400,9 @@ test('Empty, failed, saving or wrongly owned instructions cannot be reported as 
     [{ version: '1', instructions: 'Inspect' }, {}, 'saved_instructions_identity_missing'],
   ] as const) {
     const f = fixture((method) =>
-      method === 'GetLabTaskInstructions' ? { taskInstructions: { saved, ...state } } : undefined,
+      method === 'GetLabTaskInstructions'
+        ? { taskInstructions: { saveStatus: 'SAVED', saved, ...state } }
+        : undefined,
     );
     const result = object(await resolveCanvasLabPlan(f.client, reuse));
     assert.equal(result.ready, false);
@@ -217,6 +415,51 @@ test('Empty, failed, saving or wrongly owned instructions cannot be reported as 
       : undefined,
   );
   await assert.rejects(resolveCanvasLabPlan(f.client, reuse), { code: 'CONTRACT_CHANGED' });
+});
+
+test('Lab reuse refuses unknown or malformed instruction state while preserving diagnostic fields', async () => {
+  for (const state of [
+    { saveStatus: undefined },
+    { saveStatus: 'FUTURE_SAVED' },
+    { saveStatus: 'FUTURE_SAVING' },
+    { saveStatus: 'FUTURE_FAILED' },
+    { saveStatus: 'SAVED', saving: 'false' },
+    { saveStatus: 'SAVED', canSave: 1 },
+    { saveStatus: 'SAVED', hasUpdates: null },
+    { saveStatus: 'SAVED', saveErrorMessage: {} },
+  ]) {
+    const f = fixture((method) =>
+      method === 'GetLabTaskInstructions'
+        ? { taskInstructions: { ...state, saved: { nodeId: 'lab', version: '1', instructions: 'Inspect' } } }
+        : undefined,
+    );
+    const result = object(await resolveCanvasLabPlan(f.client, reuse));
+    assert.equal(result.ready, false);
+    assert.equal(result.parameters, null);
+    assert.ok(array(result.reasons).includes('instructions_state_invalid'));
+    assert.equal(object(result.instructions_validation).valid, false);
+    assert.ok(array(object(result.instructions_validation).issues).length > 0);
+  }
+});
+
+test('Lab reuse accepts webpage omitted version defaults and a valid empty idle response stays not ready', async () => {
+  const withDefaults = fixture((method) =>
+    method === 'GetLabTaskInstructions'
+      ? { taskInstructions: { saveStatus: 'SAVED', saved: { nodeId: 'lab', instructions: 'Inspect' } } }
+      : undefined,
+  );
+  const prepared = object(await resolveCanvasLabPlan(withDefaults.client, reuse));
+  assert.equal(prepared.ready, true);
+  assert.equal(prepared.instructions_version, '0');
+  assert.deepEqual(prepared.instructions_validation, { valid: true, issues: [] });
+  const idle = fixture((method) =>
+    method === 'GetLabTaskInstructions' ? { taskInstructions: { saveStatus: 'IDLE' } } : undefined,
+  );
+  const empty = object(await resolveCanvasLabPlan(idle.client, reuse));
+  assert.equal(empty.ready, false);
+  assert.equal(empty.parameters, null);
+  assert.deepEqual(empty.reasons, ['saved_instructions_empty']);
+  assert.deepEqual(empty.instructions_validation, { valid: true, issues: [] });
 });
 
 test('History rerun requires original inputs, terminal status and membership in this node history', async () => {

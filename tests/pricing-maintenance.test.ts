@@ -191,4 +191,7 @@ test('expired reviews still cannot authorize a model quote', async (t) => {
   const quote = await new PricingService(file).quote('model', { texture: false });
   assert.equal(quote.known, false);
   assert.equal(quote.credits, undefined);
+  // 报错要说清何时过期、怎么恢复，而不是只说“过期或未来日期”。
+  assert.match(quote.explanation, /^Pricing review expired at \d{4}-\d{2}-\d{2}T/);
+  assert.match(quote.explanation, /ai-modeling pricing update/);
 });

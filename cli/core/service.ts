@@ -142,7 +142,8 @@ import {
 } from './import-normalization-policy.ts';
 import { needsExportTransform } from '../../studio/contracts/export-options.ts';
 import { resolveDestination } from '../artifacts/destination.ts';
-import { variableCanvasOperations } from '../../studio/contracts/canvas-agent.ts';
+import { creativeCanvasOperations, variableCanvasOperations } from '../../studio/contracts/canvas-agent.ts';
+import { canvasAcceptanceView } from './canvas-acceptance.ts';
 import { taskType } from '../../studio/contracts/task-type.ts';
 import { hasModelResults, reconcileModelResults } from '../../studio/api/model-results.ts';
 import { reconcileExportBatch } from '../../studio/api/export-batch.ts';
@@ -197,6 +198,7 @@ export function jobView(job: Job): Record<string, unknown> {
       : {}),
     ...semanticMaskSummary(job),
     ...canvasResultView(job),
+    ...canvasAcceptanceView(job),
   };
 }
 
@@ -212,7 +214,14 @@ function shouldRefreshCompletedArtifacts(job: Job, refreshCanvas: boolean): bool
 function intentInput(input: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(input).filter(
-      ([key]) => !['_canvas_quotes', '_canvas_action', '_image_source', segmentEntityMarker].includes(key),
+      ([key]) =>
+        ![
+          '_canvas_quotes',
+          '_canvas_action',
+          '_image_source',
+          '_node_execution',
+          segmentEntityMarker,
+        ].includes(key),
     ),
   );
 }
@@ -325,6 +334,8 @@ export class TaskService {
     quote: Quote,
     maximum: number,
   ): Promise<void> {
+    // 停止已有执行不创建新的创作；不能要求接受新费用才允许停止，也不把原费用报价成零。
+    if (operation === 'canvas_node_stop') return;
     const variable =
       (variableCanvasOperations.has(operation) || operation === 'refine_submit') &&
       input.accept_variable_cost === true &&
@@ -1269,6 +1280,14 @@ export class TaskService {
       );
     if (job.state !== 'outcome_unknown' && job.error?.code !== 'PARTIAL_RECEIPT_UNKNOWN')
       throw new TripoError('RECONCILE_NOT_NEEDED', 'Only an outcome_unknown job can be reconciled.');
+    // A read of an arbitrary Turn/Lab ID proves that it exists, not that this unknown write created it.
+    // CreateTurn has no caller request key; the observed ContinueTurn/Lab/node read contracts do not
+    // establish the submitted key. Preserve unknown intent until such request-bound evidence exists.
+    if (creativeCanvasOperations.has(job.operation))
+      throw new TripoError(
+        'RECONCILE_UNVERIFIABLE',
+        'The Canvas creative receipt is unknown. A Turn or Lab ID alone cannot prove this request was accepted. Preserve the original request and inspect its exact context; do not resubmit or bind a guessed remote ID.',
+      );
     const remote = object(ids);
     if (job.operation === 'export_batch') {
       const remote_ids = reconcileExportBatch(job, remote.batch);
