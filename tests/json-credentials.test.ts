@@ -350,6 +350,48 @@ test('Windows ACL helper uses a bounded system executable and rejects malformed 
   );
 });
 
+test('Windows ACL helper isolates system modules from caller module paths and credentials', () => {
+  const overrides = {
+    PSModulePath: 'C:\\synthetic\\untrusted-modules',
+    PSHOME: 'C:\\synthetic\\untrusted-powershell',
+    AI_MODELING_TOKEN: 'synthetic-token-do-not-forward',
+    AI_MODELING_COOKIE: 'synthetic-cookie-do-not-forward',
+  };
+  const previous = Object.fromEntries(Object.keys(overrides).map((name) => [name, process.env[name]]));
+  Object.assign(process.env, overrides);
+  try {
+    checkWindowsPermissions(
+      [{ path: 'C:\\synthetic\\私有 auth\\凭据.json', kind: 'file' }],
+      (executable, args, options) => {
+        const systemRoot = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\\Windows';
+        const powerShellDirectory = path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0');
+        assert.equal(executable, path.win32.join(powerShellDirectory, 'powershell.exe'));
+        assert.deepEqual(options.env, {
+          SystemRoot: systemRoot,
+          WINDIR: systemRoot,
+          PSModulePath: path.win32.join(powerShellDirectory, 'Modules'),
+        });
+        const script = Buffer.from(args[args.indexOf('-EncodedCommand') + 1]!, 'base64').toString('utf16le');
+        assert.ok(
+          script.includes(
+            "[IO.Path]::Combine($PSHOME, 'Modules', 'Microsoft.PowerShell.Utility', 'Microsoft.PowerShell.Utility.psd1')",
+          ),
+        );
+        assert.ok(script.includes('Import-Module -Name $utilityModule -ErrorAction Stop'));
+        assert.ok(script.includes('Microsoft.PowerShell.Utility\\ConvertFrom-Json'));
+        const forwarded = JSON.stringify({ executable, args, options, script });
+        for (const value of Object.values(overrides)) assert.equal(forwarded.includes(value), false);
+        return { status: 0, signal: null, stdout: '{"ok":true}' };
+      },
+    );
+  } finally {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
+
 test(
   'native Windows DACL validation rejects an extra Everyone access rule',
   { skip: process.platform !== 'win32' },

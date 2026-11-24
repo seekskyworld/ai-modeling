@@ -18,7 +18,10 @@ $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 try {
-  $requests = @(([Console]::In.ReadToEnd() | ConvertFrom-Json))
+  # Module discovery can block without a user environment. Load only the system JSON cmdlet.
+  $utilityModule = [IO.Path]::Combine($PSHOME, 'Modules', 'Microsoft.PowerShell.Utility', 'Microsoft.PowerShell.Utility.psd1')
+  Import-Module -Name $utilityModule -ErrorAction Stop
+  $requests = @(([Console]::In.ReadToEnd() | Microsoft.PowerShell.Utility\\ConvertFrom-Json))
   if ($requests.Count -lt 1 -or $requests.Count -gt 32) { throw 'Invalid request' }
   $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
   $current = $identity.User
@@ -91,7 +94,8 @@ export function checkWindowsPermissions(
       throw new Error('Invalid permission request.');
     const systemRoot = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\\Windows';
     if (!path.win32.isAbsolute(systemRoot)) throw new Error('Invalid Windows directory.');
-    const executable = path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    const powerShellDirectory = path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0');
+    const executable = path.win32.join(powerShellDirectory, 'powershell.exe');
     const result = runner(
       executable,
       [
@@ -109,7 +113,11 @@ export function checkWindowsPermissions(
         windowsHide: true,
         stdio: ['pipe', 'pipe', 'ignore'],
         maxBuffer: 4096,
-        env: { SystemRoot: systemRoot, WINDIR: systemRoot },
+        env: {
+          SystemRoot: systemRoot,
+          WINDIR: systemRoot,
+          PSModulePath: path.win32.join(powerShellDirectory, 'Modules'),
+        },
       },
     );
     if (result.error || result.signal || result.status !== 0 || result.stdout !== '{"ok":true}')

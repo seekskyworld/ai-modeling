@@ -1,74 +1,48 @@
-/** Native transport probes expose no paths, environment values or raw PowerShell output. */
+/** Native regressions expose no paths, environment values or raw PowerShell output. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawnSync, type SpawnSyncOptionsWithStringEncoding } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { checkWindowsPermissions, windowsPermissionTimeoutMs } from '../studio/auth/windows-permissions.ts';
 
-const stageMarkers = {
-  started: 'AI_MODELING_STAGE_STARTED',
-  'input-encoding': 'AI_MODELING_STAGE_INPUT_ENCODING',
-  'output-encoding': 'AI_MODELING_STAGE_OUTPUT_ENCODING',
-  read: 'AI_MODELING_STAGE_READ',
-  json: 'AI_MODELING_STAGE_JSON',
-} as const;
-const stageLabels = new Map(Object.entries(stageMarkers).map(([label, marker]) => [marker, label]));
-const stage = (name: keyof typeof stageMarkers) => `
-[Console]::Out.WriteLine('${stageMarkers[name]}')
-[Console]::Out.Flush()
-`;
-const inputEncoding = `
-[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
-${stage('input-encoding')}
-`;
-const outputEncoding = `
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-${stage('output-encoding')}
-`;
-const parsedMarker = `
-  $requests = @(($raw | ConvertFrom-Json))
-  ${stage('json')}
-  if ($requests.Count -ne 1 -or $requests[0].kind -ne 'directory') { exit 2 }
-  [Console]::Out.Write('AI_MODELING_PROBE_STDIN')
-`;
-const stdinScript = (method: 'ReadToEnd' | 'ReadLine' | 'StreamReaderReadLine', configureInput = true) => `
-${stage('started')}
+const systemJsonScript = (importModule: boolean) => `
 $ErrorActionPreference = 'Stop'
-${configureInput ? inputEncoding : ''}
-${outputEncoding}
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 try {
   ${
-    method === 'StreamReaderReadLine'
-      ? `$reader = [IO.StreamReader]::new([Console]::OpenStandardInput(), [Text.UTF8Encoding]::new($false), $false)
-  $raw = $reader.ReadLine()`
-      : `$raw = [Console]::In.${method}()`
+    importModule
+      ? `$utilityModule = [IO.Path]::Combine($PSHOME, 'Modules', 'Microsoft.PowerShell.Utility', 'Microsoft.PowerShell.Utility.psd1')
+  Import-Module -Name $utilityModule -ErrorAction Stop`
+      : ''
   }
-  ${stage('read')}
-  ${parsedMarker}
+  $requests = @(([Console]::In.ReadToEnd() | ConvertFrom-Json))
+  if ($requests.Count -ne 1 -or $requests[0].kind -ne 'directory') { exit 2 }
+  [Console]::Out.Write('AI_MODELING_PROBE_JSON')
 } catch { exit 1 }
 `;
 const markers = new Map([
-  ['AI_MODELING_PROBE_READY', 'ready'],
-  ['AI_MODELING_PROBE_STDIN', 'stdin'],
+  ['AI_MODELING_PROBE_JSON', 'json'],
   ['{"ok":true}', 'private_acl'],
 ]);
 
 test(
-  'native Windows PowerShell transport and protected DACL',
-  {
-    skip: process.platform !== 'win32',
-    timeout: 130000,
-  },
+  'native Windows system JSON module and protected DACL preserve Unicode paths',
+  { skip: process.platform !== 'win32', timeout: 60000 },
   async (t) => {
-    const directory = await mkdtemp(path.join(tmpdir(), 'ai-modeling-native-acl-'));
-    t.after(() => rm(directory, { recursive: true, force: true }));
+    const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'ai-modeling-native-acl-'));
+    t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
+    const directory = path.join(temporaryRoot, '私有 auth Ω');
+    const file = path.join(directory, '凭据 file.json');
+    const content = '{"synthetic":"凭据 unchanged"}';
+    await mkdir(directory);
+    await writeFile(file, content);
     const systemRoot = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\\Windows';
-    const executable = path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    const powerShellDirectory = path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0');
+    const executable = path.win32.join(powerShellDirectory, 'powershell.exe');
     const minimalEnv = { SystemRoot: systemRoot, WINDIR: systemRoot };
-    const payload = JSON.stringify([{ path: directory, kind: 'directory' }]);
-    const records = new Map<string, { status: number | null; marker: string | null }>();
     const capture = (
       name: string,
       command: string,
@@ -77,31 +51,19 @@ test(
     ) => {
       const started = performance.now();
       const result = spawnSync(command, args, options);
-      // Ignore all other output, including partial lines emitted before a timeout.
-      const lines = (result.stdout ?? '').split(/\r?\n/);
-      const diagnostic = {
-        probe: name,
-        status: result.status,
-        signal: result.signal,
-        error_code: (result.error as NodeJS.ErrnoException | undefined)?.code ?? null,
-        elapsed_ms: Math.round(performance.now() - started),
-        marker: lines.map((line) => markers.get(line)).find((marker) => marker !== undefined) ?? null,
-        stages: lines.flatMap((line) => {
-          const label = stageLabels.get(line as (typeof stageMarkers)[keyof typeof stageMarkers]);
-          return label ? [label] : [];
+      t.diagnostic(
+        JSON.stringify({
+          probe: name,
+          status: result.status,
+          signal: result.signal,
+          error_code: (result.error as NodeJS.ErrnoException | undefined)?.code ?? null,
+          elapsed_ms: Math.round(performance.now() - started),
+          marker: markers.get(result.stdout) ?? null,
         }),
-      };
-      records.set(name, diagnostic);
-      t.diagnostic(JSON.stringify(diagnostic));
+      );
       return result;
     };
-    const run = (
-      name: string,
-      script: string,
-      input: string,
-      extra: string[] = [],
-      env: NodeJS.ProcessEnv = minimalEnv,
-    ) =>
+    const probe = (name: string, importModule: boolean, env: NodeJS.ProcessEnv) =>
       capture(
         name,
         executable,
@@ -109,12 +71,11 @@ test(
           '-NoLogo',
           '-NoProfile',
           '-NonInteractive',
-          ...extra,
           '-EncodedCommand',
-          Buffer.from(script, 'utf16le').toString('base64'),
+          Buffer.from(systemJsonScript(importModule), 'utf16le').toString('base64'),
         ],
         {
-          input,
+          input: JSON.stringify([{ path: directory, kind: 'directory' }]),
           encoding: 'utf8',
           timeout: windowsPermissionTimeoutMs,
           killSignal: 'SIGKILL',
@@ -124,48 +85,33 @@ test(
           env,
         },
       );
-    const markerScript = "[Console]::Out.Write('AI_MODELING_PROBE_READY')";
-    run('minimal_env_marker', markerScript, '');
-    run('inherited_env_marker', markerScript, '', [], { ...process.env });
-    run('minimal_env_read_to_end', stdinScript('ReadToEnd'), payload);
-    run('minimal_env_read_to_end_text', stdinScript('ReadToEnd'), payload, ['-InputFormat', 'Text']);
-    run('minimal_env_read_line_newline', stdinScript('ReadLine'), payload + '\n');
-    run(
-      'minimal_env_encoding_only',
-      `${stage('started')}
-$ErrorActionPreference = 'Stop'
-${inputEncoding}
-${outputEncoding}
-[Console]::Out.Write('AI_MODELING_PROBE_READY')`,
-      '',
-    );
-    run(
-      'minimal_env_inline_json',
-      `${stage('started')}
-$ErrorActionPreference = 'Stop'
-$raw = '[{"kind":"directory"}]'
-try {
-  ${parsedMarker}
-} catch { exit 1 }`,
-      '',
-    );
-    run('inherited_env_read_to_end', stdinScript('ReadToEnd'), payload, [], { ...process.env });
-    run('minimal_env_read_line_no_input_encoding', stdinScript('ReadLine', false), payload + '\n');
-    run('minimal_env_stream_reader', stdinScript('StreamReaderReadLine', false), payload + '\n');
+    // These bounded controls identify module discovery failures without inheriting the user's environment.
+    probe('system_module_path_json', false, {
+      ...minimalEnv,
+      PSModulePath: path.win32.join(powerShellDirectory, 'Modules'),
+    });
+    probe('explicit_system_module_json', true, minimalEnv);
+    const entries = [
+      { path: directory, kind: 'directory' as const },
+      { path: file, kind: 'file' as const },
+    ];
     let protectedAcl = false;
+    let verifiedAcl = false;
     try {
       checkWindowsPermissions(
-        [{ path: directory, kind: 'directory', protect: true }],
-        (command, args, options) => capture('actual_synthetic_acl', command, args, options),
+        entries.map((entry) => ({ ...entry, protect: true })),
+        (command, args, options) => capture('production_protect_unicode', command, args, options),
       );
       protectedAcl = true;
+      checkWindowsPermissions(entries, (command, args, options) =>
+        capture('production_verify_unicode', command, args, options),
+      );
+      verifiedAcl = true;
     } catch {
-      /* Report every diagnostic before asserting the production permission boundary. */
-    }
-    for (const name of ['minimal_env_marker', 'inherited_env_marker']) {
-      assert.equal(records.get(name)?.status, 0, `${name} must start; inspect diagnostic metadata.`);
-      assert.equal(records.get(name)?.marker, 'ready');
+      /* Report bounded diagnostics before asserting the production permission boundary. */
     }
     assert.equal(protectedAcl, true, 'Production ACL protection must pass; inspect diagnostic metadata.');
+    assert.equal(verifiedAcl, true, 'Production ACL verification must pass; inspect diagnostic metadata.');
+    assert.equal(await readFile(file, 'utf8'), content);
   },
 );
