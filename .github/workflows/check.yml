@@ -86,6 +86,9 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      - name: Diagnose native Windows PowerShell and credential ACL
+        if: runner.os == 'Windows'
+        run: node scripts/run-tests.ts tests/windows-permissions-native.test.ts
       - name: Verify native credential storage and login cancellation
         run: node scripts/run-tests.ts tests/json-credentials.test.ts tests/config-platform.test.ts tests/hardening-auth-input.test.ts tests/login-lock-stall.test.ts tests/json-entry-race.test.ts tests/login-state-race.test.ts
       - name: Export the real runtime package
