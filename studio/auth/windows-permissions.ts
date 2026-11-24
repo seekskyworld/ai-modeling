@@ -13,7 +13,7 @@ type PermissionRunner = (
 export const windowsPermissionTimeoutMs = 10000;
 
 // Only paths cross stdin. No credential contents, account values, or PowerShell profiles are used.
-const permissionScript = `
+const permissionScript = (replace = false) => `
 $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -73,6 +73,18 @@ try {
     else { $acl = [IO.File]::GetAccessControl($location, $sections) }
     if (-not (Test-PrivateAcl $acl $current $system $directory $full $both)) { throw 'Unprotected ACL' }
   }
+  ${
+    replace
+      ? `# ReplaceFile preserves the destination DACL and permits readers of the old file to finish.
+  # Never delete first, ignore metadata failures, create a backup or retry a partial replacement.
+  [IO.File]::Replace([string]$requests[1].path, [string]$requests[2].path, $null)
+  $location = [string]$requests[2].path
+  $attributes = [IO.File]::GetAttributes($location)
+  if (($attributes -band ([IO.FileAttributes]::ReparsePoint -bor [IO.FileAttributes]::Directory)) -ne 0) { throw 'Changed replacement' }
+  $acl = [IO.File]::GetAccessControl($location, $sections)
+  if (-not (Test-PrivateAcl $acl $current $system $false $full $both)) { throw 'Unprotected replacement' }`
+      : ''
+  }
   [Console]::Out.Write('{"ok":true}')
 } catch {
   [Console]::Out.Write('{"ok":false}')
@@ -80,11 +92,28 @@ try {
 }
 `;
 
+function assertSiblingReplacement(entries: PermissionRequest[]): void {
+  if (
+    entries.length !== 3 ||
+    entries[0]!.kind !== 'directory' ||
+    entries[1]!.kind !== 'file' ||
+    entries[2]!.kind !== 'file' ||
+    entries.some((entry) => entry.protect || entry.repair) ||
+    path.win32.resolve(entries[1]!.path).toLowerCase() ===
+      path.win32.resolve(entries[2]!.path).toLowerCase() ||
+    entries
+      .slice(1)
+      .some(
+        (entry) =>
+          path.win32.dirname(path.win32.resolve(entry.path)).toLowerCase() !==
+          path.win32.resolve(entries[0]!.path).toLowerCase(),
+      )
+  )
+    throw new Error('Replacement requires two private files in the same directory.');
+}
+
 /** Injectable process boundary lets offline tests exercise failures without changing the host ACL. */
-export function checkWindowsPermissions(
-  entries: PermissionRequest[],
-  runner: PermissionRunner = spawnSync,
-): void {
+function checkWindowsPaths(entries: PermissionRequest[], runner: PermissionRunner, replace = false): void {
   try {
     if (
       !entries.length ||
@@ -92,6 +121,7 @@ export function checkWindowsPermissions(
       entries.some((entry) => !path.win32.isAbsolute(entry.path) || /[\0\r\n]/.test(entry.path))
     )
       throw new Error('Invalid permission request.');
+    if (replace) assertSiblingReplacement(entries);
     const systemRoot = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\\Windows';
     if (!path.win32.isAbsolute(systemRoot)) throw new Error('Invalid Windows directory.');
     const powerShellDirectory = path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0');
@@ -103,7 +133,7 @@ export function checkWindowsPermissions(
         '-NoProfile',
         '-NonInteractive',
         '-EncodedCommand',
-        Buffer.from(permissionScript, 'utf16le').toString('base64'),
+        Buffer.from(permissionScript(replace), 'utf16le').toString('base64'),
       ],
       {
         input: JSON.stringify(entries),
@@ -125,10 +155,36 @@ export function checkWindowsPermissions(
   } catch {
     throw new TripoError(
       'CREDENTIAL_STORE_UNAVAILABLE',
-      'Private local JSON storage requires a Windows ACL owned by the current user and restricted to that user and SYSTEM. Check the directory permissions and retry the original action.',
-      'not_submitted',
+      replace
+        ? 'The private Windows JSON record could not be replaced safely. A protected temporary record may remain; inspect the stored state before retrying the original action.'
+        : 'Private local JSON storage requires a Windows ACL owned by the current user and restricted to that user and SYSTEM. Check the directory permissions and retry the original action.',
+      replace ? 'unknown' : 'not_submitted',
     );
   }
+}
+
+export function checkWindowsPermissions(
+  entries: PermissionRequest[],
+  runner: PermissionRunner = spawnSync,
+): void {
+  checkWindowsPaths(entries, runner);
+}
+
+/** One same-directory ReplaceFile operation; a failure may have changed either path, so never retry it. */
+export function replacePrivateWindowsFile(
+  source: string,
+  target: string,
+  runner: PermissionRunner = spawnSync,
+): void {
+  checkWindowsPaths(
+    [
+      { path: path.win32.dirname(target), kind: 'directory' },
+      { path: source, kind: 'file' },
+      { path: target, kind: 'file' },
+    ],
+    runner,
+    true,
+  );
 }
 
 export function applyPrivateWindowsPaths(entries: PermissionRequest[]): void {

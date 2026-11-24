@@ -124,8 +124,9 @@ for (const phase of ['during_lstat', 'before_open', 'after_open'] as const) {
     assert.equal(result.error, undefined, result.message);
     assert.equal(result.status, replacement.status);
     assert.equal(result.nonce, replacement.nonce);
-    assert.equal(result.opens, phase === 'during_lstat' ? 1 : 2);
-    if (phase === 'during_lstat') assert.equal(result.lstatNlink, 0);
+    const initialUnlink = phase === 'during_lstat' && result.lstatNlink === 0;
+    assert.equal(result.opens, initialUnlink ? 1 : 2);
+    if (phase === 'during_lstat' && process.platform !== 'win32') assert.equal(result.lstatNlink, 0);
     assert.equal(result.closes, result.opens, 'every attempt must close its file handle');
   });
 }

@@ -21,7 +21,11 @@ import {
   type AuthStorageOptions,
 } from './control-directory.ts';
 import { withJsonEntryLock } from './credential-lock.ts';
-import { protectPrivateWindowsPath, verifyPrivateWindowsPaths } from './windows-permissions.ts';
+import {
+  protectPrivateWindowsPath,
+  replacePrivateWindowsFile,
+  verifyPrivateWindowsPaths,
+} from './windows-permissions.ts';
 
 export const jsonEntryLimit = 1024 * 1024;
 const jsonEntryReadAttempts = 5;
@@ -254,6 +258,7 @@ export class JsonEntry {
     const temporary = path.join(path.dirname(location.file), `.${randomUUID()}.tmp`);
     let descriptor: number | undefined;
     let failure: unknown;
+    let preserveTemporary = false;
     try {
       this.unchangedDirectories(location);
       descriptor = openSync(
@@ -269,7 +274,24 @@ export class JsonEntry {
       descriptor = undefined;
       this.unchangedDirectories(location);
       this.unchangedFile(location);
-      renameSync(temporary, location.file);
+      try {
+        renameSync(temporary, location.file);
+      } catch (error) {
+        if (
+          process.platform !== 'win32' ||
+          !location.existing ||
+          !['EPERM', 'EACCES'].includes((error as NodeJS.ErrnoException).code ?? '')
+        )
+          throw error;
+        // MoveFileEx cannot replace some open destinations. ReplaceFile retains the
+        // private ACL and old reader handles without a delete/create visibility gap.
+        this.unchangedDirectories(location);
+        this.unchangedFile(location);
+        // ReplaceFile failures can leave only the source. Keep it private for inspection, never replay it.
+        preserveTemporary = true;
+        replacePrivateWindowsFile(temporary, location.file);
+        preserveTemporary = false;
+      }
       synchronizeDirectory(location.file);
     } catch (error) {
       failure = error;
@@ -280,7 +302,7 @@ export class JsonEntry {
         failure ??= error;
       }
       try {
-        unlinkSync(temporary);
+        if (!preserveTemporary) unlinkSync(temporary);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') failure ??= error;
       }

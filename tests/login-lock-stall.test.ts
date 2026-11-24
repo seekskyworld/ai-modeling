@@ -7,6 +7,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { fileURLToPath } from 'node:url';
+import { createInterface } from 'node:readline';
 import { JsonStore } from '../studio/auth/credentials.ts';
 import { logoutLogin } from '../cli/auth/coordinator.ts';
 import { readState } from '../cli/auth/state.ts';
@@ -31,55 +33,46 @@ test(
     // The real broker and JSON store run in another process. Only the duration of one
     // store read changes, modelling successive synchronous Windows ACL checks.
     // This exercises lock timing; it does not substitute for native Windows ACL tests.
-    const source = `
-import {JsonStore} from ${JSON.stringify(new URL('../studio/auth/credentials.ts', import.meta.url).href)};
-import {beginLogin} from ${JSON.stringify(new URL('../cli/auth/coordinator.ts', import.meta.url).href)};
-import {startLoginBroker} from ${JSON.stringify(new URL('../cli/auth/broker.ts', import.meta.url).href)};
-const config=${JSON.stringify(config)};
-const candidate=${JSON.stringify(session)};
-const store=new JsonStore(config.credentialProfile);
-const load=store.load.bind(store);
-let stall=false;
-store.load=()=>{
-  if(stall){
-    stall=false;
-    process.stdout.write('STALLED\\n');
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,15000);
-  }
-  return load();
-};
-let browserOptions;
-const runtime={
-  store,
-  verify:async()=>{stall=true;return {session:candidate,result:{authenticated:true}}},
-  browser:async(options)=>{
-    browserOptions=options;
-    await new Promise(resolve=>options.signal.addEventListener('abort',resolve,{once:true}));
-  }
-};
-let broker;
-runtime.launch=async(start)=>{broker=await startLoginBroker(start,runtime)};
-try {
-  await beginLogin({config,open:true},runtime);
-  const accepted=await browserOptions.accept(candidate);
-  process.stdout.write(JSON.stringify({accepted})+'\\n');
-} catch(error) {
-  process.stdout.write(JSON.stringify({error:error.code})+'\\n');
-  process.exitCode=1;
-} finally {
-  await broker?.close();
-}
-`;
-    const child = spawn(process.execPath, ['--input-type=module', '-e', source], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const fixture = fileURLToPath(new URL('./login-lock-stall-fixture.ts', import.meta.url));
+    const child = spawn(process.execPath, [fixture, directory], { stdio: ['ignore', 'pipe', 'pipe'] });
     const exited = once(child, 'close');
-    let output = '',
-      errors = '';
+    let errors = '';
+    let accepted = false;
+    let lastDiagnostic = '';
+    let lastFailure = '';
+    const lines = createInterface({ input: child.stdout });
     const stalled = new Promise<void>((resolve) => {
-      child.stdout.on('data', (chunk) => {
-        output += chunk;
-        if (output.includes('STALLED\n')) resolve();
+      lines.on('line', (line) => {
+        if (line.length > 4096) return;
+        let value: Record<string, unknown>;
+        try {
+          value = JSON.parse(line) as Record<string, unknown>;
+        } catch {
+          return;
+        }
+        if (!value || value.diagnostic !== 'login_lock_stall') return;
+        // Only this fixed schema is reported; never include arbitrary child output or credential fields.
+        const diagnostic = {
+          diagnostic: 'login_lock_stall',
+          phase:
+            typeof value.phase === 'string' && /^[a-z_]{1,64}$/.test(value.phase) ? value.phase : 'unknown',
+          elapsed_ms: typeof value.elapsed_ms === 'number' ? value.elapsed_ms : undefined,
+          store_reads: typeof value.store_reads === 'number' ? value.store_reads : undefined,
+          error_code:
+            typeof value.error_code === 'string' && /^[A-Z_]{2,64}$/.test(value.error_code)
+              ? value.error_code
+              : undefined,
+          status:
+            typeof value.status === 'string' && /^[a-z_]{1,32}$/.test(value.status)
+              ? value.status
+              : undefined,
+          accepted: typeof value.accepted === 'boolean' ? value.accepted : undefined,
+        };
+        lastDiagnostic = JSON.stringify(diagnostic);
+        if (diagnostic.error_code) lastFailure = lastDiagnostic;
+        t.diagnostic(lastDiagnostic);
+        if (diagnostic.phase === 'store_stalled') resolve();
+        if (diagnostic.phase === 'candidate_result') accepted = diagnostic.accepted === true;
       });
     });
     child.stderr.on('data', (chunk) => {
@@ -88,12 +81,15 @@ try {
     t.after(async () => {
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
       await exited.catch(() => undefined);
+      lines.close();
       await rm(directory, { recursive: true, force: true });
     });
     await Promise.race([
       stalled,
       exited.then(([code]) => {
-        throw new Error(`Login worker exited before the store delay (${code}): ${errors}`);
+        throw new Error(
+          `Login worker exited before the store delay (${code}): ${lastFailure || lastDiagnostic}`,
+        );
       }),
     ]);
     // The old ten-second stale threshold allowed logout to take over this live lock.
@@ -119,7 +115,7 @@ try {
     const [code] = await exited;
     assert.equal(code, 0, errors);
     assert.equal(errors.includes('ECOMPROMISED'), false);
-    assert.ok(output.includes('{"accepted":true}'), output);
+    assert.equal(accepted, true, lastDiagnostic);
     assert.equal(store.load(), undefined, 'a late login must not recreate the logged-out session');
     assert.equal((await readState(config))?.status, 'cancelled');
   },

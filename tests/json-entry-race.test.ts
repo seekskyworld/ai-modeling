@@ -10,10 +10,13 @@ import {
   closeSync,
   existsSync,
   fchmodSync,
+  fstatSync,
   ftruncateSync,
   linkSync,
+  lstatSync,
   openSync,
   readFileSync,
+  readdirSync,
   renameSync,
   symlinkSync,
   unlinkSync,
@@ -27,7 +30,11 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { JsonEntry, jsonEntryLimit } from '../studio/auth/json-entry.ts';
 import { JsonStore, type Session } from '../studio/auth/credentials.ts';
-import { protectPrivateWindowsPath } from '../studio/auth/windows-permissions.ts';
+import {
+  protectPrivateWindowsPath,
+  replacePrivateWindowsFile,
+  verifyPrivateWindowsPath,
+} from '../studio/auth/windows-permissions.ts';
 import type { JsonRacePhase, JsonRaceResult } from './json-entry-race-fixture.ts';
 
 const session = (deviceId: string): Session => ({
@@ -98,6 +105,136 @@ async function race(
   assert.equal(result.inspectionCloses, result.inspectionHandles);
   return { result, file, entry, store };
 }
+
+test('Windows atomic replacement is restricted to private siblings and never retried after failure', () => {
+  const source = 'C:\\synthetic\\私有 auth\\source.tmp';
+  const target = 'C:\\synthetic\\私有 auth\\record.json';
+  let calls = 0;
+  assert.throws(
+    () =>
+      replacePrivateWindowsFile(source, target, (_executable, args, options) => {
+        calls++;
+        assert.deepEqual(JSON.parse(String(options.input)), [
+          { path: path.win32.dirname(target), kind: 'directory' },
+          { path: source, kind: 'file' },
+          { path: target, kind: 'file' },
+        ]);
+        const script = Buffer.from(args.at(-1)!, 'base64').toString('utf16le');
+        assert.equal(script.match(/\[IO\.File\]::Replace/g)?.length, 1);
+        assert.ok(
+          script.includes('[IO.File]::Replace([string]$requests[1].path, [string]$requests[2].path, $null)'),
+        );
+        assert.equal(script.includes('[IO.File]::Delete'), false);
+        assert.equal(script.includes('[IO.File]::Copy'), false);
+        assert.equal(options.timeout, 10000);
+        return { status: 1, signal: null, stdout: '{"ok":false}' };
+      }),
+    { code: 'CREDENTIAL_STORE_UNAVAILABLE', certainty: 'unknown' },
+  );
+  assert.equal(calls, 1);
+  for (const invalid of [source, 'C:\\another\\record.json', 'relative'])
+    assert.throws(
+      () => replacePrivateWindowsFile(source, invalid, () => assert.fail('Unsafe replacement was attempted')),
+      { code: 'CREDENTIAL_STORE_UNAVAILABLE' },
+    );
+});
+
+test(
+  'native Windows replacement preserves old reader bytes and private new-file identity',
+  { skip: process.platform !== 'win32', timeout: 60000 },
+  async (t) => {
+    const temporary = await mkdtemp(path.join(tmpdir(), 'ai-modeling-native-replace-'));
+    t.after(() => rm(temporary, { recursive: true, force: true }));
+    const options = { directory: path.join(temporary, '私有 auth') };
+    const entry = new JsonEntry('ai-modeling', 'native-replace', options);
+    const file = path.join(
+      options.directory,
+      'credentials',
+      digest('ai-modeling'),
+      `${digest('native-replace')}.json`,
+    );
+    entry.setPassword('original bytes');
+    const originalBytes = readFileSync(file);
+    const old = openSync(file, 'r');
+    try {
+      const before = fstatSync(old);
+      entry.setPassword('replacement bytes');
+      const current = lstatSync(file);
+      assert.notEqual(current.ino, before.ino);
+      assert.equal(fstatSync(old).ino, before.ino);
+      assert.deepEqual(readFileSync(old), originalBytes);
+      assert.equal(entry.getPassword(), 'replacement bytes');
+      verifyPrivateWindowsPath(file, 'file');
+      assert.deepEqual(
+        readdirSync(path.dirname(file)).filter((name) => name.endsWith('.tmp')),
+        [],
+      );
+      t.diagnostic(
+        JSON.stringify({
+          probe: 'native_replace_open_target',
+          old_handle_nlink: fstatSync(old).nlink,
+          identity_changed: true,
+          old_bytes_preserved: true,
+          new_bytes_verified: true,
+          private_acl: true,
+        }),
+      );
+    } finally {
+      closeSync(old);
+    }
+  },
+);
+
+test(
+  'a failed native Windows replacement preserves the private temporary record without replay',
+  { skip: process.platform !== 'win32', timeout: 90000 },
+  async (t) => {
+    const temporary = await mkdtemp(path.join(tmpdir(), 'ai-modeling-replace-failure-'));
+    t.after(() => rm(temporary, { recursive: true, force: true }));
+    const options = { directory: path.join(temporary, 'auth') };
+    const entry = new JsonEntry('ai-modeling', 'failed-replace', options);
+    entry.setPassword('original bytes');
+    const directory = path.join(options.directory, 'credentials', digest('ai-modeling'));
+    const file = path.join(directory, `${digest('failed-replace')}.json`);
+    const source = `
+import fs from 'node:fs';
+import childProcess from 'node:child_process';
+import {syncBuiltinESMExports} from 'node:module';
+import {JsonEntry} from ${JSON.stringify(new URL('../studio/auth/json-entry.ts', import.meta.url).href)};
+const originalSpawn=childProcess.spawnSync,handle=fs.openSync(${JSON.stringify(file)},'r');
+let calls=0,result;
+childProcess.spawnSync=function(command,args,options){
+  const script=Buffer.from(args.at(-1),'base64').toString('utf16le');
+  if(script.includes('[IO.File]::Replace(')){
+    calls++;
+    return {status:1,signal:null,stdout:'{"ok":false}'};
+  }
+  return originalSpawn(command,args,options);
+};
+syncBuiltinESMExports();
+try{new JsonEntry('ai-modeling','failed-replace',${JSON.stringify(options)}).setPassword('pending bytes')}
+catch(error){result={error:error.code,certainty:error.certainty}}
+finally{fs.closeSync(handle)}
+process.stdout.write(JSON.stringify({...result,calls}));
+`;
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', source], {
+      encoding: 'utf8',
+      timeout: 60000,
+    });
+    assert.equal(child.status, 0, child.stderr);
+    assert.deepEqual(JSON.parse(child.stdout), {
+      error: 'CREDENTIAL_STORE_UNAVAILABLE',
+      certainty: 'unknown',
+      calls: 1,
+    });
+    assert.equal(entry.getPassword(), 'original bytes');
+    const pending = readdirSync(directory).filter((name) => name.endsWith('.tmp'));
+    assert.equal(pending.length, 1);
+    const preserved = path.join(directory, pending[0]!);
+    verifyPrivateWindowsPath(preserved, 'file');
+    assert.equal(JSON.parse(readFileSync(preserved, 'utf8')).value, 'pending bytes');
+  },
+);
 
 for (const phase of [
   'during_lstat',

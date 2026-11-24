@@ -5,28 +5,7 @@ import { spawnSync, type SpawnSyncOptionsWithStringEncoding } from 'node:child_p
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { checkWindowsPermissions, windowsPermissionTimeoutMs } from '../studio/auth/windows-permissions.ts';
-
-const systemJsonScript = (importModule: boolean) => `
-$ErrorActionPreference = 'Stop'
-[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-try {
-  ${
-    importModule
-      ? `$utilityModule = [IO.Path]::Combine($PSHOME, 'Modules', 'Microsoft.PowerShell.Utility', 'Microsoft.PowerShell.Utility.psd1')
-  Import-Module -Name $utilityModule -ErrorAction Stop`
-      : ''
-  }
-  $requests = @(([Console]::In.ReadToEnd() | ConvertFrom-Json))
-  if ($requests.Count -ne 1 -or $requests[0].kind -ne 'directory') { exit 2 }
-  [Console]::Out.Write('AI_MODELING_PROBE_JSON')
-} catch { exit 1 }
-`;
-const markers = new Map([
-  ['AI_MODELING_PROBE_JSON', 'json'],
-  ['{"ok":true}', 'private_acl'],
-]);
+import { checkWindowsPermissions } from '../studio/auth/windows-permissions.ts';
 
 test(
   'native Windows system JSON module and protected DACL preserve Unicode paths',
@@ -39,10 +18,6 @@ test(
     const content = '{"synthetic":"凭据 unchanged"}';
     await mkdir(directory);
     await writeFile(file, content);
-    const systemRoot = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\\Windows';
-    const powerShellDirectory = path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0');
-    const executable = path.win32.join(powerShellDirectory, 'powershell.exe');
-    const minimalEnv = { SystemRoot: systemRoot, WINDIR: systemRoot };
     const capture = (
       name: string,
       command: string,
@@ -58,39 +33,11 @@ test(
           signal: result.signal,
           error_code: (result.error as NodeJS.ErrnoException | undefined)?.code ?? null,
           elapsed_ms: Math.round(performance.now() - started),
-          marker: markers.get(result.stdout) ?? null,
+          private_acl: result.stdout === '{"ok":true}',
         }),
       );
       return result;
     };
-    const probe = (name: string, importModule: boolean, env: NodeJS.ProcessEnv) =>
-      capture(
-        name,
-        executable,
-        [
-          '-NoLogo',
-          '-NoProfile',
-          '-NonInteractive',
-          '-EncodedCommand',
-          Buffer.from(systemJsonScript(importModule), 'utf16le').toString('base64'),
-        ],
-        {
-          input: JSON.stringify([{ path: directory, kind: 'directory' }]),
-          encoding: 'utf8',
-          timeout: windowsPermissionTimeoutMs,
-          killSignal: 'SIGKILL',
-          windowsHide: true,
-          stdio: ['pipe', 'pipe', 'ignore'],
-          maxBuffer: 4096,
-          env,
-        },
-      );
-    // These bounded controls identify module discovery failures without inheriting the user's environment.
-    probe('system_module_path_json', false, {
-      ...minimalEnv,
-      PSModulePath: path.win32.join(powerShellDirectory, 'Modules'),
-    });
-    probe('explicit_system_module_json', true, minimalEnv);
     const entries = [
       { path: directory, kind: 'directory' as const },
       { path: file, kind: 'file' as const },

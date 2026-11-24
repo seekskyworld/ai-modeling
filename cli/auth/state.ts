@@ -9,6 +9,7 @@ import { TripoError } from '../../studio/contracts/errors.ts';
 import { privateAuthDirectory } from '../../studio/auth/control-directory.ts';
 import {
   protectPrivateWindowsPath,
+  replacePrivateWindowsFile,
   verifyPrivateWindowsPath,
 } from '../../studio/auth/windows-permissions.ts';
 import { loginStates, type LoginState, type LoginStatus } from './types.ts';
@@ -121,12 +122,38 @@ export async function readState(config: Config): Promise<LoginState | undefined>
 export async function writeState(config: Config, state: LoginState): Promise<void> {
   const file = await loginStateFile(config),
     temporary = file + '.' + randomUUID() + '.part';
+  let preserveTemporary = false;
   try {
     await writeFile(temporary, JSON.stringify(state) + '\n', { mode: 0o600, flag: 'wx' });
     if (process.platform === 'win32') protectPrivateWindowsPath(temporary, 'file');
-    await rename(temporary, file);
+    const previous =
+      process.platform === 'win32'
+        ? await lstat(file).catch((error: NodeJS.ErrnoException) => {
+            if (error.code === 'ENOENT') return undefined;
+            throw error;
+          })
+        : undefined;
+    try {
+      await rename(temporary, file);
+    } catch (error) {
+      if (
+        process.platform !== 'win32' ||
+        !previous ||
+        !['EPERM', 'EACCES'].includes((error as NodeJS.ErrnoException).code ?? '')
+      )
+        throw error;
+      // The fallback validates the existing destination and performs one native
+      // atomic replacement; a reader may still hold the previous file handle.
+      const current = await lstat(file);
+      if (current.dev !== previous.dev || current.ino !== previous.ino)
+        throw new TripoError('LOGIN_STATE_INVALID', 'Login state changed before atomic replacement.');
+      // A partial ReplaceFile failure can leave only the source; do not erase or automatically replay it.
+      preserveTemporary = true;
+      replacePrivateWindowsFile(temporary, file);
+      preserveTemporary = false;
+    }
   } finally {
-    await rm(temporary, { force: true });
+    if (!preserveTemporary) await rm(temporary, { force: true });
   }
 }
 // Windows ACL checks are synchronous and individually bounded at 10 seconds. A login commit

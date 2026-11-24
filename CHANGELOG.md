@@ -32,6 +32,7 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 ### Fixed
 
+- Preserve concurrent readers when replacing private Windows credentials and login state. If ordinary rename is blocked, use one same-directory native replacement after rechecking file identity and private ACLs. Uncertain replacements retain protected temporary records for inspection and are never automatically retried.
 - Explicitly load the system JSON module during Windows credential ACL checks, retaining the controlled environment, permission validation and timeouts. Native installation and publication outcomes are recorded with the corresponding Release; this change alone does not establish successful Windows or browser acceptance.
 - Recheck reviewed fixed-price expiry immediately before a new remote write, after preparation or authentication delays. Already submitted and unknown receipts remain recoverable without replay.
 - Preserve valid webpage-generated graph connections with an empty source port when the source has exactly one output. Keep original graph JSON, Lab selection requirements and ambiguous-output rejection; a real saved graph passed local editing and remote save/readback without changing existing nodes or edges.
