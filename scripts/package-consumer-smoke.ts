@@ -12,6 +12,7 @@ import { PACKAGE_NAME, VERSION } from '../version.ts';
 import { archiveEntries, snapshotArchive } from './archive-input.ts';
 import { productionLock, type ProductionLock } from './dependency-lock.ts';
 import { readDistributionFile } from './package-validation.ts';
+import { npmDiagnosticFiles, readNpmDiagnostics } from './npm-consumer-diagnostics.ts';
 import {
   installGlobalConsumer,
   probeGlobalCredentialStore,
@@ -439,13 +440,14 @@ export async function installConsumerRoutes(
     VERSION,
   );
   const packageArgs = ['--offline', '--ignore-scripts', '--yes', '--package', archive, '--', 'ai-modeling'];
+  const previousNpmLogs = await npmDiagnosticFiles(directory);
   try {
     assert.equal(
       (
         await consumerStage('npx_cache_install', () =>
           execute(
             process.execPath,
-            [npmPath, 'exec', ...packageArgs, '--version'],
+            [npmPath, 'exec', '--timing', ...packageArgs, '--version'],
             empty,
             offlineEnv,
             installationTimeoutMs,
@@ -456,6 +458,13 @@ export async function installConsumerRoutes(
     );
   } catch (error) {
     await reportNpxCacheState(directory);
+    process.stderr.write(
+      JSON.stringify({
+        diagnostic: 'package_consumer_npm',
+        stage: 'npx_cache_install',
+        ...(await readNpmDiagnostics(directory, previousNpmLogs)),
+      }) + '\n',
+    );
     throw error;
   }
   assert.match(
