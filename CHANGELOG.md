@@ -4,7 +4,7 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 ## Unreleased
 
-## 0.1.5 — 2026-11-24
+## 0.1.6 — 2026-11-25
 
 ### Added
 
@@ -32,6 +32,7 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 ### Fixed
 
+- Explicitly load the system JSON module during Windows credential ACL checks, retaining the controlled environment, permission validation and timeouts. Native installation and publication outcomes are recorded with the corresponding Release; this change alone does not establish successful Windows or browser acceptance.
 - Recheck reviewed fixed-price expiry immediately before a new remote write, after preparation or authentication delays. Already submitted and unknown receipts remain recoverable without replay.
 - Preserve valid webpage-generated graph connections with an empty source port when the source has exactly one output. Keep original graph JSON, Lab selection requirements and ambiguous-output rejection; a real saved graph passed local editing and remote save/readback without changing existing nodes or edges.
 - Expose unquoted-operation consent on applicable full MCP tools and on the default model-file import entry. Default model imports no longer inherit the unrelated PBR generation flag; later processing steps require their own explicit consent.
@@ -53,6 +54,10 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 - New Canvas chat submissions validate standalone and mixed attachment identity/readiness; continuations require a turn waiting for user input. Run preparation verifies the exact Canvas and unique Lab outputs, while Lab reuse rejects explicitly unavailable selected assets. Submitted jobs query their original receipts; uncertain creative submissions remain unbound without resubmission.
 
+## 0.1.5 — Unpublished candidate
+
+The `v0.1.5` tag is retained as a failed release candidate. Windows installation validation failed before publication; no npm upload or GitHub Release was created. Its changes are carried forward to 0.1.6.
+
 ## 0.1.4 — 2026-11-17
 
 ### Added
@@ -70,7 +75,7 @@ This file records user-facing changes. Unreleased changes describe the source tr
 - Keep publication-note failures free of raw JSON, private file paths and subprocess diagnostics; compare the complete original pricing object before schema normalization so extra fields cannot hide a source/runtime difference.
 - Retry private login-state reads when a concurrent login worker atomically replaces the file, while retaining ownership, permission, link and bounded-size checks.
 
-Version 0.1.4 is available on npm. Native Windows validation and the first GitHub OIDC upload remain unverified; npm availability does not establish those results. Existing 0.1.3 artifacts and version tags are unchanged.
+Version 0.1.4 was published to npm. At that release, native Windows validation and the first GitHub OIDC upload had not been verified; npm availability alone did not establish those results. Refer to each subsequent Release for its own acceptance records. Existing 0.1.3 artifacts and version tags are unchanged.
 
 ## 0.1.3 — 2026-11-17
 

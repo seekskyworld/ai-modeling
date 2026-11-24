@@ -30,7 +30,7 @@ Skill 安装管理依据客户端目标元数据和管理记录运行，保留�
 | 边界 | 必须保持的合同 |
 | --- | --- |
 | POSIX 文件 | 目录 `0700`、文件 `0600`；读取验证大小、结构、所有者及 no-follow 文件身份，写入采用同目录临时文件、fsync、原子 rename。 |
-| Windows 文件 | 有界 PowerShell 验证受保护 DACL，仅当前用户 SID 与 SYSTEM；拒绝 reparse point 和额外 allow ACE。chmod 不代替 ACL 验证。 |
+| Windows 文件 | 在受控环境中显式加载系统 JSON 模块，使用有界 PowerShell 验证受保护 DACL，仅当前用户 SID 与 SYSTEM；拒绝 reparse point 和额外 allow ACE。保留权限检查与超时，chmod 不代替 ACL 验证。 |
 | ACL 修复 | 仅应用自有认证控制目录/登录状态可在归属、非 reparse 与文件身份验证后收紧；不改内容、nonce 或撤销信息。私有 ACL 不重写，凭据条目和外部导入文件只验证、不修复。 |
 | 失败分类 | 保留 `CREDENTIAL_STORE_UNAVAILABLE`、`AUTH_DIRECTORY_INVALID`、`CREDENTIAL_STORE_BUSY`，区分读取失败与写入结果未知。 |
 | 秘密与浏览器 | JSON 值未额外加密，不复制到 SQLite、MCP 参数或日志；浏览器会话验证后才能保存。CDP 仅接受显式回环地址，只清理工具自建资源，不自动访问旧钥匙串。 |
@@ -105,7 +105,7 @@ npm run package:check
 
 ## 准备版本
 
-`package.json` 是唯一手工维护的程序版本来源，`version.ts` 供源码、CLI 与 MCP 共用。使用 `npm version patch --no-git-tag-version` 同步锁文件，再运行 `npm run version:check`；不要手改生成的 `dist/`。审阅 [CHANGELOG.md](../CHANGELOG.md) 和公开说明，只有真正发布时才把 Unreleased 条目移入有日期的版本。相同版本号下的源码修改不会改变已发布归档。0.1.5 的手动 npm 发布不等于 GitHub OIDC 发布验证；在非 Windows 环境跳过 Windows 专属测试时，原生 Windows 验收仍须单独完成。
+`package.json` 是唯一手工维护的程序版本来源，`version.ts` 供源码、CLI 与 MCP 共用。使用 `npm version patch --no-git-tag-version` 同步锁文件，再运行 `npm run version:check`；不要手改生成的 `dist/`。审阅 [CHANGELOG.md](../CHANGELOG.md) 和公开说明，只有真正发布时才把 Unreleased 条目移入有日期的版本。相同版本号下的源码修改不会改变已发布归档。平台安装、Windows 原生权限与 OIDC 发布结果以对应 Release 的验收记录为准；安装检查通过不代表浏览器登录、Agent 宿主或全部 Studio 业务已经验收。未发布候选的标签保留失败事实，不当作 npm 上传或 GitHub Release 发布。
 
 ## 打包与分发
 

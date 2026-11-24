@@ -67,14 +67,16 @@
 准备 Node.js **24+**，从 [npm](https://www.npmjs.com/package/@seekskyworld/ai-modeling) 安装统一运行包：
 
 ```sh
-npm install --global @seekskyworld/ai-modeling@0.1.5
+npm install --global @seekskyworld/ai-modeling@0.1.6
 ai-modeling --version
 ai-modeling doctor --offline --json
 ```
 
 0.1.0 预发布版存在全局安装原生依赖缺失问题，请使用上方修补版本。
 
-**0.1.5** 新增画布产物验收与会话历史核对，更新审阅价格并明确无预报价操作的费用同意，修复任务恢复与提交守卫。详见[更新记录](CHANGELOG.md)及[已验证范围](docs/compatibility.md)。Windows 原生验收和首次 GitHub OIDC 发布仍未验证；本机手动发布 npm 不代表这两项已经通过。
+**0.1.6** 新增画布产物验收与会话历史核对，更新审阅价格并明确无预报价操作的费用同意，修复任务恢复与提交守卫。Windows 凭据检查显式加载所需的系统 JSON 模块，保留受控环境、权限检查与超时。详见[更新记录](CHANGELOG.md)及[已验证范围](docs/compatibility.md)。
+
+平台安装与发布结果以对应 [Release](https://github.com/seekskyworld/ai-modeling/releases) 的验收记录为准。安装检查通过不代表浏览器、Agent 宿主或全部 Studio 业务均已验收。
 
 npm 包名是 **`@seekskyworld/ai-modeling`**，命令是 **`ai-modeling`**。接下来选择 [Skill](#使用-skill) 或 [MCP](#接入-mcp)，两者共用 CLI 和 Studio 账号。npm 安装不会自动导入 Skill 或修改客户端 MCP 配置。
 
@@ -87,7 +89,7 @@ ai-modeling make "a small blue robot" --model tripo-p2 --dry-run --json
 
 `setup` 会复用已保存的有效会话；需要登录时，由你在 Chrome/Edge 中完成密码与验证，不需要复制 Token。会话使用本地私有 JSON 文件保存，同一 OS 用户和 profile 的 CLI/MCP 共用，不再依赖系统钥匙串。权限要求和旧版升级见[本地 JSON 凭据](docs/usage.md#本地-json-凭据)。预览只在本地执行；确认后去掉 `--dry-run` 才会生成并消耗 Studio 积分。用 `ai-modeling task get @last` 查询任务，或用 `ai-modeling task watch @last --download --out ./assets` 下载结果。
 
-不想全局安装时，可运行 `npx --yes --package @seekskyworld/ai-modeling@0.1.5 ai-modeling --version`；后续 CLI 或 Skill 安装命令沿用这个完整前缀。下方 MCP 配置也可直接通过 npx 启动。
+不想全局安装时，可运行 `npx --yes --package @seekskyworld/ai-modeling@0.1.6 ai-modeling --version`；后续 CLI 或 Skill 安装命令沿用这个完整前缀。下方 MCP 配置也可直接通过 npx 启动。
 
 更多 npm、[Release 归档](https://github.com/seekskyworld/ai-modeling/releases)、平台条件与恢复方法见[安装与登录指南](docs/usage.md)。源码贡献者执行 `npm ci`、`npm run build`，再用 `node dist/cli/main.js` 替换文中的 `ai-modeling`；单纯构建不会安装全局命令。付费流程前可用 `ai-modeling pricing status` 检查价格来源与到期时间。
 
@@ -117,7 +119,7 @@ ai-modeling generate image-to-model ./reference.png --model tripo-v3.1 -p face_l
 
 CLI 是底层执行接口；MCP 是面向 Agent 的工具入口，Agent 调用 MCP 后，由 MCP 内部调用 CLI。Skills 提供使用说明、示例和面向具体目标的流程指导，沿用用户选定的入口。选择 MCP 时使用 MCP 工具，不擅自改成 shell CLI。Skill 需要另装运行包，运行层不强制固定业务流程。
 
-0.1.5 使用 `@seekskyworld/ai-modeling` 包名、`ai-modeling` 命令、`AI_MODELING_*` 配置、`ai_modeling_*` 工具及 `ai-modeling://auth/status` 资源。请按这些名称配置客户端，再通过所选入口完成登录。
+0.1.6 使用 `@seekskyworld/ai-modeling` 包名、`ai-modeling` 命令、`AI_MODELING_*` 配置、`ai_modeling_*` 工具及 `ai-modeling://auth/status` 资源。请按这些名称配置客户端，再通过所选入口完成登录。
 
 ### 使用 Skill
 
@@ -145,7 +147,7 @@ Golutra Agent 用户可执行 `ai-modeling skill install --target golutra-agent 
     "ai-modeling": {
       "type": "stdio",
       "command": "npx",
-      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.5", "ai-modeling", "mcp"],
+      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.6", "ai-modeling", "mcp"],
       "env": {"AI_MODELING_PROFILE": "default"}
     }
   }
