@@ -48,6 +48,8 @@ interface LockMismatch {
 
 const installationTimeoutMs = 300000;
 const startupTimeoutMs = 30000;
+// npm reopens and extracts local TGZ metadata even when its npx installation is cached.
+const fileSpecTimeoutMs = 600000;
 type ConsumerStage =
   | 'local_install'
   | 'local_cli_version'
@@ -55,6 +57,9 @@ type ConsumerStage =
   | 'local_npm_exec'
   | 'npx_cache_install'
   | 'npx_cached_help'
+  | 'local_mcp'
+  | 'global_mcp'
+  | 'npx_mcp'
   | 'global_install'
   | 'global_native_runtime'
   | 'global_json_credentials';
@@ -97,9 +102,11 @@ async function consumerStage<T>(stage: ConsumerStage, action: () => T | Promise<
   }
 }
 
-/** A failed first npx invocation may still be installing; report only disposable cache presence. */
-async function reportNpxCacheState(directory: string): Promise<void> {
-  const diagnostic = { diagnostic: 'package_consumer_cache', stage: 'npx_cache_install' };
+type NpxFileSpecStage = 'npx_cache_install' | 'npx_cached_help' | 'npx_mcp';
+
+/** A failed npx invocation may still be extracting metadata; report disposable cache presence only. */
+async function reportNpxCacheState(directory: string, stage: NpxFileSpecStage): Promise<void> {
+  const diagnostic = { diagnostic: 'package_consumer_cache', stage };
   try {
     const cache = path.join(directory, 'cache', '_npx');
     const roots = (await readdir(cache, { withFileTypes: true })).filter((entry) => entry.isDirectory());
@@ -133,6 +140,28 @@ async function reportNpxCacheState(directory: string): Promise<void> {
     );
   } catch {
     process.stderr.write(JSON.stringify({ ...diagnostic, inspection: 'unavailable' }) + '\n');
+  }
+}
+
+async function npxFileSpecStage<T>(
+  stage: NpxFileSpecStage,
+  directory: string,
+  action: () => T | Promise<T>,
+): Promise<T> {
+  const previousNpmLogs = await npmDiagnosticFiles(directory);
+  try {
+    return await consumerStage(stage, action);
+  } catch (error) {
+    await reportNpxCacheState(directory, stage);
+    throw error;
+  } finally {
+    process.stderr.write(
+      JSON.stringify({
+        diagnostic: 'package_consumer_npm',
+        stage,
+        ...(await readNpmDiagnostics(directory, previousNpmLogs)),
+      }) + '\n',
+    );
   }
 }
 
@@ -439,37 +468,33 @@ export async function installConsumerRoutes(
     ).trim(),
     VERSION,
   );
-  const packageArgs = ['--offline', '--ignore-scripts', '--yes', '--package', archive, '--', 'ai-modeling'];
-  const previousNpmLogs = await npmDiagnosticFiles(directory);
-  try {
-    assert.equal(
-      (
-        await consumerStage('npx_cache_install', () =>
-          execute(
-            process.execPath,
-            [npmPath, 'exec', '--timing', ...packageArgs, '--version'],
-            empty,
-            offlineEnv,
-            installationTimeoutMs,
-          ),
-        )
-      ).trim(),
-      VERSION,
-    );
-  } catch (error) {
-    await reportNpxCacheState(directory);
-    process.stderr.write(
-      JSON.stringify({
-        diagnostic: 'package_consumer_npm',
-        stage: 'npx_cache_install',
-        ...(await readNpmDiagnostics(directory, previousNpmLogs)),
-      }) + '\n',
-    );
-    throw error;
-  }
+  const packageArgs = [
+    '--timing',
+    '--offline',
+    '--ignore-scripts',
+    '--yes',
+    '--package',
+    archive,
+    '--',
+    'ai-modeling',
+  ];
+  assert.equal(
+    (
+      await npxFileSpecStage('npx_cache_install', directory, () =>
+        execute(
+          process.execPath,
+          [npmPath, 'exec', ...packageArgs, '--version'],
+          empty,
+          offlineEnv,
+          fileSpecTimeoutMs,
+        ),
+      )
+    ).trim(),
+    VERSION,
+  );
   assert.match(
-    await consumerStage('npx_cached_help', () =>
-      execute(process.execPath, [npxPath, ...packageArgs, '--help'], empty, offlineEnv),
+    await npxFileSpecStage('npx_cached_help', directory, () =>
+      execute(process.execPath, [npxPath, ...packageArgs, '--help'], empty, offlineEnv, fileSpecTimeoutMs),
     ),
     /ai-modeling/,
   );
@@ -582,6 +607,34 @@ async function checkGolutraExport(
   return { packages: exported.plugins.length, tools: names.length, client_loaded: false };
 }
 
+async function checkMcpConsumerRoute(
+  route: { args: string[]; cwd: string },
+  env: Record<string, string>,
+  definitions: { name: string }[],
+  connectTimeoutMs: number,
+) {
+  const client = new Client({ name: 'npm-consumer-smoke', version: '1' });
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    ...route,
+    env,
+    stderr: 'pipe',
+  });
+  // npm timing text is captured in its disposable logs; draining avoids blocking the stdio server.
+  transport.stderr?.on('data', () => undefined);
+  try {
+    await client.connect(transport, { timeout: connectTimeoutMs });
+    assert.deepEqual(client.getServerVersion(), { name: 'ai-modeling', version: VERSION });
+    assert.deepEqual(
+      (await client.listTools({}, { timeout: startupTimeoutMs })).tools.map((tool) => tool.name).sort(),
+      definitions.map((tool) => tool.name).sort(),
+    );
+  } finally {
+    await client.close();
+    await transport.close();
+  }
+}
+
 export async function smokePackageConsumer(archive: string, npmCli = process.env.npm_execpath) {
   if (!npmCli) throw new Error('Run package:consumer-smoke through npm run so npm_execpath is available.');
   const directory = await realpath(await mkdtemp(path.join(tmpdir(), 'ai-modeling-consumer-smoke-')));
@@ -617,32 +670,29 @@ export async function smokePackageConsumer(archive: string, npmCli = process.env
     assert.ok(definitions.some((tool) => tool.name === 'ai_modeling_assets_list'));
     assert.match(cli(['assets', 'list', '--help']), /--kind <kind>/);
     assert.match(cli(['guides', 'read', 'commands/assets/list']), /next_offset/);
-    for (const route of [
-      { args: [installed.local.entry, 'mcp', '--toolset', 'studio'], cwd: directory },
-      { args: [global.entry, 'mcp', '--toolset', 'studio'], cwd: directory },
+    for (const { stage, timeout, ...route } of [
       {
+        stage: 'local_mcp' as const,
+        timeout: startupTimeoutMs,
+        args: [installed.local.entry, 'mcp', '--toolset', 'studio'],
+        cwd: directory,
+      },
+      {
+        stage: 'global_mcp' as const,
+        timeout: startupTimeoutMs,
+        args: [global.entry, 'mcp', '--toolset', 'studio'],
+        cwd: directory,
+      },
+      {
+        stage: 'npx_mcp' as const,
+        timeout: fileSpecTimeoutMs,
         args: [installed.npxPath, ...installed.packageArgs, 'mcp', '--toolset', 'studio'],
         cwd: installed.empty,
       },
     ]) {
-      const client = new Client({ name: 'npm-consumer-smoke', version: '1' });
-      const transport = new StdioClientTransport({
-        command: process.execPath,
-        ...route,
-        env: installed.env,
-        stderr: 'pipe',
-      });
-      try {
-        await client.connect(transport, { timeout: 30000 });
-        assert.deepEqual(client.getServerVersion(), { name: 'ai-modeling', version: VERSION });
-        assert.deepEqual(
-          (await client.listTools({}, { timeout: 30000 })).tools.map((tool) => tool.name).sort(),
-          definitions.map((tool) => tool.name).sort(),
-        );
-      } finally {
-        await client.close();
-        await transport.close();
-      }
+      const check = () => checkMcpConsumerRoute(route, installed.env, definitions, timeout);
+      if (stage === 'npx_mcp') await npxFileSpecStage(stage, directory, check);
+      else await consumerStage(stage, check);
     }
     const skillParent = path.join(directory, 'skills');
     await checkInstalledSkill(cli, ['--dir', skillParent], path.join(skillParent, 'ai-modeling'), entries);

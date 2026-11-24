@@ -147,6 +147,8 @@ npm run release:check
 
 `package:smoke` 解包、锁定安装并链接临时全局入口，验证 CLI/MCP、唯一 bin、版本、指南及依赖。`package:consumer-smoke` 分别检查本地 npm、真实全局 npm、npm exec/npx、Skill 管理、MCP 发现及原生模块加载，功能与依赖版本/完整性分别记录。`--require-locked` 将漂移作为失败；这些临时配置检查不登录或生成素材，也不代替公共 registry 安装。
 
+本地 TGZ 的 `npm exec/npx --package FILE.tgz` 会重复解包以读取元数据，已有 npx 缓存也会执行这些检查；其总耗时不能作为 CLI 冷启动或热启动耗时。消费验收为三个本地 TGZ 入口（首次 npx、缓存 npx 帮助、npx MCP 连接）各设置 10 分钟上限，并记录阶段耗时及经过筛选的 npm 计时。已安装 CLI 和直接 MCP 连接仍限 30 秒，所有 MCP 工具查询仍限 30 秒。安装矩阵的总时限为 40 分钟，包含多轮安装、原生权限与产物检查；这些上限不表示对应平台已通过验收。
+
 Linux、macOS、Windows 的 `smoke-{platform}.json` 和 `consumer-{platform}.json` 必须绑定同一 TGZ。缺报告或 `CONSUMER_DEPENDENCY_DRIFT` 阻塞发布就绪，功能通过不能抵消依赖漂移；没有原生成功回执的平台保留未验收。
 
 `release:check` 核源码元数据、可追溯且干净的提交和价格期限，默认至少剩余 24 小时；不联网验证联系人/价格、不自动续期，`scope: source` 的 ready 只表示源码前置条件。候选汇总使用：
