@@ -7,14 +7,46 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { checkWindowsPermissions, windowsPermissionTimeoutMs } from '../studio/auth/windows-permissions.ts';
 
-const stdinScript = (method: 'ReadToEnd' | 'ReadLine') => `
-$ErrorActionPreference = 'Stop'
+const stageMarkers = {
+  started: 'AI_MODELING_STAGE_STARTED',
+  'input-encoding': 'AI_MODELING_STAGE_INPUT_ENCODING',
+  'output-encoding': 'AI_MODELING_STAGE_OUTPUT_ENCODING',
+  read: 'AI_MODELING_STAGE_READ',
+  json: 'AI_MODELING_STAGE_JSON',
+} as const;
+const stageLabels = new Map(Object.entries(stageMarkers).map(([label, marker]) => [marker, label]));
+const stage = (name: keyof typeof stageMarkers) => `
+[Console]::Out.WriteLine('${stageMarkers[name]}')
+[Console]::Out.Flush()
+`;
+const inputEncoding = `
 [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+${stage('input-encoding')}
+`;
+const outputEncoding = `
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-try {
-  $requests = @(([Console]::In.${method}() | ConvertFrom-Json))
+${stage('output-encoding')}
+`;
+const parsedMarker = `
+  $requests = @(($raw | ConvertFrom-Json))
+  ${stage('json')}
   if ($requests.Count -ne 1 -or $requests[0].kind -ne 'directory') { exit 2 }
   [Console]::Out.Write('AI_MODELING_PROBE_STDIN')
+`;
+const stdinScript = (method: 'ReadToEnd' | 'ReadLine' | 'StreamReaderReadLine', configureInput = true) => `
+${stage('started')}
+$ErrorActionPreference = 'Stop'
+${configureInput ? inputEncoding : ''}
+${outputEncoding}
+try {
+  ${
+    method === 'StreamReaderReadLine'
+      ? `$reader = [IO.StreamReader]::new([Console]::OpenStandardInput(), [Text.UTF8Encoding]::new($false), $false)
+  $raw = $reader.ReadLine()`
+      : `$raw = [Console]::In.${method}()`
+  }
+  ${stage('read')}
+  ${parsedMarker}
 } catch { exit 1 }
 `;
 const markers = new Map([
@@ -27,7 +59,7 @@ test(
   'native Windows PowerShell transport and protected DACL',
   {
     skip: process.platform !== 'win32',
-    timeout: 90000,
+    timeout: 130000,
   },
   async (t) => {
     const directory = await mkdtemp(path.join(tmpdir(), 'ai-modeling-native-acl-'));
@@ -45,13 +77,19 @@ test(
     ) => {
       const started = performance.now();
       const result = spawnSync(command, args, options);
+      // Ignore all other output, including partial lines emitted before a timeout.
+      const lines = (result.stdout ?? '').split(/\r?\n/);
       const diagnostic = {
         probe: name,
         status: result.status,
         signal: result.signal,
         error_code: (result.error as NodeJS.ErrnoException | undefined)?.code ?? null,
         elapsed_ms: Math.round(performance.now() - started),
-        marker: markers.get(result.stdout) ?? null,
+        marker: lines.map((line) => markers.get(line)).find((marker) => marker !== undefined) ?? null,
+        stages: lines.flatMap((line) => {
+          const label = stageLabels.get(line as (typeof stageMarkers)[keyof typeof stageMarkers]);
+          return label ? [label] : [];
+        }),
       };
       records.set(name, diagnostic);
       t.diagnostic(JSON.stringify(diagnostic));
@@ -92,6 +130,28 @@ test(
     run('minimal_env_read_to_end', stdinScript('ReadToEnd'), payload);
     run('minimal_env_read_to_end_text', stdinScript('ReadToEnd'), payload, ['-InputFormat', 'Text']);
     run('minimal_env_read_line_newline', stdinScript('ReadLine'), payload + '\n');
+    run(
+      'minimal_env_encoding_only',
+      `${stage('started')}
+$ErrorActionPreference = 'Stop'
+${inputEncoding}
+${outputEncoding}
+[Console]::Out.Write('AI_MODELING_PROBE_READY')`,
+      '',
+    );
+    run(
+      'minimal_env_inline_json',
+      `${stage('started')}
+$ErrorActionPreference = 'Stop'
+$raw = '[{"kind":"directory"}]'
+try {
+  ${parsedMarker}
+} catch { exit 1 }`,
+      '',
+    );
+    run('inherited_env_read_to_end', stdinScript('ReadToEnd'), payload, [], { ...process.env });
+    run('minimal_env_read_line_no_input_encoding', stdinScript('ReadLine', false), payload + '\n');
+    run('minimal_env_stream_reader', stdinScript('StreamReaderReadLine', false), payload + '\n');
     let protectedAcl = false;
     try {
       checkWindowsPermissions(
