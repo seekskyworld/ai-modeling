@@ -109,7 +109,15 @@ function workflowIdentity(env: NodeJS.ProcessEnv, selectedRepository: string) {
     );
   // GitHub supplies an opaque endpoint; supported runners do not share a pathname suffix.
   url.searchParams.set('audience', audience);
-  return { ref, workflow, sha: env.GITHUB_SHA, url, requestToken: env.ACTIONS_ID_TOKEN_REQUEST_TOKEN };
+  return {
+    ref,
+    workflow,
+    sha: env.GITHUB_SHA,
+    url,
+    requestToken: env.ACTIONS_ID_TOKEN_REQUEST_TOKEN,
+    repositoryId: env.GITHUB_REPOSITORY_ID,
+    ownerId: env.GITHUB_REPOSITORY_OWNER_ID,
+  };
 }
 
 const requestLabels = {
@@ -200,6 +208,25 @@ export async function oidcRequest(
   }
 }
 
+function subjectMatches(claims: Record<string, unknown>, identity: ReturnType<typeof workflowIdentity>) {
+  const legacy = `repo:${repository}:environment:npm`;
+  const { repositoryId, ownerId } = identity;
+  // Existing repositories may still emit the legacy subject. Any supplied IDs bind both formats.
+  if (repositoryId === undefined && ownerId === undefined) return claims.sub === legacy;
+  if (
+    !repositoryId ||
+    !ownerId ||
+    !/^[1-9]\d*$/.test(repositoryId) ||
+    !/^[1-9]\d*$/.test(ownerId) ||
+    claims.repository_id !== repositoryId ||
+    claims.repository_owner_id !== ownerId
+  )
+    return false;
+  const [owner, name] = repository.split('/');
+  const immutable = `repo:${owner}@${ownerId}/${name}@${repositoryId}:environment:npm`;
+  return claims.sub === legacy || claims.sub === immutable;
+}
+
 function assertClaims(token: string, identity: ReturnType<typeof workflowIdentity>, now: number) {
   try {
     const parts = token.split('.');
@@ -210,7 +237,7 @@ function assertClaims(token: string, identity: ReturnType<typeof workflowIdentit
       claims.iss !== 'https://token.actions.githubusercontent.com' ||
       claims.aud !== audience ||
       claims.repository !== repository ||
-      claims.sub !== `repo:${repository}:environment:npm` ||
+      !subjectMatches(claims, identity) ||
       claims.ref !== identity.ref ||
       claims.workflow_ref !== identity.workflow ||
       claims.sha !== identity.sha ||

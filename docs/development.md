@@ -181,7 +181,7 @@ npm trust github @seekskyworld/ai-modeling --file release.yml --repo seekskyworl
 
 正式标签的 `prepare` / `submit` 路径先由独立 auth job 执行真实 GitHub OIDC 获取与 npm 包级令牌交换，成功后才允许新候选构建或恢复首次提交。三平台验收可能持续较久，因此 publish 重新读取持久状态；只有当前仍为 `submit` 时，才在 `--begin-submission` 之前再次认证。第二次认证失败保留 prepared 状态，不消耗唯一提交占位。认证通过也不代替后续 npm 上传及公共字节验收。
 
-两处统一运行 `node scripts/npm-auth-check.ts --repository "$GITHUB_REPOSITORY" --out "$AUTH_REPORT"`。预检只获取短时凭据并立即丢弃，不发布包、不改 dist-tag、不保存 npmrc；失败非零退出，并由 `always()` 步骤保留无凭据诊断报告。报告仅包含环境变量是否存在、认证阶段、HTTP 状态、工具版本等安全字段，不保存 token、JWT、OIDC 请求 URL、响应正文或原始错误。`NPM_TRUSTED_PUBLISHER_CONFIGURED=true` 仍只是维护者声明，不能替代真实预检。 GitHub 提供的 OIDC 请求路径和查询串按不透明值处理，不假定旧版 `/idtoken` 后缀；仍限定 HTTPS 与 GitHub Actions 发行端域名，并拒绝 URL 内嵌账号、额外端口和 fragment。
+两处统一运行 `node scripts/npm-auth-check.ts --repository "$GITHUB_REPOSITORY" --out "$AUTH_REPORT"`。预检只获取短时凭据并立即丢弃，不发布包、不改 dist-tag、不保存 npmrc；失败非零退出，并由 `always()` 步骤保留无凭据诊断报告。报告仅包含环境变量是否存在、认证阶段、HTTP 状态、工具版本等安全字段，不保存 token、JWT、OIDC 请求 URL、响应正文或原始错误。`NPM_TRUSTED_PUBLISHER_CONFIGURED=true` 仍只是维护者声明，不能替代真实预检。 GitHub 提供的 OIDC 请求路径和查询串按不透明值处理，不假定旧版 `/idtoken` 后缀；仍限定 HTTPS 与 GitHub Actions 发行端域名，并拒绝 URL 内嵌账号、额外端口和 fragment。 身份接受旧格式 subject，或固定仓库名称加 runner 的 owner/repository ID 构成的不可变格式；后者还须与 JWT 中两个 ID 交叉一致，不能只匹配名称或忽略环境。
 
 预检要求 Node.js **24+** 和 npm **11.17.0**，与已验证的发布工具链一致；这是发布维护脚本的约束，不改变普通用户安装产品 CLI 的 npm 要求。`CI=false` 或非空 `NPM_ID_TOKEN` 会在交换前被拒绝；早期预检、提交前预检和实际 publish 三处均显式清空 `NPM_ID_TOKEN`，保留继承的 CI 值用于检查。
 

@@ -256,6 +256,89 @@ test('GitHub runner opaque endpoint paths retain their query and use the same pa
   assert.deepEqual(logs, []);
 });
 
+const repositoryId = '456789';
+const ownerId = '123456';
+const immutableSubject = `repo:seekskyworld@${ownerId}/ai-modeling@${repositoryId}:environment:npm`;
+const runtimeIds = { GITHUB_REPOSITORY_ID: repositoryId, GITHUB_REPOSITORY_OWNER_ID: ownerId };
+const idClaims = { repository_id: repositoryId, repository_owner_id: ownerId };
+
+for (const [label, subject] of [
+  ['legacy', `repo:${repository}:environment:npm`],
+  ['immutable', immutableSubject],
+] as const)
+  test(`${label} environment subject binds the runtime and JWT repository IDs before exchange`, async () => {
+    const token = identity({ ...idClaims, sub: subject });
+    const network = transport([
+      () => Response.json({ value: token }),
+      () => Response.json({ token: packageToken }),
+    ]);
+    const report = await checkNpmAuthentication(
+      { repository },
+      dependencies(network.fetcher, environment(runtimeIds)),
+    );
+    assert.equal(report.success, true);
+    assert.equal(network.calls.length, 2);
+    assert.equal(new Headers(network.calls[1]!.options.headers).get('authorization'), `Bearer ${token}`);
+    safeReport(report);
+    noSecrets(report, [token, subject]);
+  });
+
+for (const [label, envChanges, claimChanges] of [
+  [
+    'a different owner ID in the subject',
+    {},
+    { sub: `repo:seekskyworld@999/ai-modeling@${repositoryId}:environment:npm` },
+  ],
+  [
+    'a different repository ID in the subject',
+    {},
+    { sub: `repo:seekskyworld@${ownerId}/ai-modeling@999:environment:npm` },
+  ],
+  [
+    'a different owner name with the same IDs',
+    {},
+    { sub: `repo:other@${ownerId}/ai-modeling@${repositoryId}:environment:npm` },
+  ],
+  [
+    'another environment with the same IDs',
+    {},
+    { sub: immutableSubject.replace(':environment:npm', ':environment:other') },
+  ],
+  ['a mismatched JWT repository ID', {}, { repository_id: '999' }],
+  ['a mismatched JWT owner ID', {}, { repository_owner_id: '999' }],
+  ['a missing JWT repository ID', {}, { repository_id: undefined }],
+  ['a missing JWT owner ID', {}, { repository_owner_id: undefined }],
+  ['a numeric rather than exact string JWT ID', {}, { repository_id: Number(repositoryId) }],
+  ['missing runtime IDs', { GITHUB_REPOSITORY_ID: undefined, GITHUB_REPOSITORY_OWNER_ID: undefined }, {}],
+  ['an incomplete runtime ID pair', { GITHUB_REPOSITORY_OWNER_ID: undefined }, {}],
+  [
+    'a noncanonical runtime ID',
+    { GITHUB_REPOSITORY_OWNER_ID: '0123456' },
+    {
+      repository_owner_id: '0123456',
+      sub: `repo:seekskyworld@0123456/ai-modeling@${repositoryId}:environment:npm`,
+    },
+  ],
+  [
+    'legacy fallback with mismatched bound IDs',
+    {},
+    { sub: `repo:${repository}:environment:npm`, repository_id: '999' },
+  ],
+] as const)
+  test(`subject verification rejects ${label} without falling back or exchanging`, async () => {
+    const token = identity(Object.assign({ ...idClaims, sub: immutableSubject }, claimChanges));
+    const network = transport([() => Response.json({ value: token })]);
+    const report = await checkNpmAuthentication(
+      { repository },
+      dependencies(network.fetcher, environment({ ...runtimeIds, ...envChanges })),
+    );
+    assert.equal(report.success, false);
+    assert.deepEqual(report.failure, { stage: 'github_claims', code: 'CLAIMS_INVALID' });
+    assert.equal(network.calls.length, 1);
+    safeReport(report);
+    noSecrets(report, [token]);
+  });
+
 for (const [label, endpoint] of [
   ['HTTP issuer', 'http://run-actions-3-azure-eastus.actions.githubusercontent.com/synthetic/opaque'],
   ['foreign host', 'https://example.com/synthetic/opaque'],
