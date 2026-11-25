@@ -5,6 +5,7 @@ import { TripoError } from '../../studio/contracts/errors.ts';
 import { affineIntentKey } from '../core/smartsegment-affine-policy.ts';
 import { smartSegmentAffinePlan } from './smartsegment-affine-plan.ts';
 import { smartSegmentIdentity } from './smartsegment-scale-plan.ts';
+import { legacyAffineBillingPlan } from './smartsegment-affine-billing.ts';
 
 export const smartSegmentTransferWarning =
   'New positive-determinant affine smartsegment requests use three separately quoted native operations: import the unchanged original GLB with a source-derived proper rotation, write the second TRS as native metadata, then ordinary segmentation. Both matrices and import normalization are frozen from the original source and requested matrix before submission. The source must be a centered unit-extent static single-primitive GLB with complete normals/UVs and basic opaque appearance; each actual import must preserve its normalized oriented faces, source normals, UVs and embedded texture bytes before continuing. An original Studio display rename on the single source node is mapped to the verified imported node; unrelated stale rename keys are rejected before submission. Original Studio material fields are restored exactly, including partial maps. The final native output must independently match every original A(P) face and every B2(actual import) face at the fixed 4e-5 bound. Tolerances are never accumulated and no model geometry is locally rewritten. Final segmentation can change normals, UVs, materials and textures. Original seven-step requests retain their frozen route and receipts; failed or unknown stages are never replaced or resubmitted. This per-result verification does not claim every matrix or source was tested against Studio.';
@@ -89,5 +90,5 @@ export function selectAffinePlan(app: Application, plan: Plan, parent: string): 
       'Both affine routes are bound to this request. Recover its original complete records without submitting.',
       'not_submitted',
     );
-  return legacy ? legacyAffinePlan(plan) : transferAffinePlan(plan);
+  return legacy ? legacyAffineBillingPlan(legacyAffinePlan(plan), plan, legacy) : transferAffinePlan(plan);
 }

@@ -29,14 +29,15 @@ export class WebMicroClient {
     this.namespace = namespace;
   }
   /** 方法由内部目录选择；提交不自动重试，请求头和错误正文不进入调用结果。 */
-  async call(method: string, body: unknown, write = false): Promise<unknown> {
-    return await this.callOnce(method, body, write, true);
+  async call(method: string, body: unknown, write = false, beforeSend?: () => void): Promise<unknown> {
+    return await this.callOnce(method, body, write, true, beforeSend);
   }
   private async callOnce(
     method: string,
     body: unknown,
     write: boolean,
     allowLogin: boolean,
+    beforeSend?: () => void,
   ): Promise<unknown> {
     const allowed =
       this.namespace === 'canvas'
@@ -48,6 +49,7 @@ export class WebMicroClient {
     // 仅精确GetCanvas回读已核实可重放；write=false不意味着任意RPC都只读。
     const readRetry =
       this.namespace === 'canvas' && method === '/tripo.canvas.api.agent.CanvasService/GetCanvas' && !write;
+    beforeSend?.();
     const response = await fetchReadTransport(
       this.studio.fetcher,
       'https://msapi.tripo3d.ai/ms/web/api',
@@ -75,7 +77,7 @@ export class WebMicroClient {
       if (!allowLogin || write || !(this.namespace === 'community' || authenticationReads.has(method)))
         throw error;
       await this.studio.recoverAuthentication(error, 'read_rejected', session.accountRef);
-      return await this.callOnce(method, body, write, false);
+      return await this.callOnce(method, body, write, false, beforeSend);
     }
   }
   /** SSE 与普通 RPC 使用同一会话，只允许已核实的两个订阅方法。 */

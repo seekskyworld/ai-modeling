@@ -30,6 +30,7 @@ function condition(expression: string, context: object): boolean {
       {
         ...context,
         always: () => true,
+        cancelled: () => false,
         startsWith: (value: string, prefix: string) => value.startsWith(prefix),
       },
       { timeout: 100 },
@@ -58,6 +59,7 @@ test('actual event and dependency guards reject manual or incomplete publication
       ref?: string;
       action?: string;
       inspect?: string;
+      auth?: string;
       build?: string;
       smoke?: string;
       candidate?: string;
@@ -67,6 +69,7 @@ test('actual event and dependency guards reject manual or incomplete publication
       github: { event_name: changes.event ?? 'push', ref: changes.ref ?? 'refs/tags/v0.1.4' },
       needs: {
         inspect: { result: changes.inspect ?? 'success', outputs: { action: changes.action ?? 'prepare' } },
+        auth: { result: changes.auth ?? 'success' },
         build: { result: changes.build ?? 'success' },
         smoke: { result: changes.smoke ?? 'success' },
         candidate: { result: changes.candidate ?? 'success' },
@@ -75,13 +78,77 @@ test('actual event and dependency guards reject manual or incomplete publication
   assert.equal(permitted(), true);
   assert.equal(permitted({ event: 'workflow_dispatch' }), false);
   assert.equal(permitted({ ref: 'refs/heads/main' }), false);
-  for (const name of ['inspect', 'build', 'smoke', 'candidate'])
+  for (const name of ['inspect', 'auth', 'build', 'smoke', 'candidate'])
     assert.equal(permitted({ [name]: 'failure' }), false);
   for (const action of ['submit', 'wait', 'verify', 'published']) {
     const values = { action, build: 'skipped', smoke: 'skipped', candidate: 'skipped' };
     assert.equal(permitted(values), true);
     assert.equal(permitted({ ...values, event: 'workflow_dispatch' }), false);
-    assert.equal(condition(release.jobs.build!.if!, { needs: { inspect: { outputs: { action } } } }), false);
+    assert.equal(
+      condition(release.jobs.build!.if!, {
+        github: { event_name: 'push' },
+        needs: { inspect: { result: 'success', outputs: { action } }, auth: { result: 'success' } },
+      }),
+      false,
+    );
+    for (const auth of ['failure', 'cancelled', 'skipped'])
+      assert.equal(permitted({ ...values, auth }), action !== 'submit');
+  }
+  for (const action of ['', 'publish', 'unknown', 'import_required'])
+    assert.equal(permitted({ action }), false);
+});
+
+test('real authentication is exclusive to new tag submissions and gates candidate work', () => {
+  for (const event of ['push', 'workflow_dispatch'])
+    for (const action of ['prepare', 'submit', 'wait', 'verify', 'published'])
+      for (const inspect of ['success', 'failure', 'cancelled', 'skipped'])
+        for (const auth of ['success', 'failure', 'cancelled', 'skipped']) {
+          const context = {
+            github: { event_name: event, ref: 'refs/tags/v0.1.4' },
+            needs: { inspect: { result: inspect, outputs: { action } }, auth: { result: auth } },
+          };
+          assert.equal(
+            condition(release.jobs.auth!.if!, context),
+            event === 'push' && inspect === 'success' && ['prepare', 'submit'].includes(action),
+          );
+          assert.equal(
+            condition(release.jobs.build!.if!, context),
+            inspect === 'success' &&
+              action === 'prepare' &&
+              (event === 'workflow_dispatch' || auth === 'success'),
+          );
+        }
+  assert.equal(
+    condition(release.jobs.auth!.if!, {
+      github: { event_name: 'push', ref: 'refs/heads/main' },
+      needs: { inspect: { result: 'success', outputs: { action: 'prepare' } } },
+    }),
+    false,
+  );
+});
+
+test('manual preview continues its full candidate graph after the authentication job is skipped', () => {
+  const context = {
+    github: { event_name: 'workflow_dispatch', ref: 'refs/heads/main' },
+    needs: {
+      inspect: { result: 'success', outputs: { action: 'prepare' } },
+      auth: { result: 'skipped' },
+      build: { result: 'success' },
+      smoke: { result: 'success' },
+      candidate: { result: 'success' },
+    },
+  };
+  assert.equal(condition(release.jobs.auth!.if!, context), false);
+  for (const job of ['build', 'smoke', 'candidate']) {
+    assert.match(release.jobs[job]!.if!, /always\(\)/);
+    assert.equal(condition(release.jobs[job]!.if!, context), true);
+  }
+  assert.equal(condition(release.jobs.publish!.if!, context), false);
+  for (const failed of ['inspect', 'build', 'smoke']) {
+    const failedContext = structuredClone(context);
+    failedContext.needs[failed as 'inspect' | 'build' | 'smoke'].result = 'failure';
+    assert.equal(condition(release.jobs.candidate!.if!, failedContext), false);
+    if (failed !== 'smoke') assert.equal(condition(release.jobs.smoke!.if!, failedContext), false);
   }
 });
 
@@ -176,6 +243,132 @@ for (const action of ['submit', 'wait', 'verify', 'published'])
 test('confirmed Trusted Publisher permits the prepared prerequisite check', bashOnly, async (t) => {
   const f = await workflowFixture(t);
   f.run(named('publish', 'Check the npm-side Trusted Publisher prerequisite before a new claim'));
+});
+
+async function submissionSteps(fixture: Awaited<ReturnType<typeof workflowFixture>>, authSuccess = true) {
+  const steps: Record<string, { outcome: string; outputs: Record<string, string> }> = Object.fromEntries(
+    ['preclaim', 'auth', 'claim', 'npm'].map((id) => [id, { outcome: 'skipped', outputs: {} }]),
+  );
+  let successful = true;
+  for (const id of ['preclaim', 'auth', 'claim', 'npm']) {
+    const current = step('publish', id);
+    if (!successful || (current.if && !condition(current.if, { steps }))) continue;
+    const result = fixture.run(current, id !== 'auth' || authSuccess);
+    successful = result.status === 0;
+    steps[id] = { outcome: successful ? 'success' : 'failure', outputs: await fixture.outputs() };
+  }
+  return steps;
+}
+
+test('early authentication failure writes its report and prevents the build gate', bashOnly, async (t) => {
+  const f = await workflowFixture(t);
+  f.env.WORKFLOW_AUTH_EXIT = '1';
+  f.env.WORKFLOW_AUTH_REPORT = JSON.stringify({ schema_version: 1, success: false, stages: [] });
+  f.run(step('auth', 'authenticate'), false);
+  assert.equal(JSON.parse(await readFile(f.env.AUTH_REPORT!, 'utf8')).success, false);
+  assert.equal(
+    condition(release.jobs.build!.if!, {
+      github: { event_name: 'push' },
+      needs: { inspect: { result: 'success', outputs: { action: 'prepare' } }, auth: { result: 'failure' } },
+    }),
+    false,
+  );
+  assert.deepEqual(
+    (await f.calls()).map((call) => call.args[0]),
+    ['scripts/npm-auth-check.ts'],
+  );
+  assert.equal(condition(named('auth', 'Retain the credential-free authentication report').if!, {}), true);
+});
+
+test(
+  'expired authentication after candidate work preserves the prepared state without consuming a claim',
+  bashOnly,
+  async (t) => {
+    const f = await workflowFixture(t);
+    f.env.AUTH_REPORT = path.join(f.directory, 'auth-before-build.json');
+    f.run(step('auth', 'authenticate'));
+    f.env.AUTH_REPORT = path.join(f.env.STATE_DIR!, 'auth-before-claim.json');
+    f.env.WORKFLOW_AUTH_EXIT = '1';
+    f.env.WORKFLOW_AUTH_REPORT = JSON.stringify({ schema_version: 1, success: false, stages: [] });
+    const steps = await submissionSteps(f, false);
+    assert.equal(steps.auth!.outcome, 'failure');
+    assert.equal(steps.claim!.outcome, 'skipped');
+    assert.equal(steps.npm!.outcome, 'skipped');
+    const calls = await f.calls();
+    assert.equal(calls.filter((call) => call.args[0] === 'scripts/npm-auth-check.ts').length, 2);
+    assert.equal(
+      calls.some((call) => call.args.includes('--begin-submission') || call.command === 'npm'),
+      false,
+    );
+    assert.equal(JSON.parse(await readFile(f.env.AUTH_REPORT!, 'utf8')).success, false);
+    await assert.rejects(access(path.join(f.env.STATE_DIR!, 'claim.json')));
+    assert.equal(
+      condition(named('publish', 'Retain local receipts even when publication is still pending').if!, {}),
+      true,
+    );
+  },
+);
+
+test(
+  'successful reauthentication precedes the unique claim and exact original upload',
+  bashOnly,
+  async (t) => {
+    const f = await workflowFixture(t);
+    const steps = await submissionSteps(f);
+    assert.equal(steps.auth!.outcome, 'success');
+    assert.equal(steps.claim!.outputs.should_publish, 'true');
+    const calls = await f.calls();
+    assert.equal(calls.length, 4);
+    assert.equal(calls[0]!.args[0], 'scripts/npm-publication.ts');
+    assert.equal(calls[1]!.args[0], 'scripts/npm-auth-check.ts');
+    assert.ok(calls[2]!.args.includes('--begin-submission'));
+    assert.deepEqual(calls[3]!.args.slice(0, 2), ['publish', f.archive]);
+  },
+);
+
+for (const action of ['wait', 'verify', 'published'])
+  test(
+    `fresh preclaim ${action} bypasses authentication and claims while preserving public verification`,
+    bashOnly,
+    async (t) => {
+      const f = await workflowFixture(t);
+      // This also covers inspect=prepare/submit followed by another run acquiring the claim.
+      f.env.WORKFLOW_PRECLAIM_REPORT = JSON.stringify({ action });
+      f.env.NPM_TRUSTED_PUBLISHER_CONFIGURED = 'false';
+      f.env.WORKFLOW_AUTH_EXIT = '1';
+      const steps = await submissionSteps(f, false);
+      for (const id of ['auth', 'claim', 'npm']) assert.equal(steps[id]!.outcome, 'skipped');
+      f.run(step('publish', 'public'));
+      assert.equal((await f.outputs()).verified, 'true');
+      const calls = await f.calls();
+      assert.ok(calls.some((call) => call.args[1] === 'verify'));
+      assert.equal(
+        calls.some(
+          (call) =>
+            call.args[0] === 'scripts/npm-auth-check.ts' ||
+            call.args.includes('--begin-submission') ||
+            call.command === 'npm',
+        ),
+        false,
+      );
+      await assert.rejects(access(f.env.AUTH_REPORT!));
+      await assert.rejects(access(path.join(f.env.STATE_DIR!, 'claim.json')));
+    },
+  );
+
+test('concurrent acquisition after reauthentication still cannot replay npm', bashOnly, async (t) => {
+  const f = await workflowFixture(t);
+  f.env.WORKFLOW_CLAIM_REPORT = JSON.stringify({ action: 'wait', should_publish: false });
+  const steps = await submissionSteps(f);
+  assert.equal(steps.auth!.outcome, 'success');
+  assert.equal(steps.claim!.outputs.should_publish, 'false');
+  assert.equal(steps.npm!.outcome, 'skipped');
+  f.run(step('publish', 'public'));
+  assert.equal((await f.outputs()).verified, 'true');
+  assert.equal(
+    (await f.calls()).some((call) => call.command === 'npm'),
+    false,
+  );
 });
 
 for (const exit of [0, 1, 137])

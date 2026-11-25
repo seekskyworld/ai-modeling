@@ -10,12 +10,12 @@ type InstalledLock = {
   packages?: Record<string, { name?: string; version?: string; integrity?: string }>;
 };
 
-function execute(npm: string, args: string[], cwd: string, env: Environment) {
+function execute(npm: string, args: string[], cwd: string, env: Environment, timeout = 300000) {
   return execFileSync(process.execPath, [npm, ...args], {
     cwd,
     env,
     encoding: 'utf8',
-    timeout: 300000,
+    timeout,
     maxBuffer: 32 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -66,6 +66,7 @@ export async function installGlobalConsumer(
     ],
     directory,
     env,
+    600000,
   );
   const modules = execute(npm, ['root', '--global', '--prefix', prefix], directory, env).trim();
   const installed = path.join(modules, ...PACKAGE_NAME.split('/'));

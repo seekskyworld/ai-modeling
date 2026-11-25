@@ -212,7 +212,11 @@ export async function prepareTransferSource(app: Application, plan: Plan, parent
       operator = text(resolved.operator_id);
     }
     identity = { ...identity, source_project_id: project, source_operator_id: operator };
-    parameters = { name: 'smartsegment-affine-transfer', use_original_uv: true };
+    parameters = {
+      name: 'smartsegment-affine-transfer',
+      use_original_uv: true,
+      ...(plan.steps[0]!.parameters.accept_variable_cost === true ? { accept_variable_cost: true } : {}),
+    };
     const snapshot = await smartSegmentScaleSnapshot(app.studio.client, account, project, operator, true);
     metadata = snapshot.metadata;
     completeMetadata = snapshot.complete_metadata;

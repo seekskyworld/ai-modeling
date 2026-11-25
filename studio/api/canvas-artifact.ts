@@ -18,15 +18,22 @@ function extension(value: string): string {
   return found === 'jpg' ? 'jpeg' : found;
 }
 
+/** Shared metadata classification: an actual URL path suffix takes precedence over a filename. */
+export function canvasArtifactSuffix(url: string | undefined, filename: string): string {
+  let urlExtension = '';
+  if (url !== undefined) {
+    try {
+      urlExtension = extension(new URL(url).pathname);
+    } catch {
+      throw new TripoError('CONTRACT_CHANGED', 'Canvas returned an invalid download URL.');
+    }
+  }
+  return urlExtension || extension(filename.trim());
+}
+
 /** 网页 EC.r 优先 URL 后缀，再取标题；未知文件只核传输字节，不能声称验证其内容。 */
 export function canvasArtifactContent(url: string, filename: string, kind: string) {
-  let urlExtension: string;
-  try {
-    urlExtension = extension(new URL(url).pathname);
-  } catch {
-    throw new TripoError('CONTRACT_CHANGED', 'Canvas returned an invalid download URL.');
-  }
-  const format = urlExtension || extension(filename);
+  const format = canvasArtifactSuffix(url, filename);
   if (kind === 'image' || kind === 'screenshot' || kind === 'ASSET_KIND_IMAGE') return { format: 'image' };
   if (kind === 'video' || kind === 'ASSET_KIND_VIDEO') {
     if (!videos.has(format))

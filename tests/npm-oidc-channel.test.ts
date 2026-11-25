@@ -187,6 +187,39 @@ test('network and redirect errors are sanitized even when transport exceptions c
   );
 });
 
+test('body cancellation errors cannot replace a sanitized HTTP rejection at any channel stage', async () => {
+  for (const failedStage of [1, 2, 3]) {
+    let calls = 0;
+    await assert.rejects(
+      setNpmChannelWithOidc(input, {
+        env: environment(),
+        now: () => now,
+        fetcher: async () => {
+          calls++;
+          if (calls === failedStage)
+            return new Response(
+              new ReadableStream({
+                cancel() {
+                  throw new Error(`${requestToken} ${identity()} ${packageToken}`);
+                },
+              }),
+              { status: 403 },
+            );
+          return calls === 1 ? Response.json({ value: identity() }) : Response.json({ token: packageToken });
+        },
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof NpmOidcChannelError);
+        assert.match(error.message, /HTTP 403/);
+        for (const secret of [requestToken, identity(), packageToken])
+          assert.equal(String(error).includes(secret), false);
+        return true;
+      },
+    );
+    assert.equal(calls, failedStage);
+  }
+});
+
 test('expired or persistent exchange credentials cannot reach the dist-tag mutation', async () => {
   for (const expires of [
     new Date(now - 1).toISOString(),

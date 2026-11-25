@@ -37,7 +37,8 @@ const ownProject = {
   is_owner: true,
   operator: { operator_id: 'op-source', status: 'success' },
 };
-test('public exports use the public route and price while other operations retain ownership checks', async () => {
+test('public exports use the public route and price while other operations retain ownership checks', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse(reviewedPrices.reviewed_at) });
   const f = await fixture();
   const operations = new Operations(
     client(() => ({ ...ownProject, is_owner: false })),
@@ -184,7 +185,8 @@ test('image deletion sends per-asset output keys, not an untyped asset_ids field
   await assert.rejects(callResource(c, spec, { asset_ids: ['image'] }));
 });
 
-test('regeneration uses the original quantity and 4K surcharge and rejects a false model', async () => {
+test('regeneration uses the original quantity and 4K surcharge and rejects a false model', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse(reviewedPrices.reviewed_at) });
   const c = client(() => ({
     asset_id: 'image',
     input: { model_version: 'flux.1_kontext_pro', amount: 3, resolution: '4K' },
@@ -194,11 +196,7 @@ test('regeneration uses the original quantity and 4K surcharge and rejects a fal
     'image_process',
     normalize('image_process', { action: 'regenerate', asset_id: 'image' }),
   );
-  const prices = new PricingService('/missing/prices.json', {
-    ...reviewedPrices,
-    reviewed_at: new Date(Date.now() - 1000).toISOString(),
-    expires_at: new Date(Date.now() + 60000).toISOString(),
-  });
+  const prices = new PricingService('/missing/prices.json', reviewedPrices);
   assert.equal((await prices.quote('image_process', input)).credits, 60);
   assert.equal((await prices.quote('image_process', { action: 'regenerate' })).known, false);
   await assert.rejects(
@@ -252,7 +250,8 @@ test('advanced operation bodies preserve the verified Studio field names', async
   }
 });
 
-test('real multiview regeneration metadata uses one reviewed multiview price despite empty image fields', async () => {
+test('real multiview regeneration metadata uses one reviewed multiview price despite empty image fields', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse(reviewedPrices.reviewed_at) });
   const asset = {
     asset_id: 'views',
     type: 'multiview_images',

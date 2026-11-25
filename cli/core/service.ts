@@ -142,7 +142,13 @@ import {
 } from './import-normalization-policy.ts';
 import { needsExportTransform } from '../../studio/contracts/export-options.ts';
 import { resolveDestination } from '../artifacts/destination.ts';
-import { variableCanvasOperations } from '../../studio/contracts/canvas-agent.ts';
+import { creativeCanvasOperations, variableCanvasOperations } from '../../studio/contracts/canvas-agent.ts';
+import { canvasAcceptanceView } from './canvas-acceptance.ts';
+import {
+  acceptsUnquotedBudget,
+  assertCurrentUnquotedQuote,
+  isUnquotedOperation,
+} from '../../studio/contracts/unquoted-pricing.ts';
 import { taskType } from '../../studio/contracts/task-type.ts';
 import { hasModelResults, reconcileModelResults } from '../../studio/api/model-results.ts';
 import { reconcileExportBatch } from '../../studio/api/export-batch.ts';
@@ -197,6 +203,7 @@ export function jobView(job: Job): Record<string, unknown> {
       : {}),
     ...semanticMaskSummary(job),
     ...canvasResultView(job),
+    ...canvasAcceptanceView(job),
   };
 }
 
@@ -212,7 +219,14 @@ function shouldRefreshCompletedArtifacts(job: Job, refreshCanvas: boolean): bool
 function intentInput(input: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(input).filter(
-      ([key]) => !['_canvas_quotes', '_canvas_action', '_image_source', segmentEntityMarker].includes(key),
+      ([key]) =>
+        ![
+          '_canvas_quotes',
+          '_canvas_action',
+          '_image_source',
+          '_node_execution',
+          segmentEntityMarker,
+        ].includes(key),
     ),
   );
 }
@@ -238,6 +252,25 @@ function requireVerifiedReceipts(status: RemoteStatus): void {
     throw new TripoError(
       status.state === 'requires_login' ? 'AUTH_REQUIRED' : 'RECONCILE_NOT_VERIFIED',
       'Some receipts could not be verified. Keep the original job and retry verification with the same receipts.',
+    );
+}
+/** 上传或授权等待可能耗尽固定报价期限；只有最终写入前仍有效的报价可用于新提交。 */
+function assertCurrentFixedQuote(job: Job): void {
+  if (
+    !job.quote.known ||
+    job.quote.credits === undefined ||
+    job.quote.variable === true ||
+    variableCanvasOperations.has(job.operation) ||
+    ['canvas_node_stop', 'refine_submit', 'project_edit', 'uv_commit'].includes(job.operation)
+  )
+    return;
+  const expires = Date.parse(job.quote.expires_at);
+  if (!Number.isFinite(expires) || expires <= Date.now())
+    throw new TripoError(
+      'PRICE_UNKNOWN',
+      'The fixed credit estimate expired or has an invalid expiry before submission. Obtain a current reviewed quote before starting a new request.',
+      'not_submitted',
+      { quote_expires_at: job.quote.expires_at },
     );
 }
 export class TaskService {
@@ -323,13 +356,17 @@ export class TaskService {
     operation: Operation,
     input: Record<string, unknown>,
     quote: Quote,
-    maximum: number,
+    maximum: number | undefined,
   ): Promise<void> {
+    // 停止已有执行不创建新的创作；不能要求接受新费用才允许停止，也不把原费用报价成零。
+    if (operation === 'canvas_node_stop') return;
+    const unquoted = acceptsUnquotedBudget(operation, input, quote, maximum);
     const variable =
-      (variableCanvasOperations.has(operation) || operation === 'refine_submit') &&
-      input.accept_variable_cost === true &&
-      quote.variable === true;
-    if (!variable && (!Number.isFinite(maximum) || maximum < 0))
+      unquoted ||
+      ((variableCanvasOperations.has(operation) || operation === 'refine_submit') &&
+        input.accept_variable_cost === true &&
+        quote.variable === true);
+    if (!variable && (maximum === undefined || !Number.isFinite(maximum) || maximum < 0))
       throw new TripoError(
         'INVALID_INPUT',
         'max_estimated_credits must be a finite nonnegative number.',
@@ -337,7 +374,7 @@ export class TaskService {
       );
     if ((!quote.known || quote.credits === undefined) && !variable)
       throw new TripoError('PRICE_UNKNOWN', quote.explanation, 'not_submitted');
-    if (quote.credits !== undefined && quote.credits > maximum)
+    if (quote.credits !== undefined && maximum !== undefined && quote.credits > maximum)
       throw new TripoError(
         'ESTIMATE_EXCEEDS_BUDGET',
         'Estimated credits exceed max_estimated_credits.',
@@ -356,7 +393,7 @@ export class TaskService {
     operation: Operation,
     requestId: string,
     parameters: unknown,
-    maximum: number,
+    maximum?: number,
   ): Promise<Record<string, unknown>> {
     this.jobs.recoverExpired();
     const account = this.accountRef();
@@ -455,6 +492,9 @@ export class TaskService {
         () => {
           this.own(job);
           const current = this.jobs.get(job.job_id);
+          if (isUnquotedOperation(current.operation) && current.quote.variable === true)
+            assertCurrentUnquotedQuote(current.quote);
+          assertCurrentFixedQuote(current);
           if (
             current.state !== 'submitting' ||
             current.account_ref !== job.account_ref ||
@@ -1269,6 +1309,14 @@ export class TaskService {
       );
     if (job.state !== 'outcome_unknown' && job.error?.code !== 'PARTIAL_RECEIPT_UNKNOWN')
       throw new TripoError('RECONCILE_NOT_NEEDED', 'Only an outcome_unknown job can be reconciled.');
+    // A read of an arbitrary Turn/Lab ID proves that it exists, not that this unknown write created it.
+    // CreateTurn has no caller request key; the observed ContinueTurn/Lab/node read contracts do not
+    // establish the submitted key. Preserve unknown intent until such request-bound evidence exists.
+    if (creativeCanvasOperations.has(job.operation))
+      throw new TripoError(
+        'RECONCILE_UNVERIFIABLE',
+        'The Canvas creative receipt is unknown. A Turn or Lab ID alone cannot prove this request was accepted. Preserve the original request and inspect its exact context; do not resubmit or bind a guessed remote ID.',
+      );
     const remote = object(ids);
     if (job.operation === 'export_batch') {
       const remote_ids = reconcileExportBatch(job, remote.batch);

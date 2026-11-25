@@ -1,7 +1,7 @@
 {
-  "reviewed_at": "2026-11-17T04:25:59.155Z",
-  "expires_at": "2026-11-24T04:25:59.155Z",
-  "source": "Studio current 43 price constants (lxPio4R0.js), model/texture/retopology formulas (BOu_jEBr.js), zero-credit image splitting/multiview/preset motion application (BDjTb8jV.js), owner export (aHcCFJ_6.js), and free-retry eligibility (EHnlgQUN.js) reviewed 2026-11-17. Current import, segmentation-save and texture-apply flows remain consistent with historical evidence; their prices retain completed-workflow observations, including ApplyTextureBasic=10 from 2026-11-13. Estimates exclude promotions; upstream billing remains authoritative.",
+  "reviewed_at": "2026-11-24T14:06:51Z",
+  "expires_at": "2026-12-01T14:06:51Z",
+  "source": "Studio public frontend reviewed 2026-11-24: 43 current constants (BUU-SXu_.js); model, image, texture and retopology formulas (BseUOuqR.js); explicit zero-credit multiview/image splitting and preset/asset animation application (TI8AVkrX.js); owned-project export (CY2gkA1_.js); eligible Free Retry (Bpu-JGRC.js). The 48 numerical keys exclude ImportOwnModel, SaveSegmentation and ApplyTextureBasic. Their current upload/save chains (CKsKHJa5.js, BamXcUgI.js and Bpu-JGRC.js) submit without an advance numerical quote; only these three operations may explicitly accept unknown Studio billing while this review is current. No zero price or spending cap is implied. Estimates exclude promotions; upstream billing remains authoritative.",
   "credits": {
     "AICompletion": 0,
     "Completion": 5,
@@ -50,55 +50,37 @@
     "UvEditRetry": 10,
     "ExportOwnProject": 0,
     "Retarget": 0,
-    "ImportOwnModel": 0,
-    "ApplyTextureBasic": 10,
-    "SaveSegmentation": 0,
     "FreeRetry": 0
   },
   "evidence": [
     {
-      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/lxPio4R0.js",
-      "sha256": "3ce49c7a4e0e0f592147f7cbcec2e6c6f9fa571d962d7e43b047260963cd391a"
+      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/BUU-SXu_.js",
+      "sha256": "86e2f4580214b751929015fc93f9078efc2af4efacced1ccbf1504423769810a"
     },
     {
-      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/BOu_jEBr.js",
-      "sha256": "bc1880b973609a4808d941ced39507ac2c8c471cdc0e9ac01cd96df6fdea73aa"
+      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/BseUOuqR.js",
+      "sha256": "7d0cdda2ab0e7002d0c173f47e083d452b29e02d0e5c6b39c940947e113b1dcc"
     },
     {
-      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/_pBd4tHi.js",
-      "sha256": "a39e27a49269dbbc8aff8909e2d3011f0bfe103dbe24fe4952855dc33789c100"
+      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/TI8AVkrX.js",
+      "sha256": "a1c001c667b4ba6beb0b2b08944a66df40b3260dd515ccd45268b46bc7c53a2b"
     },
     {
-      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/DTG1ZoLh.js",
-      "sha256": "b46e32613c27ca77d00e74f4b21e1ff8893435e4a3c899456531e390b71bae1f"
+      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/CY2gkA1_.js",
+      "sha256": "efeedd97927629e7fa51e5a44f506e4350dc85db9c9c9089070372e56edf5395"
     },
     {
-      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/BBLjA0_k.js",
-      "sha256": "30d34880927cecbaa00dc2c186eb2dfc4edf5276211dbca218a21626471f6a0d"
+      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/Bpu-JGRC.js",
+      "sha256": "8439b6dbadccf406b3f6f172d62d03327a44eaea8d1953fcdc4e7a220047aa00"
     },
     {
-      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/B1MMqOlX.js",
-      "sha256": "8dd37a49fd2ac927c1af025b81fffb357bbd204008d5c80b5c465ecad534b84d"
+      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/CKsKHJa5.js",
+      "sha256": "01029c9180e9e0421a2d06054441cc65c805e6af6b37d58d886097a532a7a0a7"
     },
     {
-      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/Ctru4gJB.js",
-      "sha256": "c78a55f48e5c5fdef0f69be9905570b4a414e468c1e5a926671448106b3b6bbe"
-    },
-    {
-      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/BDjTb8jV.js",
-      "sha256": "9510daa3458052dfaea011bba268bf0f1b299f8b9dca06ec90709d05681cc298"
-    },
-    {
-      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/aHcCFJ_6.js",
-      "sha256": "966530c67e7ff596a1fddc6a0061910ef8ad6579c271f2e377795de9294734b4"
-    },
-    {
-      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/EHnlgQUN.js",
-      "sha256": "ecdec09dea9e9f2a959c2561035f6a7767a26e70bc8049d1b9844696b318773c"
-    },
-    {
-      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/lNczn-tE.js",
-      "sha256": "f8bf6837ad5d9a71161946934ac8451ad945672c1859af13b7e182d562496d52"
+      "url": "https://tripo-webapp-assets.tripo3d.ai/studio-prod/_nuxt/BamXcUgI.js",
+      "sha256": "074660e49bb0277e68da0653330e9e0a0cfb692f6164af5367ba1dc8f7f340cd"
     }
-  ]
+  ],
+  "unquoted_operations": ["import_model", "modification", "retexture_apply"]
 }

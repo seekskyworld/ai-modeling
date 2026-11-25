@@ -3,6 +3,7 @@ import type { StudioClient } from './client.ts';
 import type { Operation } from '../contracts/types.ts';
 import { object, text, TripoError } from '../contracts/errors.ts';
 import { prepareCanvasRun } from './canvas-run.ts';
+import { prepareCanvasNodeExecution } from './canvas-node-execution.ts';
 import { validateModelSubmission } from '../contracts/model-policy.ts';
 
 export async function prepareInput(
@@ -12,6 +13,12 @@ export async function prepareInput(
 ): Promise<Record<string, unknown>> {
   if (operation === 'model') validateModelSubmission(input);
   if (operation === 'canvas_run') return await prepareCanvasRun(client, input);
+  if (operation === 'canvas_node_stop' || operation === 'canvas_node_retry')
+    return await prepareCanvasNodeExecution(
+      client,
+      input,
+      operation === 'canvas_node_stop' ? 'stop' : 'retry',
+    );
   if (operation !== 'image_process' || !['regenerate', 'regenerate_multiview'].includes(text(input.action)))
     return input;
   const asset = object(

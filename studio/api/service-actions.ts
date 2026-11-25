@@ -6,6 +6,7 @@ import { object, text, TripoError } from '../contracts/errors.ts';
 export async function submitServiceAction(
   client: StudioClient,
   job: Job,
+  beforeSubmit?: () => void,
 ): Promise<{ remote_ids: RemoteIds; status: RemoteStatus }> {
   const x = job.input;
   // 网页历史版本只允许原 model_url 本地转换后 export-lite；不能用最新版本检查拒绝固定历史素材。
@@ -40,7 +41,7 @@ export async function submitServiceAction(
         is_owner: owner,
         format: x.format === 'glb' ? 'gltf' : x.format,
       },
-      { paid: true },
+      { paid: true, beforeSend: beforeSubmit },
     );
     return {
       remote_ids: { project_id: text(x.project_id), operator_id: text(x.operator_id) },
@@ -63,7 +64,7 @@ export async function submitServiceAction(
         success_url: 'https://studio.tripo3d.ai/?refine_success=true',
         cancel_url: 'https://studio.tripo3d.ai/?refine_fail=true',
       },
-      { paid: true },
+      { paid: true, beforeSend: beforeSubmit },
     ),
   );
   if (typeof result.if_need_payment !== 'boolean')

@@ -11,9 +11,9 @@ CLI 是底层执行接口，MCP 提供同源指导资源并通过工具适配调
 - 账号操作使用当前 OS 用户的私有 JSON 凭据文件，不需要系统钥匙串、Linux Secret Service 或 D-Bus。POSIX 使用目录 `0700`/文件 `0600`；Windows 通过系统 PowerShell 检查当前用户 SID 与 SYSTEM 的受保护 ACL。自动网页登录另需已安装、可见的 Chrome/Edge。离线发现和 Skill 安装管理不需要登录。
 - 只在具体功能需要时检查 Blender 4.5+、FFmpeg 或固定网页转换运行时。未获用户相应授权时，不自动安装依赖、全局安装/升级程序或修改 MCP 配置；缺少条件时指出具体缺项。用户明确要求这些操作时，确认本项目来源后按授权执行。
 - 使用用户已安装的本项目运行包；有多个版本时核对可执行文件目标与版本。配置使用 `AI_MODELING_*`，结构化工具使用 `ai_modeling_*`，认证资源为 `ai-modeling://auth/status`；旧项目名称不作为别名。已有有效 JSON 会话可复用；升级自旧钥匙串版本时按下文重新连接，不因 npm 包名带 scope 而更换 profile。
-- 入口不明确时核对已安装版本与路径；源码入口为 `node /absolute/path/to/installation/dist/cli/main.js`。用户选择 npx 路线时，每次沿用同一完整、固定版本前缀，例如 `npx --yes --package @seekskyworld/ai-modeling@0.1.3 ai-modeling`，不能误用无 scope 的同名包或静默升级。
+- 入口不明确时核对已安装版本与路径；源码入口为 `node /absolute/path/to/installation/dist/cli/main.js`。用户选择 npx 路线时，每次沿用同一完整、固定版本前缀，例如 `npx --yes --package @seekskyworld/ai-modeling@0.1.5 ai-modeling`，不能误用无 scope 的同名包或静默升级。
 
-用户已授权安装时，使用 `npm install --global @seekskyworld/ai-modeling@0.1.3`，再核对 `ai-modeling --version`。可按用户选择使用同版本 npx 前缀，无需全局安装。保留平台可选依赖。npm 安装不会自动导入 Skill 或配置 MCP。发布版本与来源以 npm 和指定 GitHub 仓库为准，不使用无 scope 的 `ai-modeling` 包。
+用户已授权安装时，使用 `npm install --global @seekskyworld/ai-modeling@0.1.5`，再核对 `ai-modeling --version`。可按用户选择使用同版本 npx 前缀，无需全局安装。保留平台可选依赖。npm 安装不会自动导入 Skill 或配置 MCP。发布版本与来源以 npm 和指定 GitHub 仓库为准，不使用无 scope 的 `ai-modeling` 包。
 
 Windows PowerShell 若拒绝执行 `npm.ps1` / `npx.ps1`，可使用 `npm.cmd` / `npx.cmd`。MCP 宿主是否能直接启动 `.cmd` 取决于其实现；不支持时可由 `cmd.exe /d /c` 启动，或直接用 `node.exe` 加已安装包的 `dist/cli/main.js` 与 `mcp` 参数。选定 MCP 入口时保持客户端配置和工具调用，不因发现命令启动差异就替换为 shell 执行业务；按用户授权处理配置。
 
@@ -72,7 +72,11 @@ Skill 可直接调用 CLI，不要求安装 MCP。用户已选择 MCP 时保持�
 
 CLI 的 `pricing status` 离线显示来源、到期时间和刷新需求。维护源为 [reviewed-prices.json](https://github.com/seekskyworld/ai-modeling/blob/main/studio/api/reviewed-prices.json)。已有授权允许更新时，从对应 Release 取得审阅提交或标签及文件 SHA-256，使用固定提交的 raw.githubusercontent.com URL 调用 `pricing update HTTPS_URL --sha256 SHA256`；本地文件可用 `pricing verify/import FILE --sha256 SHA256 --network`。工具强制摘要与官方证据校验，不自动信任可变 main，不自动续期；不能把自行计算的下载摘要代替维护者发布值。选择 MCP 时保留入口，当前工具集没有价格维护能力则报告需维护者更新运行环境，不改跑 shell。
 
-`--max-credits` / `max_estimated_credits` 是估算门槛，不是服务端硬扣费上限。多步骤可能分别收费；Canvas/Lab 的 `accept_variable_cost=true` 只在用户已授权可变费用时设置，不能为绕过失败自动添加。
+`--max-credits` / `max_estimated_credits` 是估算门槛，不是服务端硬扣费上限。多步骤可能分别收费；已有的用户费用授权持续有效，按实际范围设置同意参数。
+
+当前有效审阅快照仅对 `import_model`、`modification`、`retexture_apply` 声明无数值预报价。需要这些步骤时，已获相应费用授权的调用可显式设置 `accept_variable_cost:true`；兼容处理命令使用 `-p accept_variable_cost=true`；Studio 结构化工具放在 `parameters` 内，full MCP 的对应处理工具使用顶层 `accept_variable_cost:true`。必须省略 `--max-credits` / `max_estimated_credits`，包括 0；数字阈值无法限制未知金额，会返回 `UNQUOTED_BUDGET_UNSUPPORTED`。这不是免费估算或扣费上限，不使过期快照有效，也不适用于其它未知价格。整条链会在首个上传/收费前检查这些步骤，执行各步时再验证；恢复已提交任务仍沿原身份。旧七步仿射链中从未冻结的导入/合并步骤可显式接受未知费用；已有 prepared/input/scale 冻结记录且原意图未含同意时，保留 `UNQUOTED_CONSENT_FROZEN`，不能改原身份或换请求重提，须等有效数值报价恢复。
+
+default MCP 的 `ai_modeling_make` 顶层 `accept_variable_cost:true` 只授权初始模型文件/URL导入，不授权后续步骤。后续UV压缩须在对应 `then` 中明确设置，例如 `uv:bake=false;compress=geometry;accept_variable_cost=true`。已有任务和图片/文本输入不能使用顶层导入同意；它们按对应处理步骤表达。导入本身不生成PBR纹理，模型文件的 `pbr:true` 须改为明确的后续 `texture:pbr=true`，不静默忽略。
 
 若授权或关键输入确实缺失，先完成已有范围内的规划/检查，说明具体操作、费用性质与缺项后获取必要决定。明确报告能力限制，不切换开发者 API 钱包或其它模型提供商补结果。
 
@@ -84,6 +88,24 @@ CLI 的 `pricing status` 离线显示来源、到期时间和刷新需求。维�
 - 只在入口支持时用 `--no-wait`；依赖前一步的多步骤通常需要等待。`--no-download` 省略交付到用户目录，仍可能读取并验证原件。
 - 用原任务 `task get/watch` 查询和下载。需要准确来源时用明确任务/项目版本，避免后续新任务改变 `@last` 的含义。
 - 原件下载、网页服务转换、固定网页引擎的本机转换和普通本地后处理分开说明。存在命令或远端成功不等于全部官方效果、任意提示语义或网页全站等价。
+
+## Canvas 结果检查
+
+HolyMolly 的新消息使用显式 `capabilities:["holy_molly"]`，素材通过准确 `refs` / `attachment_ids`，不接新 materials 图边；独立上传需当前项目 READY，节点结果需准确 node_id + asset_id。修改已有游戏传目标 `node_id`，准备入口 `canvas turn-plan` 则使用 `nodeId`。最终空正文只允许显式能力、已保存 Holy 目标且无普通附件；低层仍须传 `text:""`。它需要独立可变费用授权，不使用普通 `canvas-run`。Holy 历史 retry 只有服务原消息明确记录能力与准确目标且通过当前画布校验时才能准备；缺目标返回 `retry_holy_molly_target_unknown`。不能手补 nodeId/capabilities，CLI 已有 job 继续按原身份恢复。
+
+0.1.5 提供的 `studio canvas-node-stop/canvas-node-retry` 仅作用于已保存 Holy 节点，要求 canvas_id/node_id/expected_run_id 和十进制字符串 revision；先查实际 schema。stop 不要求新生成预算，原账单不归零；retry 要求 retryable=true、原节点/运行终态及 accept_variable_cost=true。持久 job 和预检不构成上游原子条件，未知写不重提，也无可验证的未知回执对账绑定。这是网页协议映射，尚未完成真实节点 stop/retry 验收；完整流程见下方流水线。
+
+核对历史使用 `canvas session-history` / `ai_modeling_canvas_session_history`，传准确 `canvasId` 和 `sessionId`。它对六种已知状态的回合、会话消息和回合详情做两次稳定读取；按 `observed_history_consistent`、逐回合差异及 `incomplete` 判断，正文用 `session-get`。一致不证明服务没有截断，`history_complete:null` 不能改成全量完成。
+
+需要停止 Agent 时，使用 `canvas turn-stop-plan`（MCP：`ai_modeling_canvas_turn_stop_plan`）核对准确回合。它只准备 `turn-cancel` → 确认 CANCELLED 并重读 → 停止该回合仍活动的准确运行 → 复核状态，不自动写入。发现不完整或状态变化时不提供写动作，当前快照不保证历史完整；受理和自然完成均不能算停止成功。
+
+Canvas Agent 聊天完成后，交付前先用 `canvas audit`（MCP：`ai_modeling_canvas_audit`）回读准确画布、会话/回合和目标节点。返回结果分为运行中、等待输入、阻塞与待审；即使节点资产就绪，`requirements_met` 仍为 `null`。该读取不证明资产由本次回合创建，也不证明长历史完整；不要用整张画布里的旧产物替代用户要的结果。`canvas review` 是网页 REVIEW 节点批准/撤销的写操作，不是验收命令。
+
+Holy 审计使用 `expect.kind:"html"` 和准确资产身份；HTML 优先按当前结果 URL 路径后缀识别候选，无后缀时才看文件名；分类不证明字节、依赖和玩法。`game.preview.entry_url` 是删除查询参数的诊断线索，不是完整试玩或原件下载链接。HTML 下载后独立验加载、依赖、控制和玩法，不能送进图片/模型检查器。`game.credits` 来源为节点运行，终态不等于 SETTLED，PENDING/未知不等于零费用，`turn_attribution:unknown` 不能归为本次聊天账单。
+
+图片或模型按报告中的准确来源下载，再用 `studio artifact-inspect`（MCP：`ai_modeling_artifact_inspect`）检查图片解码或 GLB 几何、贴图、骨架、动作及明确机器条件；将下载回执的 `sha256` 传为 `expected_sha256`，不要用画布指纹代替。读取结果的 `requirements_status` 和逐项 `checks`；`failed` 也会正常返回检查报告，退出码或 MCP `isError` 不能代替检查结论。Agent 还要实际看图，或按需使用 `studio snapshot` / `ai_modeling_snapshot` 查看模型的合适视角与动作帧，并与用户要求比较。任务结束、文件有效、机器条件通过、视觉/语义满足目标分别记录；没有证据的项保留未检查。
+
+具体命令与状态处理按需读取[画布交付验收](pipelines.md#canvas-agent-交付验收)。MCP 用户使用 Studio 工具集和共用指南，不为此改用 shell；只读检查、下载和本地检查不新建创作任务，修正或重新生成仍按原授权范围执行。
 
 ## 失败与恢复
 

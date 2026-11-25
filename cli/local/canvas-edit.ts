@@ -11,12 +11,35 @@ import { expandCanvasImages } from './canvas-image-plan.ts';
 import { planCanvasFragment, remapSectionSources } from './canvas-fragment.ts';
 import { replaceCanvasUpload, replaceUploadAction } from './canvas-replace-upload.ts';
 import { extractionSourceIdentities, resetChangedExtractionSources } from './canvas-extraction-source.ts';
+import {
+  canvasEditExpected,
+  hasReservedCanvasKey,
+  readCanvasEditState,
+  reservedCanvasKeyMessage,
+  type CanvasEditSnapshot as Snapshot,
+  type CanvasEditState as State,
+} from './canvas-edit-state.ts';
 import type { LocalSpec } from './operations.ts';
 
 // 编辑既有图必须接受与 SaveCanvas 相同的稳定标识；系统节点不保证全部使用 UUID。
 const graphId = canvasNode.shape.id;
 const ids = z.array(graphId).min(1).max(1000);
 const point = z.object({ x: z.number().finite(), y: z.number().finite() }).strict();
+const patchParamsAction = z
+  .object({
+    action: z.literal('patch_params'),
+    node_id: graphId,
+    set: z.record(z.string().min(1), z.json()).optional(),
+    unset: z.array(z.string().min(1)).max(1000).optional(),
+  })
+  .strict()
+  .refine((x) => !!Object.keys(x.set ?? {}).length || !!x.unset?.length, {
+    message: 'Provide at least one parameter to set or unset.',
+  })
+  .refine((x) => !x.unset?.some((key) => Object.hasOwn(x.set ?? {}, key)), {
+    message: 'A parameter cannot be both set and unset.',
+  })
+  .describe('Change only named top-level parameters; nested values are replaced, and null is preserved.');
 const actions = z.discriminatedUnion('action', [
   z.object({ action: z.literal('add'), node: canvasNode }).strict(),
   z
@@ -26,6 +49,7 @@ const actions = z.discriminatedUnion('action', [
   z
     .object({ action: z.literal('params'), node_id: graphId, params: z.record(z.string(), z.json()) })
     .strict(),
+  patchParamsAction,
   z.object({ action: z.literal('move'), node_ids: ids, offset: point }).strict(),
   replaceUploadAction,
   z
@@ -72,28 +96,23 @@ const actions = z.discriminatedUnion('action', [
   z.object({ action: z.literal('redo') }).strict(),
 ]);
 type Action = z.infer<typeof actions>;
-const snapshotSchema = z
-  .object({ nodes: canvasSaveSchema.shape.nodes, edges: canvasSaveSchema.shape.edges })
-  .strict();
-type Snapshot = z.infer<typeof snapshotSchema>;
-const stateSchema = z
-  .object({
-    kind: z.literal('ai-modeling.canvas.graph'),
-    version: z.literal(1),
-    source_sha256: z.string().regex(/^[a-f0-9]{64}$/),
-    graph: canvasSaveSchema,
-    undo: z.array(snapshotSchema).max(100),
-    redo: z.array(snapshotSchema).max(100),
-  })
-  .strict();
-type State = z.infer<typeof stateSchema>;
-const schema = z
-  .object({
-    graph_path: z.string().min(1),
-    destination_path: z.string().min(1),
-    actions: z.array(actions).min(1).max(200),
-  })
-  .strict();
+const schema = z.preprocess(
+  (input, ctx) => {
+    if (hasReservedCanvasKey(input)) ctx.addIssue({ code: 'custom', message: reservedCanvasKeyMessage });
+    return input;
+  },
+  z
+    .object({
+      graph_path: z
+        .string()
+        .min(1)
+        .describe('Saved canvas get JSON, CLI result wrapper, SaveCanvas input or graph-edit state file.'),
+      destination_path: z.string().min(1),
+      actions: z.array(actions).min(1).max(200),
+      ...canvasEditExpected,
+    })
+    .strict(),
+);
 
 function node(graph: CanvasGraph, id: string) {
   const found = graph.nodes.find((n) => n.id === id);
@@ -158,6 +177,22 @@ function absolutePosition(graph: CanvasGraph, id: string) {
   }
   return point;
 }
+function validateCopiedHolyConnections(
+  graph: CanvasGraph,
+  copies: CanvasGraph['nodes'],
+  edges: CanvasGraph['edges'],
+) {
+  const nodes = [...graph.nodes, ...copies];
+  const holyIds = new Set(nodes.filter((n) => n.type === 'NODE_TYPE_HOLY_MOLLY').map((n) => n.id));
+  const copiedEdges = edges.filter((e) => holyIds.has(e.source.nodeId) || holyIds.has(e.target.nodeId));
+  if (!copiedEdges.length) return;
+  const issues = canvasGraphIssues(nodes, copiedEdges);
+  if (issues.length)
+    throw new TripoError(
+      'INVALID_INPUT',
+      'Copied HolyMolly connections are unsupported. ' + issues.join(' '),
+    );
+}
 function duplicate(graph: CanvasGraph, action: Extract<Action, { action: 'duplicate' }>, source = graph) {
   const sameCanvas = source.canvasId === graph.canvasId;
   const plan = planCanvasFragment(source, descendants(source, action.node_ids));
@@ -195,6 +230,7 @@ function duplicate(graph: CanvasGraph, action: Extract<Action, { action: 'duplic
       source: { ...e.source, nodeId: mapping.get(e.source.nodeId) ?? e.source.nodeId },
       target: { ...e.target, nodeId: mapping.get(e.target.nodeId)! },
     }));
+  validateCopiedHolyConnections(graph, copies, edges);
   graph.nodes.push(...copies);
   graph.edges.push(...edges);
   return {
@@ -228,6 +264,13 @@ function move(graph: CanvasGraph, action: Extract<Action, { action: 'move' }>) {
     if (!hasSelectedAncestor) place(n, position(n).x + action.offset.x, position(n).y + action.offset.y);
   }
 }
+function patchParameters(graph: CanvasGraph, action: Extract<Action, { action: 'patch_params' }>) {
+  const patch = patchParamsAction.parse(action),
+    target = node(graph, patch.node_id);
+  const params = { ...target.params, ...structuredClone(patch.set ?? {}) };
+  for (const key of patch.unset ?? []) delete params[key];
+  target.params = params;
+}
 function change(graph: CanvasGraph, action: Action): unknown {
   switch (action.action) {
     case 'add':
@@ -241,6 +284,9 @@ function change(graph: CanvasGraph, action: Action): unknown {
       break;
     case 'params':
       node(graph, action.node_id).params = structuredClone(action.params);
+      break;
+    case 'patch_params':
+      patchParameters(graph, action);
       break;
     case 'move':
       move(graph, action);
@@ -287,6 +333,8 @@ function snapshot(graph: CanvasGraph): Snapshot {
 
 /** 一批动作先完整校验再写文件；失败时原图和历史不变，撤销不回滚远端任务产物。 */
 export function editCanvas(state: State, requested: z.infer<typeof schema>['actions']) {
+  if (hasReservedCanvasKey(state) || hasReservedCanvasKey(requested))
+    throw new TripoError('INVALID_INPUT', reservedCanvasKeyMessage);
   const result = structuredClone(state),
     receipts: unknown[] = [];
   let extractionSources = extractionSourceIdentities(result.graph);
@@ -324,28 +372,25 @@ export const canvasEditOperations: LocalSpec[] = [
     name: 'canvas_graph_edit',
     group: 'canvas',
     description:
-      'edit a saved Canvas graph locally: copy, group, layout, expand image batches, replace uploads and persistent undo/redo; save separately',
+      'edit Canvas get JSON or saved graph state locally: patch parameters, copy, group, layout, expand images, replace uploads and undo/redo; save separately',
     schema,
     run: async (config, input) => {
       const x = schema.parse(input),
         source = await readBoundedFile(x.graph_path, config.inputRoots, 32 * 1024 * 1024);
       const raw = JSON.parse(source.bytes.toString('utf8'));
-      const state: State =
-        raw.kind === 'ai-modeling.canvas.graph'
-          ? stateSchema.parse(raw)
-          : {
-              kind: 'ai-modeling.canvas.graph',
-              version: 1,
-              source_sha256: source.sha256,
-              graph: canvasSaveSchema.parse(raw),
-              undo: [],
-              redo: [],
-            };
+      const imported = readCanvasEditState(raw, source.sha256, {
+        expected_canvas_id: x.expected_canvas_id,
+        expected_project_id: x.expected_project_id,
+        expected_revision: x.expected_revision,
+      });
+      const state = imported.state;
       const target = await localTarget(config.outputDir, x.destination_path, 'json'),
         edited = editCanvas(state, x.actions);
       const bytes = Buffer.from(JSON.stringify(edited.state, null, 2) + '\n');
       return {
         ...(await publishLocal(target, bytes, 'json')),
+        source_format: imported.source_format,
+        input_envelope: imported.input_envelope,
         canvas_id: state.graph.canvasId,
         revision: state.graph.revision,
         nodes: edited.state.graph.nodes.length,

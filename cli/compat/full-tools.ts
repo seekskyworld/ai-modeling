@@ -59,9 +59,17 @@ function options(x: Record<string, unknown>): Flags {
     'dry_run',
     'request_id',
     'model',
+    'max_estimated_credits',
   ])
     delete param[k];
-  return { model: x.model, param, requestId: x.request_id, wait: false, download: false };
+  return {
+    model: x.model,
+    param,
+    requestId: x.request_id,
+    ...(x.max_estimated_credits === undefined ? {} : { maxCredits: x.max_estimated_credits }),
+    wait: false,
+    download: false,
+  };
 }
 
 /** 显式空图片输入是无效编辑，不得因为 falsy 值悄悄切到收费文生图。 */
@@ -206,8 +214,9 @@ async function callFull(name: string, x: Record<string, unknown>, app: Applicati
     return await uploadLocal(app, text(resolved.steps[0]?.parameters.image_path));
   }
   const plan = fullToolPlan(name, x);
-  if (x.dry_run) return await dryRunPlan(plan, {});
-  const result = await executePlan(app, plan, { ...options(x), wait: plan.steps.length > 1 });
+  const flags = { ...options(x), wait: plan.steps.length > 1 };
+  if (x.dry_run) return await dryRunPlan(plan, flags);
+  const result = await executePlan(app, plan, flags);
   return { ...result, next: taskNextAction(result) };
 }
 export function fullTools(service: Dependency<TaskService>, studio: Dependency<StudioReads>): ToolSpec[] {

@@ -3,7 +3,7 @@
     "ai-modeling": {
       "type": "stdio",
       "command": "npx",
-      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.3", "ai-modeling", "mcp"],
+      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.5", "ai-modeling", "mcp"],
       "env": {
         "AI_MODELING_PROFILE": "default"
       }

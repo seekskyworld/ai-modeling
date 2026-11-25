@@ -12,7 +12,7 @@
 - Preserve request identity and account binding. An expired lock or missing response is not evidence that a remote submission did not execute. Do not automatically resubmit an unknown write.
 - Keep migrations, task state, cached artifact identity and idempotency updates transactional. Validate downloaded bytes and avoid overwriting unrelated files.
 - Run checks appropriate to the change. Documentation changes require valid links, accurate examples and a clean package inventory; they do not require unrelated live generation.
-- Live tests require the operator's authorization and credit budget. Distinguish offline checks, live requests, output validation and website comparisons in reports.
+- Distinguish offline checks, live requests, output validation and website comparisons in reports.
 - Keep public documentation focused on usage, architecture and current limitations. Store local investigation notes, screenshots, raw responses and historical reports under ignored `artifacts/`.
 - Retain third-party license notices. Do not bundle upstream application assets or conversion runtimes without appropriate distribution rights.
 - Preserve concurrent contributors' changes. Update the relevant documentation with behavior changes; do not rewrite unrelated work.

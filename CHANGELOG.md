@@ -4,6 +4,81 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 ## Unreleased
 
+## 0.1.5 — Pending release
+
+This candidate includes the complete changes below. The earlier 0.1.5 attempt at `634394c` stopped before any npm submission; its failure remains recorded below.
+
+### Added
+
+- Live Canvas validation completed native Smart Low Poly plus Smart UV in one Retopology node and one step, preserving the existing graph. The textured model reduced from about 1.98 million faces to 1,106, with usable UVs, baked textures, webpage views and an exact 35-credit charge. This is a limited default-engine result, not an exact 1,000-face or material-preservation guarantee.
+- Read-only `canvas session-history` compares two session/turn-detail snapshots, explicitly requests all six turn states, and detects message, identity, order and completeness hints. Three live sessions with 59 messages and 15 turns matched; stable reads do not prove server-side history completeness.
+- Refresh the reviewed pricing source from current webpage evidence: 43 constants, five verified derived numeric prices and three explicitly unquoted operations. Import, modification and retexture application require a valid unquoted declaration plus explicit variable-cost consent, with numeric budgets omitted. Unknown cost is never reported as zero; older published snapshots are unchanged.
+- Validate Studio Free Retry separately from HolyMolly node Retry: an eligible project completed submission, generation, original inspection and webpage loading. The output did not strictly satisfy its prompt, and missing exact billing remains unknown.
+
+- Read-only `canvas turn-stop-plan` composes the webpage Agent cancellation sequence using exact turn/run ownership, bounded discovery and stable snapshots. It requires confirmed turn cancellation before preparing active run stops, preserves unknown writes and separates cancellation from natural completion. Live webpage cancellation reached STOPPED; a separate CLI cancellation also reached CANCELLED with its exact run stopped, requiring no redundant stop request.
+- Canvas audits now verify complete one-to-one multi-node runs; a live two-image chat run passed exact output attribution. Textured HD originals require matching task IDs in both their directory and exact filename. Exact `currentStepId` now resolves repeated-node steps when complete run coverage and unique task identities hold. Internal split outputs without a proven original-file mapping and unbound Canvas runs still retain unknown generation attribution.
+- A live non-indexed fixture completed file import, UV generation/application and native Meshopt compression, with decoded geometry/UV inspection and webpage model/layout checks. The final file preserves the applied UV geometry within the documented quantization bound. The initial import still fails the stricter original-attribute normalization proof, and Blender 4.5.16 requires a separate decoded copy for Meshopt input; neither limitation is hidden.
+- Live card checks cover plan confirmation, detected-part renaming, candidate selection through textured HD generation, original inspection and webpage views, and the HolyMolly recommendation selection protocol. The recommendation sample ended without HTML delivery; successful continuation does not imply successful generation.
+
+- Canvas audits separate run ownership, current selection and generated-output provenance. Supported image, HD-model, texture and HolyMolly originals must match exact task/step identities; selecting an old output does not attribute it to the current run. Run reads join both snapshots, while node credit ownership stays separate from account-ledger verification and settlement.
+- Live checks cover grouped Other/per-question Skip, selection confirmation, confirmation gates before model generation and texturing, original-file inspection and webpage comparison. Session creation documents its actual default/active-session switch and retained archived history; confirmation-card guidance distinguishes its arguments from selection cards.
+- Read-only Canvas acceptance audits bind the exact conversation to its Canvas, check node and asset expectations, and verify a stable read snapshot. They do not approve workflow review nodes or infer that current assets were created by the last message.
+- Local artifact inspection decodes image/model content and reports file identity, geometry, textures and animation evidence with optional machine-checkable expectations. Visual and semantic acceptance remains an explicit Agent responsibility.
+- Canvas chat task results now retain acceptance follow-up guidance after remote completion, shared through CLI, MCP and the progressive Skill workflow.
+- Canvas graph editing imports `canvas get` output directly, supports explicit identity/revision guards and patches selected parameter keys without replacing the rest. Undo/redo retains the original graph identity.
+- Live Canvas tool discovery reports CLI graph and execution mappings, retired definitions and unmapped capabilities. HolyMolly uses explicit Agent capabilities and verified attachment preparation; its graph supports HTML-to-HTML/Lab connections.
+- Live HolyMolly checks verified original attachment bytes, HTML download, in-Canvas Play, keyboard movement, collection, victory and restart. Targeted changes preserved the original node and delivered new version nodes with the requested appearance, win threshold and Space pause/resume behavior; later revisions added a Pause/Resume button and P shortcut, verified using player position changes and original dependencies. Restarting while paused also restored the zero-score state. Acceptance follows the exact turn/run/new-node/asset chain. Successful stopping and eligible native node Retry remain unverified, and a settled revision does not settle other pending generation charges.
+- HolyMolly audits expose HTML candidates, game preview diagnostics and separate credit status. Confirmation cards retain game recommendations; historical game retries with no verifiable target remain blocked. Core documentation is consolidated into five maintained guides.
+
+- Saved HolyMolly node stop/retry operations preserve a durable request, exact source run and revision guards. Stop confirmation is separate from turn completion; retry requires variable billing consent. Unknown receipts are retained without replay or unproven turn reconciliation. A live accepted stop ending in FAILED remains unconfirmed; native node Retry has no eligible live success example.
+
+### Fixed
+
+- Validate both legacy GitHub OIDC subjects and immutable subjects containing the exact owner/repository IDs. The immutable form also cross-checks those IDs against the token claims and runner context; workflow, tag, commit and npm environment checks remain required.
+- Accept the opaque OIDC request path supplied by current GitHub-hosted runners while retaining HTTPS and GitHub issuer-host validation. Release authentication no longer assumes the legacy `/idtoken` suffix; external hosts, embedded credentials, custom ports and URL fragments remain rejected.
+- Verify GitHub OIDC and the npm package credential before new release builds and again before claiming a submission. Authentication failures retain a credential-free stage report without uploading a package; existing submitted or unknown releases continue verification without acquiring another claim. This preflight does not replace actual publication or public archive validation.
+- Serialize login revocation monitoring so slow native permission checks do not accumulate overlapping reads. Cancellation remains observable and closing the broker prevents new polls.
+- Preserve concurrent readers when replacing private Windows credentials and login state. If ordinary rename is blocked, use one same-directory native replacement after rechecking file identity and private ACLs. Uncertain replacements retain protected temporary records for inspection and are never automatically retried.
+- Explicitly load the system JSON module during Windows credential ACL checks, retaining the controlled environment, permission validation and timeouts. Native installation and publication outcomes are recorded with the corresponding Release; this change alone does not establish successful Windows or browser acceptance.
+- Recheck reviewed fixed-price expiry immediately before a new remote write, after preparation or authentication delays. Already submitted and unknown receipts remain recoverable without replay.
+- Preserve valid webpage-generated graph connections with an empty source port when the source has exactly one output. Keep original graph JSON, Lab selection requirements and ambiguous-output rejection; a real saved graph passed local editing and remote save/readback without changing existing nodes or edges.
+- Expose unquoted-operation consent on applicable full MCP tools and on the default model-file import entry. Default model imports no longer inherit the unrelated PBR generation flag; later processing steps require their own explicit consent.
+- Preserve unquoted-operation consent across native CLI tools and multi-step processing, preflight the complete new chain before uploads or billable work, and recheck each new submission. Existing submitted/unknown receipts are recovered without replay.
+- Recognize the current numeric plan-card alias and retain exact current-step attribution while keeping selected-output association separate from generation provenance.
+
+- `anim retarget` with the default JPEG export no longer fails with `IDEMPOTENCY_CONFLICT` before export submission. Animations created earlier in the chain are now merged into the export parameters before the JPEG intent is frozen, so the pre-submit check compares the same intent. A live Studio run exported one GLB with both requested preset motions and verified JPEG textures.
+- Studio uploads scale their per-request timeout with the body size (60 seconds plus the transfer time at 32 KiB/s, capped at 10 minutes), allowing more time for 10 MiB parts and large reference images on slower or proxied connections.
+- Expired or future-dated pricing reviews report when the review expired, or that it is future-dated, and the recovery commands, instead of a generic message.
+
+- Classify HolyMolly HTML candidates by the download URL path suffix first, falling back to the filename only when that path has no suffix. Extensionless display names no longer hide HTML outputs; classification still requires separate content and gameplay checks.
+- Reject manually supplied Turn/Lab IDs for uncertain Canvas creative submissions with `RECONCILE_UNVERIFIABLE`. An existing remote result does not prove request ownership; preserve the original unknown job without replay or guessed receipt binding.
+- Serialize JobStore schema initialization and migration after acquiring the database write lock, with bounded retries for WAL setup contention. Concurrent CLI/MCP startup no longer races partially initialized schemas; this does not retry remote submissions.
+- Accept verified HolyMolly Stop receipts containing the exact original run ID and `status:accepted`, preserving their identity separately from turn receipts. Poll the original node execution and retain stop-request timing as evidence; a DONE or FAILED result remains `STOP_NOT_CONFIRMED`, even after a stopping event. Previously unknown submissions are not rebound or replayed.
+- Recover a failed HolyMolly message's target only from the service's explicit `cardJson.targetNodeId` and matching capability, verifying the saved Canvas node and read snapshot. A live FAILED-message retry completed a new turn, run, node and HTML output with verified original download, attachment bytes, dependency loading, movement, collection threshold, pause/resume and restart. Missing targets remain blocked; callers cannot override historical identity. Accept `turnRefs:null` as no ordinary references without inferring a target from attachments; historical retries remain separate from native node Retry.
+- Validate Lab instruction save states before reuse while preserving the service response and Copy/Reuse guidance. Current webpage instructions are saved by the service; a Canvas snapshot is not a separate manual instruction-save API.
+- Preserve supported Agent card titles, option descriptions, plan groups and requirements for review; displayed cost ranges remain separate from executable pricing and consent.
+- Recheck the durable submission claim after Canvas turn, answer, Lab and graph-run preparation/authentication, immediately before the write.
+
+- New Canvas chat submissions validate standalone and mixed attachment identity/readiness; continuations require a turn waiting for user input. Run preparation verifies the exact Canvas and unique Lab outputs, while Lab reuse rejects explicitly unavailable selected assets. Submitted jobs query their original receipts; uncertain creative submissions remain unbound without resubmission.
+
+## Unpublished release attempts
+
+The current 0.1.5 candidate supersedes the former 0.1.10 release target. Original `v0.1.10`, `v0.1.9`, `v0.1.8` and `v0.1.6` tags remain at their original commits; their checks and failures do not establish publication of the current candidate.
+
+| Earlier attempt | Recorded outcome |
+| --- | --- |
+| 0.1.10 | Added immutable-subject validation, but successful npm authentication and publication were not established. The formal version-tag workflow passed GitHub identity checks and received HTTP 404 from npm exchange before any claim or upload. |
+| 0.1.9 | GitHub issuer returned HTTP 200, then local validation rejected the immutable subject before npm exchange. No submission claim or package upload occurred. |
+| 0.1.8 | Local endpoint validation required the legacy `/idtoken` suffix and rejected the runner URL before any credential request. No submission claim or package upload occurred. |
+| 0.1.6 | The Windows local-TGZ npm consumer check exceeded its 300-second budget. Candidate preparation, publication and promotion were skipped; that run created no npm upload or GitHub Release. |
+| Original 0.1.5 at `634394c` | Windows installation validation failed before publication. That attempt created no npm upload or GitHub Release; it is separate from the current pending 0.1.5 candidate. |
+
+## 0.1.7 — Publication unverified
+
+The original `v0.1.7` tag and frozen distribution are retained. Source checks and the same-archive Linux, macOS and Windows installation gates passed, but npm returned `ENEEDAUTH`. Its durable submission remains `submitted/unknown`; the exact version has not been publicly verified, and channel promotion was skipped. The original claim is preserved without retrying the submission or moving the tag. Its changes are included in the pending 0.1.5 candidate.
+
+## 0.1.4 — 2026-11-17
+
 ### Added
 
 - Verified publication notes include the pricing JSON's immutable source URL, original-file SHA-256, review/expiry dates and a copyable update command. The generator compares the original source with the frozen runtime and rejects missing or mismatched publication evidence; historical recovery preserves the original price validity.
@@ -19,7 +94,7 @@ This file records user-facing changes. Unreleased changes describe the source tr
 - Keep publication-note failures free of raw JSON, private file paths and subprocess diagnostics; compare the complete original pricing object before schema normalization so extra fields cannot hide a source/runtime difference.
 - Retry private login-state reads when a concurrent login worker atomically replaces the file, while retaining ownership, permission, link and bounded-size checks.
 
-These source changes do not republish 0.1.3 or establish that npm Trusted Publisher configuration, OIDC uploads or native Windows validation have already completed.
+Version 0.1.4 was published to npm. At that release, native Windows validation and the first GitHub OIDC upload had not been verified; npm availability alone did not establish those results. Refer to each subsequent Release for its own acceptance records. Existing 0.1.3 artifacts and version tags are unchanged.
 
 ## 0.1.3 — 2026-11-17
 

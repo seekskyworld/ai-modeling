@@ -75,7 +75,7 @@ jobs:
           - os: windows-2025
             platform: win32
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -86,8 +86,9 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
-      - name: Verify native credential storage and login cancellation
-        run: node scripts/run-tests.ts tests/json-credentials.test.ts tests/config-platform.test.ts tests/hardening-auth-input.test.ts tests/login-lock-stall.test.ts tests/json-entry-race.test.ts tests/login-state-race.test.ts
+      - name: Verify Windows npm and npx with a dependency-free local TGZ
+        if: runner.os == 'Windows'
+        run: node scripts/run-tests.ts --test-name-pattern="real npm install" tests/npm-consumer.test.ts
       - name: Export the real runtime package
         id: export
         shell: bash
@@ -100,18 +101,23 @@ jobs:
           import { VERSION } from './version.ts';
           appendFileSync(process.env.GITHUB_OUTPUT, `version=${VERSION}\n`);
           NODE
-      - name: Install into a temporary prefix and check offline entrypoints
-        shell: bash
-        env:
-          PACKAGE_ARCHIVE: ${{ runner.temp }}/ai-modeling-install-distribution/ai-modeling-${{ steps.export.outputs.version }}.tgz
-          SMOKE_REPORT: ${{ runner.temp }}/smoke-${{ matrix.platform }}.json
-        run: npm run package:smoke -- --archive "$PACKAGE_ARCHIVE" --report "$SMOKE_REPORT"
       - name: Verify npm install and offline npm exec/npx consumption
         shell: bash
         env:
           PACKAGE_ARCHIVE: ${{ runner.temp }}/ai-modeling-install-distribution/ai-modeling-${{ steps.export.outputs.version }}.tgz
           CONSUMER_REPORT: ${{ runner.temp }}/consumer-${{ matrix.platform }}.json
         run: npm run package:consumer-smoke -- --archive "$PACKAGE_ARCHIVE" --report "$CONSUMER_REPORT" --require-locked
+      - name: Verify native Windows system modules and Unicode credential ACL
+        if: runner.os == 'Windows'
+        run: node scripts/run-tests.ts tests/windows-permissions-native.test.ts
+      - name: Verify native credential storage and login cancellation
+        run: node scripts/run-tests.ts --test-concurrency=1 tests/json-credentials.test.ts tests/config-platform.test.ts tests/hardening-auth-input.test.ts tests/login-lock-stall.test.ts tests/json-entry-race.test.ts tests/login-state-race.test.ts
+      - name: Install into a temporary prefix and check offline entrypoints
+        shell: bash
+        env:
+          PACKAGE_ARCHIVE: ${{ runner.temp }}/ai-modeling-install-distribution/ai-modeling-${{ steps.export.outputs.version }}.tgz
+          SMOKE_REPORT: ${{ runner.temp }}/smoke-${{ matrix.platform }}.json
+        run: npm run package:smoke -- --archive "$PACKAGE_ARCHIVE" --report "$SMOKE_REPORT"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: install-smoke-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}

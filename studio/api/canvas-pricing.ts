@@ -16,6 +16,16 @@ const operations: Record<string, Operation> = {
   IMAGE_SPLIT: 'image_process',
   PARTS_DETECT: 'image_process',
 };
+
+/** Command mapping shares the actual run-price registry; it does not imply parameter or account acceptance. */
+export function canvasExecutionCommand(nodeType: string): string | undefined {
+  const type = nodeType.replace(/^NODE_TYPE_/, '');
+  if (Object.hasOwn(operations, type) || ['SEMANTIC_SPLIT', 'SPLIT_RESULT'].includes(type))
+    return 'ai-modeling studio canvas-run';
+  if (type === 'AI_3D_LAB') return 'ai-modeling studio canvas-lab';
+  if (type === 'HOLY_MOLLY') return 'ai-modeling studio canvas-turn';
+  if (type === 'REVIEW') return 'ai-modeling canvas review';
+}
 function quality(value: unknown): string {
   if (!['standard', 'detailed', 'extreme'].includes(text(value)))
     throw new TripoError('PRICE_UNKNOWN', 'Canvas texture_quality must be explicit.');
@@ -50,13 +60,19 @@ export function canvasNodeQuote(
   input: Record<string, unknown>,
 ): Record<string, unknown> {
   const type = text(node.type).replace('NODE_TYPE_', '');
+  if (type === 'HOLY_MOLLY')
+    throw new TripoError(
+      'UNSUPPORTED_OPERATION',
+      'HolyMolly uses studio canvas-turn with explicit capabilities=["holy_molly"], material refs and accepted variable billing. Use node_id to target an existing game; Canvas CreateRun is not its execution route.',
+      'not_submitted',
+    );
   if (type === 'REVIEW')
     throw new TripoError(
       'INVALID_INPUT',
       'Use canvas review to approve this checkpoint, then run the returned downstream node IDs.',
     );
   const x = object(node.params);
-  let operation = operations[type];
+  let operation = Object.hasOwn(operations, type) ? operations[type] : undefined;
   let params = { ...x };
   if (['SEMANTIC_SPLIT', 'SPLIT_RESULT'].includes(type)) {
     if (input.action === 'detect') {

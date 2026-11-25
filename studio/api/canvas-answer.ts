@@ -18,7 +18,9 @@ export const answerPlanSchema = z
       .max(100)
       .refine((ids) => new Set(ids).size === ids.length, 'Option IDs must be unique.')
       .optional()
-      .describe('Actual option IDs from the card, such as q1:__other__; do not use question IDs here.'),
+      .describe(
+        'Actual option IDs for selection cards, such as q1:__other__; do not use question IDs. Omit for normal confirmation cards.',
+      ),
     otherText: answer.optional().describe('Free text for a single selection or confirmation card.'),
     otherTexts: z
       .record(id, answer)
@@ -44,6 +46,7 @@ export type AnswerInput = z.infer<typeof answerPlanSchema>;
 interface Option {
   id: string;
   label: string;
+  subtitle?: string;
   input: boolean;
   selected: boolean;
   nodeId?: string;
@@ -58,9 +61,20 @@ interface Question {
   skippable: boolean;
   options: Option[];
 }
+interface PlanGroup {
+  name: string;
+  steps: { id: string; label: string; status?: 'completed' }[];
+}
 export interface AnswerCard {
   messageId: string;
   prompt: string;
+  title?: string;
+  subtitle?: string;
+  /** The card's displayed range, not a quote, budget limit or billing consent. */
+  estimate?: { creditsMin: number; creditsMax: number; diagnosticOnly: true };
+  groups?: PlanGroup[];
+  question?: string;
+  requirements?: string[];
   intent: string;
   confirm: boolean;
   skippable: boolean;
@@ -70,6 +84,8 @@ export interface AnswerCard {
   questions: Question[];
   parts?: string[];
   confirmNodeId?: string;
+  holyMollyRecommendation?: true;
+  holyMollyReason?: string;
   answered: boolean;
   expired: boolean;
 }
@@ -81,6 +97,83 @@ const skip = (value: Record<string, unknown>) =>
   text(value.id ?? value.optionId).endsWith(':__skip__');
 function malformed(message: string): never {
   throw new TripoError('CONTRACT_CHANGED', message);
+}
+function oversized(): never {
+  malformed('Card presentation exceeds local inspection limits; inspect the original card before answering.');
+}
+function displayString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  if (Buffer.byteLength(value, 'utf8') > 16 * 1024) oversized();
+  return value;
+}
+function displayText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? displayString(value) : undefined;
+}
+function firstDisplayText(...values: unknown[]): string | undefined {
+  return displayText(values.find((value) => typeof value === 'string' && value.trim()));
+}
+function displayList(value: unknown, max: number): unknown[] {
+  const entries = array(value);
+  if (entries.length > max) oversized();
+  return entries;
+}
+function planGroups(value: unknown): PlanGroup[] | undefined {
+  let stepCount = 0;
+  const groups = displayList(value, 100).flatMap((value): PlanGroup[] => {
+    const group = object(value);
+    if (!Array.isArray(group.steps)) return [];
+    stepCount += group.steps.length;
+    if (stepCount > 1000) oversized();
+    const steps = group.steps.flatMap((value): PlanGroup['steps'] => {
+      const step = object(value),
+        id = displayText(step.id),
+        label = displayText(step.label);
+      return id && label
+        ? [{ id, label, ...(step.status === 'completed' ? { status: 'completed' as const } : {}) }]
+        : [];
+    });
+    return steps.length ? [{ name: displayString(group.name) ?? '', steps }] : [];
+  });
+  return groups.length ? groups : undefined;
+}
+function planEstimate(raw: Record<string, unknown>, data: Record<string, unknown>): AnswerCard['estimate'] {
+  const type = text(raw.type).toLowerCase();
+  if (raw.intent !== 'plan' || (type && type !== 'confirmation' && type !== 'confirm')) return;
+  const estimate = object(data.estimate),
+    min = estimate.creditsMin ?? estimate.credits_min,
+    max = estimate.creditsMax ?? estimate.credits_max;
+  if (
+    typeof min !== 'number' ||
+    typeof max !== 'number' ||
+    !Number.isFinite(min) ||
+    !Number.isFinite(max) ||
+    min < 0 ||
+    max <= 0 ||
+    min > max
+  )
+    return;
+  return { creditsMin: min, creditsMax: max, diagnosticOnly: true };
+}
+function cardPresentation(raw: Record<string, unknown>, confirm: boolean) {
+  const data = object(raw.data),
+    title = firstDisplayText(data.title, raw.title, raw.heading),
+    subtitle = firstDisplayText(raw.subtitle, raw.description);
+  const common = { ...(title ? { title } : {}), ...(subtitle ? { subtitle } : {}) };
+  if (!confirm || raw.intent !== 'plan') return common;
+  // Studio renders fullGroups in preference to groups; neither is a ContinueTurn input.
+  const groups = planGroups(data.fullGroups ?? data.groups),
+    question = groups ? displayText(data.question) : undefined,
+    requirements = displayList(data.requirements, 1000)
+      .map(displayText)
+      .filter((value): value is string => value !== undefined),
+    estimate = planEstimate(raw, data);
+  return {
+    ...common,
+    ...(groups ? { groups } : {}),
+    ...(question ? { question } : {}),
+    ...(requirements.length ? { requirements } : {}),
+    ...(estimate ? { estimate } : {}),
+  };
 }
 function limits(value: Record<string, unknown>) {
   const min = Number(value.min ?? value.minSelect ?? 1),
@@ -98,9 +191,11 @@ function options(value: unknown, nodes?: Set<string>): Option[] {
     const nodeId =
       text(option.nodeId) ||
       (nodes?.has(optionId) && !option.input && !skip(option) && optionId !== '__other__' ? optionId : '');
+    const subtitle = displayText(option.subtitle ?? option.description);
     return {
       id: optionId,
       label: text(option.label ?? option.title),
+      ...(subtitle ? { subtitle } : {}),
       input: Boolean(option.input),
       selected: option.selected === true,
       ...(nodeId ? { nodeId } : {}),
@@ -165,7 +260,7 @@ function verifyCardIdentity(raw: Record<string, unknown>, message: Record<string
   )
     malformed('Card JSON identity conflicts with its message.');
 }
-/** Dv96avMB.Co 的已确认选择/确认形状；未知卡型不猜成可提交的卡片。 */
+/** Studio 的已确认选择/确认形状；能力标记不能将未知卡型变成可提交的卡片。 */
 export function readAnswerCard(message: Record<string, unknown>): AnswerCard | null {
   let raw: Record<string, unknown>;
   try {
@@ -183,10 +278,13 @@ export function readAnswerCard(message: Record<string, unknown>): AnswerCard | n
   const data = object(raw.data),
     questions = confirm ? [] : readQuestions(raw.questions),
     values = cardOptions(raw, confirm, questions),
-    parts = cardParts(data);
-  return {
+    parts = cardParts(data),
+    holyMolly = data.kind === 'holy_molly_confirm',
+    holyMollyReason = text(data.recommendationReason);
+  const card: AnswerCard = {
     messageId: text(message.messageId),
     prompt: text(raw.prompt ?? raw.question ?? raw.title),
+    ...cardPresentation(raw, confirm),
     intent: text(raw.intent),
     confirm,
     skippable:
@@ -200,9 +298,15 @@ export function readAnswerCard(message: Record<string, unknown>): AnswerCard | n
     questions,
     ...(parts === undefined ? {} : { parts }),
     ...(confirm && text(data.confirmNodeId) ? { confirmNodeId: text(data.confirmNodeId) } : {}),
+    ...(holyMolly ? { holyMollyRecommendation: true as const } : {}),
+    ...(holyMolly && holyMollyReason.trim() ? { holyMollyReason } : {}),
     answered: Array.isArray(raw.selected_option_ids ?? raw.selectedOptionIds),
     expired: raw.expired === true,
   };
+  // This is a local diagnostic bound, not a claimed Studio card-size restriction.
+  // Refuse instead of truncating information an agent needs to make a selection.
+  if (Buffer.byteLength(JSON.stringify(card), 'utf8') > 256 * 1024) oversized();
+  return card;
 }
 const inputOption = (option: Option) => option.input || option.id === '__other__';
 const validParts = (parts: string[]) =>

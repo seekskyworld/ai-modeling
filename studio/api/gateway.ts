@@ -25,7 +25,7 @@ import { prepareInput } from './preparation.ts';
 import { submitCanvasRun, canvasRunStatus } from './canvas-run.ts';
 import { canvasArtifactUrl, readCanvasRun } from './canvas-artifacts.ts';
 import type { Operation } from '../contracts/types.ts';
-import { variableCanvasOperations } from '../contracts/canvas-agent.ts';
+import { creativeCanvasOperations } from '../contracts/canvas-agent.ts';
 import { submitExportBatch, exportBatchStatus, batchChild } from './export-batch.ts';
 import { submitCreativeTask, creativeStatus, creativeArtifactUrl, creativeCost } from './canvas-agent.ts';
 
@@ -169,12 +169,14 @@ export class StudioGateway implements Gateway {
   ): Promise<{ remote_ids: RemoteIds; status?: RemoteStatus }> {
     beforeSubmit();
     if (['export_lite', 'refine_submit'].includes(job.operation))
-      return await submitServiceAction(this.client.forAccount(job.account_ref), job);
+      return await submitServiceAction(this.client.forAccount(job.account_ref), job, beforeSubmit);
     const client = this.client.forAccount(job.account_ref);
     if (job.operation === 'uv_commit') return await this.commitUv(client, job, beforeSubmit);
-    if (job.operation === 'export_batch') return await submitExportBatch(client, this.roots, job);
-    if (variableCanvasOperations.has(job.operation)) return await submitCreativeTask(client, job);
-    if (job.operation === 'canvas_run') return await submitCanvasRun(client, job);
+    if (job.operation === 'export_batch')
+      return await submitExportBatch(client, this.roots, job, beforeSubmit);
+    if (creativeCanvasOperations.has(job.operation))
+      return await submitCreativeTask(client, job, beforeSubmit);
+    if (job.operation === 'canvas_run') return await submitCanvasRun(client, job, beforeSubmit);
     const submission = await new Operations(client, this.roots).build(job, options);
     // build 包含网页前置读取；真实发送前重验本机冻结链，不能跨 await 沿用旧身份。
     beforeSubmit();
@@ -382,7 +384,7 @@ export class StudioGateway implements Gateway {
     if (hasModelResults(job)) return await modelResultsStatus(job, (child) => this.modelStatus(child));
     if (job.operation === 'export_batch')
       return await exportBatchStatus(job, (child) => this.modelStatus(child));
-    if (variableCanvasOperations.has(job.operation))
+    if (creativeCanvasOperations.has(job.operation))
       return await creativeStatus(this.client.forAccount(job.account_ref), job, this.links);
     if (job.operation === 'canvas_run')
       return await canvasRunStatus(this.client.forAccount(job.account_ref), job, this.links);
@@ -535,7 +537,7 @@ export class StudioGateway implements Gateway {
         artifact_id: 'model-0',
         index: 0,
       });
-    if (variableCanvasOperations.has(job.operation))
+    if (creativeCanvasOperations.has(job.operation))
       return await creativeArtifactUrl(this.client.forAccount(job.account_ref), job, artifact, this.links);
     if (job.operation === 'canvas_run')
       return await canvasArtifactUrl(this.client.forAccount(job.account_ref), job, artifact, this.links);
@@ -642,7 +644,7 @@ export class StudioGateway implements Gateway {
   }
   /** 仅匹配原任务的已履行扣费记录；没有账单不能直接推断费用为零。 */
   async cost(job: Job): Promise<ObservedCost | undefined> {
-    if (variableCanvasOperations.has(job.operation))
+    if (creativeCanvasOperations.has(job.operation))
       return await creativeCost(this.client.forAccount(job.account_ref), job);
     if (job.operation === 'uv_commit') return undefined;
     const ids = await this.billingIds(job);

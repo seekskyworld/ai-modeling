@@ -12,6 +12,7 @@ import { PACKAGE_NAME, VERSION } from '../version.ts';
 import { archiveEntries, snapshotArchive } from './archive-input.ts';
 import { productionLock, type ProductionLock } from './dependency-lock.ts';
 import { readDistributionFile } from './package-validation.ts';
+import { npmDiagnosticFiles, readNpmDiagnostics } from './npm-consumer-diagnostics.ts';
 import {
   installGlobalConsumer,
   probeGlobalCredentialStore,
@@ -43,6 +44,124 @@ interface LockMismatch {
   version?: string;
   expected?: string[];
   actual?: string;
+}
+
+const startupTimeoutMs = 30000;
+// npm reopens and extracts local TGZ metadata even when its npx installation is cached.
+const fileSpecTimeoutMs = 600000;
+type ConsumerStage =
+  | 'local_install'
+  | 'local_cli_version'
+  | 'local_cli_help'
+  | 'local_npm_exec'
+  | 'npx_cache_install'
+  | 'npx_cached_help'
+  | 'local_mcp'
+  | 'global_mcp'
+  | 'npx_mcp'
+  | 'global_install'
+  | 'global_native_runtime'
+  | 'global_json_credentials';
+
+/** Fixed stage names and bounded metadata only; never log command arguments, paths or child output. */
+async function consumerStage<T>(stage: ConsumerStage, action: () => T | Promise<T>): Promise<T> {
+  const started = performance.now();
+  const report = (outcome: 'started' | 'completed' | 'failed', error?: unknown) => {
+    const failure = error as { code?: unknown; status?: unknown; signal?: unknown } | undefined;
+    process.stderr.write(
+      JSON.stringify({
+        diagnostic: 'package_consumer',
+        stage,
+        outcome,
+        elapsed_ms: Math.round(performance.now() - started),
+        ...(outcome === 'failed'
+          ? {
+              error_code:
+                typeof failure?.code === 'string' && /^[A-Z_]{2,64}$/.test(failure.code)
+                  ? failure.code
+                  : null,
+              exit_code: Number.isInteger(failure?.status) ? failure!.status : null,
+              signal:
+                typeof failure?.signal === 'string' && /^SIG[A-Z]{1,16}$/.test(failure.signal)
+                  ? failure.signal
+                  : null,
+            }
+          : {}),
+      }) + '\n',
+    );
+  };
+  report('started');
+  try {
+    const result = await action();
+    report('completed');
+    return result;
+  } catch (error) {
+    report('failed', error);
+    throw error;
+  }
+}
+
+type NpxFileSpecStage = 'npx_cache_install' | 'npx_cached_help' | 'npx_mcp';
+
+/** A failed npx invocation may still be extracting metadata; report disposable cache presence only. */
+async function reportNpxCacheState(directory: string, stage: NpxFileSpecStage): Promise<void> {
+  const diagnostic = { diagnostic: 'package_consumer_cache', stage };
+  try {
+    const cache = path.join(directory, 'cache', '_npx');
+    const roots = (await readdir(cache, { withFileTypes: true })).filter((entry) => entry.isDirectory());
+    const present = (file: string) =>
+      access(file).then(
+        () => true,
+        () => false,
+      );
+    const states = await Promise.all(
+      roots.slice(0, 8).map(async (root) => {
+        const modules = path.join(cache, root.name, 'node_modules');
+        const installed = path.join(modules, ...PACKAGE_NAME.split('/'));
+        return {
+          package: await present(path.join(installed, 'package.json')),
+          entry: await present(path.join(installed, 'dist/cli/main.js')),
+          shim: await present(
+            path.join(modules, '.bin', process.platform === 'win32' ? 'ai-modeling.cmd' : 'ai-modeling'),
+          ),
+        };
+      }),
+    );
+    process.stderr.write(
+      JSON.stringify({
+        ...diagnostic,
+        cache_directories: roots.length,
+        inspected_directories: states.length,
+        package_metadata_present: states.some((state) => state.package),
+        cli_entry_present: states.some((state) => state.entry),
+        bin_shim_present: states.some((state) => state.shim),
+      }) + '\n',
+    );
+  } catch {
+    process.stderr.write(JSON.stringify({ ...diagnostic, inspection: 'unavailable' }) + '\n');
+  }
+}
+
+async function npxFileSpecStage<T>(
+  stage: NpxFileSpecStage,
+  directory: string,
+  action: () => T | Promise<T>,
+): Promise<T> {
+  const previousNpmLogs = await npmDiagnosticFiles(directory);
+  try {
+    return await consumerStage(stage, action);
+  } catch (error) {
+    await reportNpxCacheState(directory, stage);
+    throw error;
+  } finally {
+    process.stderr.write(
+      JSON.stringify({
+        diagnostic: 'package_consumer_npm',
+        stage,
+        ...(await readNpmDiagnostics(directory, previousNpmLogs)),
+      }) + '\n',
+    );
+  }
 }
 
 function packageName(location: string, name?: string) {
@@ -214,7 +333,13 @@ function offlineEnvironment(env: Record<string, string>): Record<string, string>
   };
 }
 
-function execute(command: string, args: string[], cwd: string, env: Record<string, string>, timeout = 30000) {
+function execute(
+  command: string,
+  args: string[],
+  cwd: string,
+  env: Record<string, string>,
+  timeout = startupTimeoutMs,
+) {
   return execFileSync(command, args, {
     cwd,
     env,
@@ -270,26 +395,28 @@ export async function installConsumerRoutes(
     JSON.stringify({ name: 'ai-modeling-consumer', version: '1.0.0', private: true }) + '\n',
     { flag: 'wx' },
   );
-  execute(
-    process.execPath,
-    [
-      npmPath,
-      'install',
-      '--prefix',
-      consumer,
-      '--ignore-scripts',
-      '--omit=dev',
-      '--no-audit',
-      '--no-fund',
-      ...(offlineInstall ? ['--offline'] : []),
-      archive,
-    ],
-    directory,
-    env,
-    300000,
+  await consumerStage('local_install', () =>
+    execute(
+      process.execPath,
+      [
+        npmPath,
+        'install',
+        '--prefix',
+        consumer,
+        '--ignore-scripts',
+        '--omit=dev',
+        '--no-audit',
+        '--no-fund',
+        ...(offlineInstall ? ['--offline'] : []),
+        archive,
+      ],
+      directory,
+      env,
+      fileSpecTimeoutMs,
+    ),
   );
   const local = await inspectConsumer(consumer);
-  const installedVersion =
+  const installedVersion = await consumerStage('local_cli_version', () =>
     process.platform === 'win32'
       ? (() => {
           const result = spawnSync(
@@ -299,7 +426,7 @@ export async function installConsumerRoutes(
               cwd: directory,
               env: { ...offlineEnv, AI_MODELING_SMOKE_BIN: local.shim },
               encoding: 'utf8',
-              timeout: 30000,
+              timeout: startupTimeoutMs,
               windowsVerbatimArguments: true,
               stdio: ['ignore', 'pipe', 'pipe'],
             },
@@ -308,41 +435,66 @@ export async function installConsumerRoutes(
           assert.equal(result.status, 0, result.stderr);
           return result.stdout;
         })()
-      : execute(local.shim, ['--version'], directory, offlineEnv);
+      : execute(local.shim, ['--version'], directory, offlineEnv),
+  );
   assert.equal(installedVersion.trim(), VERSION);
-  assert.match(execute(process.execPath, [local.entry, '--help'], directory, offlineEnv), /ai-modeling/);
+  assert.match(
+    await consumerStage('local_cli_help', () =>
+      execute(process.execPath, [local.entry, '--help'], directory, offlineEnv),
+    ),
+    /ai-modeling/,
+  );
   assert.equal(
-    execute(
-      process.execPath,
-      [
-        npmPath,
-        'exec',
-        '--offline',
-        '--ignore-scripts',
-        '--prefix',
-        consumer,
-        '--',
-        'ai-modeling',
-        '--version',
-      ],
-      directory,
-      offlineEnv,
+    (
+      await consumerStage('local_npm_exec', () =>
+        execute(
+          process.execPath,
+          [
+            npmPath,
+            'exec',
+            '--offline',
+            '--ignore-scripts',
+            '--prefix',
+            consumer,
+            '--',
+            'ai-modeling',
+            '--version',
+          ],
+          directory,
+          offlineEnv,
+        ),
+      )
     ).trim(),
     VERSION,
   );
-  const packageArgs = ['--offline', '--ignore-scripts', '--yes', '--package', archive, '--', 'ai-modeling'];
+  const packageArgs = [
+    '--timing',
+    '--offline',
+    '--ignore-scripts',
+    '--yes',
+    '--package',
+    archive,
+    '--',
+    'ai-modeling',
+  ];
   assert.equal(
-    execute(
-      process.execPath,
-      [npmPath, 'exec', ...packageArgs, '--version'],
-      empty,
-      offlineEnv,
-      120000,
+    (
+      await npxFileSpecStage('npx_cache_install', directory, () =>
+        execute(
+          process.execPath,
+          [npmPath, 'exec', ...packageArgs, '--version'],
+          empty,
+          offlineEnv,
+          fileSpecTimeoutMs,
+        ),
+      )
     ).trim(),
     VERSION,
   );
   assert.match(
-    execute(process.execPath, [npxPath, ...packageArgs, '--help'], empty, offlineEnv, 120000),
+    await npxFileSpecStage('npx_cached_help', directory, () =>
+      execute(process.execPath, [npxPath, ...packageArgs, '--help'], empty, offlineEnv, fileSpecTimeoutMs),
+    ),
     /ai-modeling/,
   );
   const cache = path.join(directory, 'cache', '_npx');
@@ -454,9 +606,38 @@ async function checkGolutraExport(
   return { packages: exported.plugins.length, tools: names.length, client_loaded: false };
 }
 
+async function checkMcpConsumerRoute(
+  route: { args: string[]; cwd: string },
+  env: Record<string, string>,
+  definitions: { name: string }[],
+  connectTimeoutMs: number,
+) {
+  const client = new Client({ name: 'npm-consumer-smoke', version: '1' });
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    ...route,
+    env,
+    stderr: 'pipe',
+  });
+  // npm timing text is captured in its disposable logs; draining avoids blocking the stdio server.
+  transport.stderr?.on('data', () => undefined);
+  try {
+    await client.connect(transport, { timeout: connectTimeoutMs });
+    assert.deepEqual(client.getServerVersion(), { name: 'ai-modeling', version: VERSION });
+    assert.deepEqual(
+      (await client.listTools({}, { timeout: startupTimeoutMs })).tools.map((tool) => tool.name).sort(),
+      definitions.map((tool) => tool.name).sort(),
+    );
+  } finally {
+    await client.close();
+    await transport.close();
+  }
+}
+
 export async function smokePackageConsumer(archive: string, npmCli = process.env.npm_execpath) {
   if (!npmCli) throw new Error('Run package:consumer-smoke through npm run so npm_execpath is available.');
   const directory = await realpath(await mkdtemp(path.join(tmpdir(), 'ai-modeling-consumer-smoke-')));
+  let verificationError: unknown;
   try {
     const snapshot = await snapshotArchive(archive, directory);
     const entries = archiveEntries(await readFile(snapshot.filename));
@@ -472,14 +653,15 @@ export async function smokePackageConsumer(archive: string, npmCli = process.env
     assert.deepEqual(metadata.bin, { 'ai-modeling': 'dist/cli/main.js' });
     const reviewed = productionLock(metadata, JSON.parse(lockEntry.bytes.toString('utf8')));
     const installed = await installConsumerRoutes(snapshot.filename, directory, npmCli);
-    const global = await installGlobalConsumer(
-      snapshot.filename,
-      directory,
-      installed.npmPath,
-      installed.installEnv,
+    const global = await consumerStage('global_install', () =>
+      installGlobalConsumer(snapshot.filename, directory, installed.npmPath, installed.installEnv),
     );
-    const nativeRuntime = probeGlobalNativeRuntime(global.entry, directory, installed.env);
-    const credentialStore = probeGlobalCredentialStore(global.entry, directory, installed.env);
+    const nativeRuntime = await consumerStage('global_native_runtime', () =>
+      probeGlobalNativeRuntime(global.entry, directory, installed.env),
+    );
+    const credentialStore = await consumerStage('global_json_credentials', () =>
+      probeGlobalCredentialStore(global.entry, directory, installed.env),
+    );
     const cli = (args: string[]) =>
       execute(process.execPath, [installed.local.entry, ...args], directory, installed.env);
     const definitions = JSON.parse(cli(['tools', '--toolset', 'studio'])) as { name: string }[];
@@ -487,32 +669,29 @@ export async function smokePackageConsumer(archive: string, npmCli = process.env
     assert.ok(definitions.some((tool) => tool.name === 'ai_modeling_assets_list'));
     assert.match(cli(['assets', 'list', '--help']), /--kind <kind>/);
     assert.match(cli(['guides', 'read', 'commands/assets/list']), /next_offset/);
-    for (const route of [
-      { args: [installed.local.entry, 'mcp', '--toolset', 'studio'], cwd: directory },
-      { args: [global.entry, 'mcp', '--toolset', 'studio'], cwd: directory },
+    for (const { stage, timeout, ...route } of [
       {
+        stage: 'local_mcp' as const,
+        timeout: startupTimeoutMs,
+        args: [installed.local.entry, 'mcp', '--toolset', 'studio'],
+        cwd: directory,
+      },
+      {
+        stage: 'global_mcp' as const,
+        timeout: startupTimeoutMs,
+        args: [global.entry, 'mcp', '--toolset', 'studio'],
+        cwd: directory,
+      },
+      {
+        stage: 'npx_mcp' as const,
+        timeout: fileSpecTimeoutMs,
         args: [installed.npxPath, ...installed.packageArgs, 'mcp', '--toolset', 'studio'],
         cwd: installed.empty,
       },
     ]) {
-      const client = new Client({ name: 'npm-consumer-smoke', version: '1' });
-      const transport = new StdioClientTransport({
-        command: process.execPath,
-        ...route,
-        env: installed.env,
-        stderr: 'pipe',
-      });
-      try {
-        await client.connect(transport, { timeout: 30000 });
-        assert.deepEqual(client.getServerVersion(), { name: 'ai-modeling', version: VERSION });
-        assert.deepEqual(
-          (await client.listTools({}, { timeout: 30000 })).tools.map((tool) => tool.name).sort(),
-          definitions.map((tool) => tool.name).sort(),
-        );
-      } finally {
-        await client.close();
-        await transport.close();
-      }
+      const check = () => checkMcpConsumerRoute(route, installed.env, definitions, timeout);
+      if (stage === 'npx_mcp') await npxFileSpecStage(stage, directory, check);
+      else await consumerStage(stage, check);
     }
     const skillParent = path.join(directory, 'skills');
     await checkInstalledSkill(cli, ['--dir', skillParent], path.join(skillParent, 'ai-modeling'), entries);
@@ -623,8 +802,21 @@ export async function smokePackageConsumer(archive: string, npmCli = process.env
       },
       live_services: false,
     };
+  } catch (error) {
+    verificationError = error;
+    throw error;
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch(
+      (cleanupError) => {
+        if (verificationError !== undefined)
+          throw new AggregateError(
+            [verificationError, cleanupError],
+            'Consumer verification and temporary-directory cleanup both failed.',
+            { cause: cleanupError },
+          );
+        throw cleanupError;
+      },
+    );
   }
 }
 

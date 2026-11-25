@@ -128,10 +128,56 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
+  auth:
+    name: Verify npm OIDC before new release work
+    needs: inspect
+    if: >-
+      ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+          && needs.inspect.result == 'success'
+          && (needs.inspect.outputs.action == 'prepare' || needs.inspect.outputs.action == 'submit') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.inspect.outputs.source }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts
+      - name: Check real package authentication without publishing
+        id: authenticate
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ''
+          NPM_TOKEN: ''
+          NPM_ID_TOKEN: ''
+          AUTH_REPORT: ${{ runner.temp }}/ai-modeling-auth-before-build.json
+        run: node scripts/npm-auth-check.ts --repository "$GITHUB_REPOSITORY" --out "$AUTH_REPORT"
+      - name: Retain the credential-free authentication report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ai-modeling-auth-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ai-modeling-auth-before-build.json
+          if-no-files-found: warn
+          retention-days: 90
+
   build:
     name: Check source and export the six candidate files
-    needs: inspect
-    if: needs.inspect.outputs.action == 'prepare'
+    needs: [inspect, auth]
+    if: >-
+      ${{ always() && !cancelled() && needs.inspect.result == 'success'
+          && needs.inspect.outputs.action == 'prepare'
+          && (github.event_name == 'workflow_dispatch' || needs.auth.result == 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -177,6 +223,9 @@ jobs:
   smoke:
     name: Verify the same TGZ (${{ matrix.platform }})
     needs: [inspect, build]
+    if: >-
+      ${{ always() && !cancelled() && needs.inspect.result == 'success'
+          && needs.build.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
@@ -188,7 +237,7 @@ jobs:
           - os: windows-2025
             platform: win32
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -201,8 +250,11 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm install --global npm@11.17.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci
+      - name: Verify native Windows system modules and Unicode credential ACL
+        if: runner.os == 'Windows'
+        run: node scripts/run-tests.ts tests/windows-permissions-native.test.ts
       - name: Check native credential permissions and cancellation on this OS
-        run: node scripts/run-tests.ts tests/json-credentials.test.ts tests/config-platform.test.ts tests/hardening-auth-input.test.ts tests/login-lock-stall.test.ts tests/json-entry-race.test.ts tests/login-state-race.test.ts tests/login-state-race.test.ts
+        run: node scripts/run-tests.ts --test-concurrency=1 tests/json-credentials.test.ts tests/config-platform.test.ts tests/hardening-auth-input.test.ts tests/login-lock-stall.test.ts tests/json-entry-race.test.ts tests/login-state-race.test.ts
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ai-modeling-release-distribution-${{ github.run_id }}-${{ github.run_attempt }}
@@ -231,6 +283,9 @@ jobs:
   candidate:
     name: Require all three platforms and preview durable preparation
     needs: [inspect, build, smoke]
+    if: >-
+      ${{ always() && !cancelled() && needs.inspect.result == 'success'
+          && needs.build.result == 'success' && needs.smoke.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -321,13 +376,16 @@ jobs:
     name: Claim once, publish through OIDC, and verify public bytes
     outputs:
       verified: ${{ steps.public.outputs.verified }}
-    needs: [inspect, build, smoke, candidate]
+    needs: [inspect, auth, build, smoke, candidate]
     if: >-
       ${{ always() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
           && needs.inspect.result == 'success'
-          && (needs.inspect.outputs.action != 'prepare'
-              || (needs.build.result == 'success' && needs.smoke.result == 'success'
-                  && needs.candidate.result == 'success')) }}
+          && ((needs.inspect.outputs.action == 'prepare' && needs.auth.result == 'success'
+               && needs.build.result == 'success' && needs.smoke.result == 'success'
+               && needs.candidate.result == 'success')
+              || (needs.inspect.outputs.action == 'submit' && needs.auth.result == 'success')
+              || needs.inspect.outputs.action == 'wait' || needs.inspect.outputs.action == 'verify'
+              || needs.inspect.outputs.action == 'published') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     environment: npm
@@ -381,6 +439,7 @@ jobs:
             --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --source "$SOURCE_COMMIT" \
             --distribution "$DISTRIBUTION_DIR" --candidate "$CANDIDATE_DIR" --out "$STATE_DIR/prepared.json"
       - name: Check the npm-side Trusted Publisher prerequisite before a new claim
+        id: preclaim
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -390,7 +449,7 @@ jobs:
             --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --source "$SOURCE_COMMIT" \
             --out "$STATE_DIR/preclaim.json"
           node --input-type=module <<'NODE'
-          import { readFileSync } from 'node:fs';
+          import { appendFileSync, readFileSync } from 'node:fs';
           import path from 'node:path';
           const state = JSON.parse(readFileSync(path.join(process.env.STATE_DIR, 'preclaim.json'), 'utf8'));
           if (state.action === 'submit' && process.env.NPM_TRUSTED_PUBLISHER_CONFIGURED !== 'true') {
@@ -399,9 +458,21 @@ jobs:
           if (!['submit', 'wait', 'verify', 'published'].includes(state.action)) {
             throw new Error('The version is not prepared for publication; preserve remote state and reconcile it.');
           }
+          appendFileSync(process.env.GITHUB_OUTPUT, 'action=' + state.action + '\n');
           NODE
+      - name: Recheck real package authentication before claiming a submission
+        id: auth
+        if: steps.preclaim.outputs.action == 'submit'
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ''
+          NPM_TOKEN: ''
+          NPM_ID_TOKEN: ''
+          AUTH_REPORT: ${{ runner.temp }}/ai-modeling-publication/auth-before-claim.json
+        run: node scripts/npm-auth-check.ts --repository "$GITHUB_REPOSITORY" --out "$AUTH_REPORT"
       - name: Persist and read back the immutable submission claim
         id: claim
+        if: steps.preclaim.outputs.action == 'submit' && steps.auth.outcome == 'success'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -431,6 +502,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ''
           NPM_TOKEN: ''
+          NPM_ID_TOKEN: ''
         run: |
           ARCHIVE_PATH="$(node --input-type=module -e "import fs from 'node:fs'; import path from 'node:path'; process.stdout.write(JSON.parse(fs.readFileSync(path.join(process.env.STATE_DIR, 'claim.json'), 'utf8')).archive_path)")"
           set +e

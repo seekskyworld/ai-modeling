@@ -31,6 +31,7 @@ import {
 } from '../core/image-output-policy.ts';
 import { nativeUnbakedPivot, needsExportTransform } from '../../studio/contracts/export-options.ts';
 import { normalize, exportIntentSchema, DEFAULT_IMAGE_MODEL } from '../../studio/contracts/schemas.ts';
+import { isUnquotedOperation } from '../../studio/contracts/unquoted-pricing.ts';
 import {
   checkedSmartSegmentTransform,
   smartSegmentTransformWarning,
@@ -114,6 +115,8 @@ export interface PlannedStep {
 export interface Plan {
   labReferenceEdit?: LabReferenceEditIntent;
   smartSegmentAffine?: SmartSegmentAffineIntent;
+  /** 旧七步链的新增费用同意独立于不可变业务布局，只适用于尚未冻结的步骤。 */
+  legacyAffineUnquotedConsent?: true;
   smartSegmentScale?: SmartSegmentScaleIntent;
   smartSegmentTransform?: SmartSegmentTransformIntent;
   smartSegmentImage?: { source: string; granularity: string; hint: string };
@@ -828,6 +831,47 @@ function optionalLabProcessingPlan(name: string, source: string, flags: Flags): 
   return name === 'edit' ? labReferenceEditPlan(source, input) : labProjectedSegmentPlan(source, input);
 }
 export function processingPlan(name: string, source: string, supplied: Flags): Plan {
+  const input = parameters(supplied);
+  // Lab 同意选择的是其整套可变计费后端，保持原来的专用校验和持久意图。
+  if (
+    input.accept_variable_cost === undefined ||
+    (name === 'edit' && input.ref_image !== undefined) ||
+    (name === 'segment' && (input.ref_image !== undefined || input.reference_projection !== undefined))
+  )
+    return processingPlanCore(name, source, supplied);
+  if (input.accept_variable_cost !== true)
+    throw new TripoError(
+      'INVALID_INPUT',
+      'accept_variable_cost must be true when supplied.',
+      'not_submitted',
+    );
+  const param = { ...object(supplied.param) };
+  delete param.accept_variable_cost;
+  const plan = processingPlanCore(name, source, { ...supplied, param });
+  if (!plan.steps.some((entry) => isUnquotedOperation(entry.operation)))
+    throw new TripoError(
+      'STUDIO_CAPABILITY_UNAVAILABLE',
+      'This processing plan has no reviewed operation that accepts billing without an advance quote. Omit accept_variable_cost.',
+      'not_submitted',
+    );
+  const warning =
+    'Explicitly accepted unknown Studio charges for import/apply operations in this processing plan. Submission still requires a current reviewed pricing snapshot; this consent is neither a zero-credit estimate nor a spending cap and cannot be combined with max-credits.';
+  return {
+    ...plan,
+    steps: plan.steps.map((entry) =>
+      isUnquotedOperation(entry.operation)
+        ? {
+            ...entry,
+            // 仿射来源的导入文件尚待精确原件准备；只传已校验的同意，不提前补全/校验占位请求。
+            parameters: { ...entry.parameters, accept_variable_cost: true },
+            warnings: [...(entry.warnings ?? []), warning],
+          }
+        : entry,
+    ),
+    warnings: [...plan.warnings, warning],
+  };
+}
+function processingPlanCore(name: string, source: string, supplied: Flags): Plan {
   const representation = object(supplied.param).source_representation;
   if (representation !== undefined) return labSourceProcessingPlan(name, source, supplied, representation);
   if (name === 'uv' && parameters(supplied).compress !== undefined) return compressedUvPlan(source, supplied);

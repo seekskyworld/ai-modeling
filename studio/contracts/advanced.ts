@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { id, prompt } from './primitives.ts';
 import { partNames } from './segmentation.ts';
+import { unquotedCostConsent } from './unquoted-pricing.ts';
 const project = { project_id: id };
 const parts = z.array(z.string().min(1).max(256)).max(200).default([]);
 export const matrix = z.array(z.number().finite()).length(16);
@@ -48,6 +49,7 @@ export const advancedSchemas = {
   modification: z
     .object({
       ...project,
+      accept_variable_cost: unquotedCostConsent,
       expected_operator_id: id.optional(),
       indices_path: z
         .string()
@@ -122,6 +124,7 @@ export const advancedSchemas = {
     ),
   import_model: z
     .object({
+      accept_variable_cost: unquotedCostConsent,
       model_path: z.string().min(1),
       name: z.string().min(1).max(100),
       transform_matrix: matrix.default([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]),
@@ -150,6 +153,7 @@ export const advancedSchemas = {
   retexture_apply: z
     .object({
       ...project,
+      accept_variable_cost: unquotedCostConsent,
       expected_operator_id: id.optional(),
       image_map: z
         .array(z.object({ part_name: z.string().max(256), image_path: z.string().min(1) }).strict())

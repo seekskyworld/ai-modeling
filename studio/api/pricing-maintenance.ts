@@ -8,6 +8,7 @@ import { priceSchema, type PriceSnapshot } from './pricing.ts';
 import { reviewedPrices } from './reviewed-prices.ts';
 import { networkFetch, type Fetcher } from './client.ts';
 import { TripoError } from '../contracts/errors.ts';
+import type { UnquotedOperation } from '../contracts/unquoted-pricing.ts';
 
 const snapshotLimit = 1024 * 1024;
 const evidenceLimit = 6 * 1024 * 1024;
@@ -23,6 +24,8 @@ export interface PricingSnapshotStatus {
   evidence_count: number;
   refresh_required: boolean;
   canonical_sha256?: string;
+  price_key_count?: number;
+  unquoted_operations?: UnquotedOperation[];
 }
 
 export function pricingSnapshotStatus(snapshot: unknown, nowMs = Date.now()): PricingSnapshotStatus {
@@ -45,6 +48,8 @@ export function pricingSnapshotStatus(snapshot: unknown, nowMs = Date.now()): Pr
     evidence_count: data.evidence.length,
     refresh_required: !usable || expiring,
     canonical_sha256: digest(Buffer.from(JSON.stringify(data))),
+    price_key_count: Object.keys(data.credits).length,
+    unquoted_operations: data.unquoted_operations ?? [],
   };
 }
 

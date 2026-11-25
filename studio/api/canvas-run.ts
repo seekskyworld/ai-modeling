@@ -36,15 +36,20 @@ async function hydrateLabInputs(
     );
     const returned = array(response.nodes).map(object);
     for (const nodeId of nodeIds) {
-      const record = returned.find((node) => node.nodeId === nodeId);
-      if (!record)
+      const matches = returned.filter((node) => node.nodeId === nodeId);
+      if (matches.length !== 1)
         throw new TripoError(
           'INPUT_NOT_READY',
-          'Read the current Lab outputs before running its downstream nodes.',
+          'The current Lab output node is missing or ambiguous. Read its exact outputs before running downstream.',
         );
-      const assets = array(record.assets).map(object);
+      const assets = array(matches[0]!.assets).map(object);
       if (assets.some((asset) => asset.nodeId !== nodeId))
         throw new TripoError('CONTRACT_CHANGED', 'Lab output belongs to a different source node.');
+      if (
+        assets.some((asset) => !text(asset.assetId)) ||
+        new Set(assets.map((asset) => asset.assetId)).size !== assets.length
+      )
+        throw new TripoError('CONTRACT_CHANGED', 'Lab output asset identities are missing or duplicated.');
       byId.get(nodeId)!.nodeAssets = assets;
     }
   }
@@ -59,6 +64,8 @@ export async function prepareCanvasRun(
       canvasId: input.canvas_id,
     }),
   );
+  if (object(result.canvas).canvasId !== input.canvas_id)
+    throw new TripoError('CONTRACT_CHANGED', 'Run Canvas identity mismatch.');
   if (String(object(result.canvas).revision) !== input.revision)
     throw new TripoError('CANVAS_CHANGED', 'Read the current Canvas revision before running.');
   const nodes = array(result.nodes).map(object);
@@ -91,6 +98,7 @@ export async function prepareCanvasRun(
 export async function submitCanvasRun(
   studio: StudioClient,
   job: Job,
+  beforeSubmit?: () => void,
 ): Promise<{ remote_ids: { task_id: string } }> {
   // 在 POST 前复核图版本；该检查不能代替上游的原子版本控制。
   const prepared = await prepareCanvasRun(studio, job.input);
@@ -119,6 +127,7 @@ export async function submitCanvasRun(
         ...(job.input.parts ? { parts: job.input.parts } : {}),
       },
       true,
+      beforeSubmit,
     ),
   );
   const runId = text(result.runId) || text(object(result.run).runId);

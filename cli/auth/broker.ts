@@ -275,9 +275,15 @@ export async function startLoginBroker(
     },
     Math.max(1, Date.parse(state.expires_at) - Date.now()),
   );
+  let monitoring = false;
   const monitor = setInterval(() => {
+    // Native Windows permission checks may outlast a poll interval. Keep at most one
+    // revocation read in flight so synchronous ACL work cannot accumulate behind it.
+    if (closing || monitoring) return;
+    monitoring = true;
     void readState(config)
       .then(async (saved) => {
+        if (closing) return;
         if (!saved || saved.login_id !== start.loginId) {
           await close();
           return;
@@ -287,7 +293,10 @@ export async function startLoginBroker(
           await close();
         }
       })
-      .catch(() => close());
+      .catch(() => close())
+      .finally(() => {
+        monitoring = false;
+      });
   }, 250);
   monitor.unref();
   if (start.open) launch();

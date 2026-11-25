@@ -5,6 +5,8 @@ export type Operation =
   | 'canvas_turn'
   | 'canvas_continue'
   | 'canvas_lab'
+  | 'canvas_node_stop'
+  | 'canvas_node_retry'
   | 'canvas_run'
   | 'image'
   | 'model'
@@ -54,6 +56,8 @@ export interface RemoteIds {
   models?: ModelReceipt[];
   batch?: { project_id: string; operator_id?: string; code: number }[];
   task_id?: string;
+  /** Stop receipts may identify the original run rather than a new control turn. */
+  node_execution_receipt?: 'accepted_run' | 'turn';
   asset_id?: string;
   project_id?: string;
   operator_id?: string;

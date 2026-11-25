@@ -1,6 +1,7 @@
 /** 网页 composer 的附件占位与字数准备；文本和附件顺序不能分别排序或按素材 ID 去重。 */
 import { z } from 'zod';
 import { id } from '../contracts/primitives.ts';
+import { canvasTurnCapabilitiesSchema } from '../contracts/canvas-agent.ts';
 
 export const turnAttachmentSchema = z
   .object({
@@ -24,6 +25,12 @@ export const turnPlanSchema = z
     sessionId: id,
     action: z.enum(['new', 'retry']).default('new'),
     agentMode: z.enum(['control', 'auto']).default('control'),
+    capabilities: canvasTurnCapabilitiesSchema.optional(),
+    nodeId: id
+      .optional()
+      .describe(
+        'Exact existing target in the saved Canvas for a new message; omit when creating a new result.',
+      ),
     text: z.string().max(500000).optional(),
     attachments: z.array(turnAttachmentSchema).max(100).optional(),
     sourceTurnId: id.optional(),
@@ -45,8 +52,11 @@ export const turnPlanSchema = z
     if (value.action === 'retry') {
       if (!value.sourceTurnId || !value.sourceMessageId)
         issue('Retry requires sourceTurnId and sourceMessageId.');
-      if (value.text !== undefined || value.attachments !== undefined)
-        issue('Retry reads historical content and attachments; caller overrides are not accepted.');
+      if (value.text !== undefined || value.attachments !== undefined || value.capabilities !== undefined)
+        issue(
+          'Retry reads historical content, attachments and capabilities; caller overrides are not accepted.',
+        );
+      if (value.nodeId !== undefined) issue('Retry cannot override the original historical target node.');
     } else if (value.sourceTurnId || value.sourceMessageId)
       issue('Historical source IDs require action=retry.');
     if (value.copiedNodes?.length && !value.expectedRevision)

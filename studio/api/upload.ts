@@ -13,6 +13,11 @@ export interface ImageReference {
   image_audit_result: AdmittedImageResult;
   image_source: 'upload' | 'generate';
 }
+/** 单个上传请求的超时：固定 60 秒对 10 MiB 分片要求约 170 KB/s，代理或并发上传时会误判失败；按请求体大小放宽，最低 32 KiB/s，最长 10 分钟。 */
+export function uploadTimeoutMs(bytes: number): number {
+  return Math.min(600_000, 60_000 + Math.ceil((bytes * 1000) / (32 * 1024)));
+}
+
 export async function uploadFile(
   client: StudioClient,
   bytes: Buffer,
@@ -60,7 +65,7 @@ export async function uploadFile(
           ),
           body: request.body as BodyInit,
           redirect: 'error',
-          signal: AbortSignal.timeout(60000),
+          signal: AbortSignal.timeout(uploadTimeoutMs(bodyLength(request.body))),
         });
         return {
           response: {
@@ -100,6 +105,11 @@ export async function uploadFile(
   }
   const reference = { bucket: text(token.resource_bucket), key: text(token.resource_uri) };
   return reference;
+}
+function bodyLength(body: unknown): number {
+  if (body instanceof Uint8Array) return body.byteLength;
+  if (typeof body === 'string') return Buffer.byteLength(body);
+  return 0;
 }
 /** 图片审核必须通过后才可进入生成请求，模型文件不经过图片审核。 */
 export async function uploadImage(

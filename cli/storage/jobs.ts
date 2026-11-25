@@ -209,12 +209,44 @@ export class JobStore {
   private db: DatabaseSync;
   constructor(file: string) {
     this.db = new DatabaseSync(file);
-    this.db.exec('PRAGMA busy_timeout=10000; PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;');
+    try {
+      this.db.exec('PRAGMA busy_timeout=0; PRAGMA foreign_keys=ON;');
+      this.enableWal();
+      this.db.exec('PRAGMA busy_timeout=10000;');
+      // Read the version after acquiring the writer lock. Other processes must see
+      // either the complete previous schema or the complete migrated schema.
+      this.transaction(() => this.initializeSchema());
+    } catch (error) {
+      try {
+        this.db.close();
+      } catch {
+        // Preserve the original initialization failure.
+      }
+      throw error;
+    }
+  }
+  private enableWal(): void {
+    // Concurrent empty-database WAL upgrades can return SQLITE_BUSY immediately,
+    // without invoking SQLite's busy handler. Retry only this idempotent setup.
+    const deadline = performance.now() + 10000,
+      pause = new Int32Array(new SharedArrayBuffer(4));
+    for (;;) {
+      try {
+        this.db.exec('PRAGMA journal_mode=WAL;');
+        return;
+      } catch (error) {
+        const code = object(error).errcode,
+          remaining = deadline - performance.now();
+        if (typeof code !== 'number' || (code & 255) !== 5 || remaining <= 0) throw error;
+        Atomics.wait(pause, 0, 0, Math.min(20, remaining));
+      }
+    }
+  }
+  private initializeSchema(): void {
     const version = Number(this.db.prepare('PRAGMA user_version').get()?.user_version);
     if (version > 18) throw new TripoError('DATABASE_VERSION', 'This database needs a newer ai-modeling.');
     if (!version)
-      this.transaction(() => {
-        this.db.exec(`CREATE TABLE IF NOT EXISTS jobs (
+      this.db.exec(`CREATE TABLE IF NOT EXISTS jobs (
         job_id TEXT PRIMARY KEY, account_ref TEXT NOT NULL, request_id TEXT NOT NULL,
         input_hash TEXT NOT NULL, operation TEXT NOT NULL, input TEXT NOT NULL,
         contract_version TEXT NOT NULL, state TEXT NOT NULL, remote_ids TEXT NOT NULL DEFAULT '{}',
@@ -225,69 +257,58 @@ export class JobStore {
         CREATE TABLE IF NOT EXISTS job_events (event_id INTEGER PRIMARY KEY, job_id TEXT NOT NULL REFERENCES jobs(job_id), state TEXT NOT NULL, at TEXT NOT NULL, detail TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS account_leases (account_ref TEXT PRIMARY KEY, job_id TEXT NOT NULL, until_ms INTEGER NOT NULL);
         PRAGMA user_version=1;`);
-      });
-    if (version < 2)
-      this.transaction(() => {
-        // 其他进程可能在等待锁时完成迁移，必须在锁内重读列定义。
-        const columns = this.db.prepare('PRAGMA table_info(jobs)').all();
-        if (!columns.some((column) => column.name === 'observed_cost'))
-          this.db.exec('ALTER TABLE jobs ADD COLUMN observed_cost TEXT');
-        this.db.exec('PRAGMA user_version=2');
-      });
+    if (version < 2) {
+      const columns = this.db.prepare('PRAGMA table_info(jobs)').all();
+      if (!columns.some((column) => column.name === 'observed_cost'))
+        this.db.exec('ALTER TABLE jobs ADD COLUMN observed_cost TEXT');
+      this.db.exec('PRAGMA user_version=2');
+    }
     if (version < 3)
-      this.transaction(() =>
-        this.db.exec(
-          `CREATE TABLE IF NOT EXISTS job_aliases (account_ref TEXT NOT NULL, name TEXT NOT NULL, job_id TEXT NOT NULL REFERENCES jobs(job_id), PRIMARY KEY(account_ref,name)); PRAGMA user_version=3;`,
-        ),
+      this.db.exec(
+        `CREATE TABLE IF NOT EXISTS job_aliases (account_ref TEXT NOT NULL, name TEXT NOT NULL, job_id TEXT NOT NULL REFERENCES jobs(job_id), PRIMARY KEY(account_ref,name)); PRAGMA user_version=3;`,
       );
     if (version < 4)
-      this.transaction(() =>
-        this.db.exec(`CREATE TABLE IF NOT EXISTS pipeline_steps (
+      this.db.exec(`CREATE TABLE IF NOT EXISTS pipeline_steps (
       account_ref TEXT NOT NULL, run_id TEXT NOT NULL, position INTEGER NOT NULL,
       job_id TEXT NOT NULL REFERENCES jobs(job_id), PRIMARY KEY(account_ref,run_id,position));
-      CREATE INDEX IF NOT EXISTS pipeline_job ON pipeline_steps(job_id); PRAGMA user_version=4;`),
-      );
+      CREATE INDEX IF NOT EXISTS pipeline_job ON pipeline_steps(job_id); PRAGMA user_version=4;`);
     if (version < 5)
-      this.transaction(() =>
-        this.db.exec(`
+      this.db.exec(`
       CREATE TABLE IF NOT EXISTS job_names (account_ref TEXT NOT NULL, job_id TEXT NOT NULL REFERENCES jobs(job_id), name TEXT NOT NULL, PRIMARY KEY(account_ref,job_id));
       INSERT OR IGNORE INTO job_names SELECT account_ref,job_id,name FROM job_aliases;
       CREATE INDEX IF NOT EXISTS job_names_lookup ON job_names(account_ref,name);
-      PRAGMA user_version=5;`),
-      );
+      PRAGMA user_version=5;`);
     if (version < 6)
-      this.transaction(() =>
-        this.db.exec(`CREATE TABLE IF NOT EXISTS request_policies (
+      this.db.exec(`CREATE TABLE IF NOT EXISTS request_policies (
         account_ref TEXT NOT NULL, request_id TEXT NOT NULL, policy TEXT NOT NULL,
-        legacy INTEGER NOT NULL, PRIMARY KEY(account_ref,request_id)); PRAGMA user_version=6;`),
-      );
+        legacy INTEGER NOT NULL, PRIMARY KEY(account_ref,request_id)); PRAGMA user_version=6;`);
     this.migrateCompatibilityVersions(version);
   }
   private migrateCompatibilityVersions(version: number): void {
     // v7 的自动骨架策略可以改变后续步骤数；旧版不能忽略该策略后按旧索引继续付费。
-    if (version < 7) this.transaction(() => this.db.exec('PRAGMA user_version=7'));
+    if (version < 7) this.db.exec('PRAGMA user_version=7');
     // v8 增加原生产物约束与本地四视图组合；旧版本会忽略约束或把组合错误当成远端任务。
-    if (version < 8) this.transaction(() => this.db.exec('PRAGMA user_version=8'));
+    if (version < 8) this.db.exec('PRAGMA user_version=8');
     // v9 的不烘焙导出必须保留源材料快照和效果证明；旧客户端不能绕过这些约束报告成功。
-    if (version < 9) this.transaction(() => this.db.exec('PRAGMA user_version=9'));
+    if (version < 9) this.db.exec('PRAGMA user_version=9');
     // v10 的缺省 JPEG 使用保结构交付及内容证明，旧客户端不得改走会重建骨架的转换路径。
-    if (version < 10) this.transaction(() => this.db.exec('PRAGMA user_version=10'));
+    if (version < 10) this.db.exec('PRAGMA user_version=10');
     // v11 的export-lite模型只能来自已验前端缓存；旧客户端会错误下载project.model_url原件。
-    if (version < 11) this.transaction(() => this.db.exec('PRAGMA user_version=11'));
+    if (version < 11) this.db.exec('PRAGMA user_version=11');
     // v12 的明确WxH是持久交付义务；旧客户端会忽略原图尺寸证明并把错像素报告成功。
-    if (version < 12) this.transaction(() => this.db.exec('PRAGMA user_version=12'));
+    if (version < 12) this.db.exec('PRAGMA user_version=12');
     // v13 的opaque必须验证原始alpha；旧客户端不能忽略背景义务或用不透明编码掩盖透明原图。
-    if (version < 13) this.transaction(() => this.db.exec('PRAGMA user_version=13'));
+    if (version < 13) this.db.exec('PRAGMA user_version=13');
     // v14 保护 Canvas 最终封口及兼容分割变换的产物义务；旧版不能忽略证明而交付原始结果。
-    if (version < 14) this.transaction(() => this.db.exec('PRAGMA user_version=14'));
+    if (version < 14) this.db.exec('PRAGMA user_version=14');
     // v15 的七步剪切还必须证明原始 A(P)；旧版只验末段 M2 会绕过整链交付义务。
-    if (version < 15) this.transaction(() => this.db.exec('PRAGMA user_version=15'));
+    if (version < 15) this.db.exec('PRAGMA user_version=15');
     // v16 的纯旋转导入组合须验证源 B1 与最终原 A(P)，旧版不能忽略新链义务直接交付。
-    if (version < 16) this.transaction(() => this.db.exec('PRAGMA user_version=16'));
+    if (version < 16) this.db.exec('PRAGMA user_version=16');
     // v17 的参考图Lab必须验证原模型保护面；旧版会把裸Lab成功误当兼容编辑已通过。
-    if (version < 17) this.transaction(() => this.db.exec('PRAGMA user_version=17'));
+    if (version < 17) this.db.exec('PRAGMA user_version=17');
     // 显式投影分区和新版兼容朝向映射不能由旧读者当作普通Lab编辑/旧轴向交付。
-    if (version < 18) this.transaction(() => this.db.exec('PRAGMA user_version=18'));
+    if (version < 18) this.db.exec('PRAGMA user_version=18');
   }
   close(): void {
     this.db.close();

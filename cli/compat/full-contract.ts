@@ -1,4 +1,21 @@
 /** 官方 tripo-cli 0.11.2 的公开 MCP schema 快照（MIT）；说明已按 Studio 后端修订，见 THIRD_PARTY_NOTICES.md。 */
+const unquotedImportConsent = {
+  type: 'boolean',
+  const: true,
+  description:
+    'Studio extension: explicitly accept unknown web-account charges for import/apply steps in this processing plan. A current reviewed snapshot must permit the operation. Omit when no such step is present; this is not a zero-cost estimate or a spending cap. Do not combine with max_estimated_credits.',
+};
+const processingBudget = {
+  type: 'number',
+  minimum: 0,
+  description:
+    'Studio extension: maximum reviewed estimate per processing step, not an upstream spending cap. Omit for explicitly accepted unquoted import/apply steps; combining it with that consent is rejected before the chain starts. Lab reference routes retain their separate variable-billing contract.',
+};
+const unquotedImportOptions = {
+  accept_variable_cost: unquotedImportConsent,
+  max_estimated_credits: processingBudget,
+};
+
 export const fullContract: {
   name: string;
   description: string;
@@ -498,6 +515,7 @@ export const fullContract: {
     inputSchema: {
       type: 'object',
       properties: {
+        ...unquotedImportOptions,
         input: {
           type: 'string',
           minLength: 1,
@@ -1597,6 +1615,7 @@ export const fullContract: {
     inputSchema: {
       type: 'object',
       properties: {
+        ...unquotedImportOptions,
         source_representation: {
           type: 'string',
           enum: ['studio_normalized'],
@@ -1751,6 +1770,7 @@ export const fullContract: {
     inputSchema: {
       type: 'object',
       properties: {
+        ...unquotedImportOptions,
         input: {
           type: 'string',
           minLength: 1,
@@ -1810,6 +1830,7 @@ export const fullContract: {
     inputSchema: {
       type: 'object',
       properties: {
+        ...unquotedImportOptions,
         source_representation: {
           type: 'string',
           enum: ['studio_normalized'],
@@ -1997,6 +2018,7 @@ export const fullContract: {
     inputSchema: {
       type: 'object',
       properties: {
+        ...unquotedImportOptions,
         source_representation: {
           type: 'string',
           enum: ['studio_normalized'],
@@ -2143,6 +2165,7 @@ export const fullContract: {
     inputSchema: {
       type: 'object',
       properties: {
+        ...unquotedImportOptions,
         source_representation: {
           type: 'string',
           enum: ['studio_normalized'],
@@ -2235,6 +2258,7 @@ export const fullContract: {
     inputSchema: {
       type: 'object',
       properties: {
+        ...unquotedImportOptions,
         source_representation: {
           type: 'string',
           enum: ['studio_normalized'],
@@ -2314,6 +2338,7 @@ export const fullContract: {
     inputSchema: {
       type: 'object',
       properties: {
+        max_estimated_credits: processingBudget,
         source_representation: {
           type: 'string',
           enum: ['studio_normalized'],
@@ -2360,7 +2385,7 @@ export const fullContract: {
         accept_variable_cost: {
           type: 'boolean',
           description:
-            'Studio extension: explicitly select variable-cost 3D Lab for projected reference partitioning. This does not select the official v2 engine or cap Lab billing.',
+            'Studio extension: with ref_image, explicitly select variable-cost 3D Lab for projected reference partitioning; this does not select the official v2 engine or cap Lab billing. Without ref_image, true accepts unknown charges for an implicit model import under a current reviewed snapshot. Omit for existing native task inputs without import; unquoted import consent cannot combine with max_estimated_credits.',
         },
         request_id: {
           type: 'string',
@@ -2486,6 +2511,7 @@ export const fullContract: {
     inputSchema: {
       type: 'object',
       properties: {
+        max_estimated_credits: processingBudget,
         source_representation: {
           type: 'string',
           enum: ['studio_normalized'],
@@ -2526,7 +2552,7 @@ export const fullContract: {
         accept_variable_cost: {
           type: 'boolean',
           description:
-            'Studio extension: explicitly select variable-cost 3D Lab for ref_image editing. This does not select the fixed P2 engine or cap Lab billing.',
+            'Studio extension: with ref_image, explicitly select variable-cost 3D Lab for reference editing; this does not select the fixed P2 engine or cap Lab billing. Without ref_image, true accepts unknown charges for an implicit model import under a current reviewed snapshot. Omit for existing native task inputs without import; unquoted import consent cannot combine with max_estimated_credits.',
         },
         compress: {
           type: 'string',
@@ -2588,6 +2614,7 @@ export const fullContract: {
     inputSchema: {
       type: 'object',
       properties: {
+        ...unquotedImportOptions,
         source_representation: {
           type: 'string',
           enum: ['studio_normalized'],
