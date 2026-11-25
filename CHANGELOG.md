@@ -4,7 +4,9 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 ## Unreleased
 
-## 0.1.10 — 2026-11-25
+## 0.1.5 — Pending release
+
+This candidate includes the complete changes below. The earlier 0.1.5 attempt at `634394c` stopped before any npm submission; its failure remains recorded below.
 
 ### Added
 
@@ -59,25 +61,21 @@ This file records user-facing changes. Unreleased changes describe the source tr
 
 - New Canvas chat submissions validate standalone and mixed attachment identity/readiness; continuations require a turn waiting for user input. Run preparation verifies the exact Canvas and unique Lab outputs, while Lab reuse rejects explicitly unavailable selected assets. Submitted jobs query their original receipts; uncertain creative submissions remain unbound without resubmission.
 
-## 0.1.9 — Unpublished candidate
+## Unpublished release attempts
 
-The original `v0.1.9` tag is retained. The corrected endpoint request succeeded, but the authentication preflight rejected the repository's immutable GitHub subject before npm exchange. No package upload or submission claim was made. Exact immutable-subject validation is included in 0.1.10.
+The current 0.1.5 candidate supersedes the former 0.1.10 release target. Original `v0.1.10`, `v0.1.9`, `v0.1.8` and `v0.1.6` tags remain at their original commits; their checks and failures do not establish publication of the current candidate.
 
-## 0.1.8 — Unpublished candidate
-
-The original `v0.1.8` tag is retained. Its authentication preflight rejected the current GitHub-hosted runner endpoint before any credential request because it required the legacy `/idtoken` path suffix. No package upload or submission claim was made. The corrected endpoint handling and other changes are carried forward to 0.1.10.
+| Earlier attempt | Recorded outcome |
+| --- | --- |
+| 0.1.10 | Added immutable-subject validation, but successful npm authentication and publication were not established. The formal version-tag workflow passed GitHub identity checks and received HTTP 404 from npm exchange before any claim or upload. |
+| 0.1.9 | GitHub issuer returned HTTP 200, then local validation rejected the immutable subject before npm exchange. No submission claim or package upload occurred. |
+| 0.1.8 | Local endpoint validation required the legacy `/idtoken` suffix and rejected the runner URL before any credential request. No submission claim or package upload occurred. |
+| 0.1.6 | The Windows local-TGZ npm consumer check exceeded its 300-second budget. Candidate preparation, publication and promotion were skipped; that run created no npm upload or GitHub Release. |
+| Original 0.1.5 at `634394c` | Windows installation validation failed before publication. That attempt created no npm upload or GitHub Release; it is separate from the current pending 0.1.5 candidate. |
 
 ## 0.1.7 — Publication unverified
 
-The original `v0.1.7` tag and frozen distribution are retained. Source checks and the same-archive Linux, macOS and Windows installation gates passed, but npm returned `ENEEDAUTH`. Its durable submission remains `submitted/unknown`; the exact version has not been publicly verified, and channel promotion was skipped. The original claim is preserved without retrying the submission or moving the tag. Its changes are carried forward to 0.1.10.
-
-## 0.1.6 — Unpublished candidate
-
-The `v0.1.6` tag is retained at its original source commit as a failed release candidate. The Windows local-TGZ npm consumer check exceeded its 300-second budget before publication. Candidate preparation, npm publication and channel promotion were skipped; no npm upload or GitHub Release was created by that run. Its changes are carried forward to 0.1.10.
-
-## 0.1.5 — Unpublished candidate
-
-The `v0.1.5` tag is retained as a failed release candidate. Windows installation validation failed before publication; no npm upload or GitHub Release was created. Its changes are carried forward to 0.1.10.
+The original `v0.1.7` tag and frozen distribution are retained. Source checks and the same-archive Linux, macOS and Windows installation gates passed, but npm returned `ENEEDAUTH`. Its durable submission remains `submitted/unknown`; the exact version has not been publicly verified, and channel promotion was skipped. The original claim is preserved without retrying the submission or moving the tag. Its changes are included in the pending 0.1.5 candidate.
 
 ## 0.1.4 — 2026-11-17
 

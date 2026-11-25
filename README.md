@@ -67,14 +67,14 @@ Use the [command reference](docs/commands.md) to find the right operation. Some 
 Install Node.js **24+**, then install the single runtime package from [npm](https://www.npmjs.com/package/@seekskyworld/ai-modeling):
 
 ```sh
-npm install --global @seekskyworld/ai-modeling@0.1.10
+npm install --global @seekskyworld/ai-modeling@0.1.5
 ai-modeling --version
 ai-modeling doctor --offline --json
 ```
 
 The 0.1.0 prerelease has a known native-dependency problem in global installations. Use the patched version above.
 
-Version **0.1.10** adds Canvas result audits and session-history checks, refreshed pricing with explicit consent for unquoted operations, and fixes for task recovery and submission safety. Windows credential checks explicitly load the required system JSON module while retaining the controlled environment, permission checks and timeouts. See the [changelog](CHANGELOG.md) and [verified scope](docs/compatibility.md).
+Version **0.1.5** adds Canvas result audits and session-history checks, refreshed pricing with explicit consent for unquoted operations, and fixes for task recovery and submission safety. Windows credential checks explicitly load the required system JSON module while retaining the controlled environment, permission checks and timeouts. See the [changelog](CHANGELOG.md) and [verified scope](docs/compatibility.md).
 
 Platform installation and publication results are recorded with the corresponding [Release](https://github.com/seekskyworld/ai-modeling/releases). Installation checks do not establish complete browser, Agent-host or Studio workflow acceptance.
 
@@ -89,7 +89,7 @@ ai-modeling make "a small blue robot" --model tripo-p2 --dry-run --json
 
 `setup` reuses a valid saved session. When login is needed, complete passwords and verification in Chrome/Edge; no copied Token is required. Sessions are saved in private local JSON files shared by CLI and MCP for the same OS user and profile, without a system keychain. See [session storage and upgrades](docs/usage.md#本地-json-凭据) for permissions and upgrading from older versions. The dry run is local and does not submit a generation task. To generate, run the reviewed request without `--dry-run`; it uses Studio credits. Use `ai-modeling task get @last` to inspect the task or `ai-modeling task watch @last --download --out ./assets` to download its result.
 
-Prefer no global install? Run a command with `npx --yes --package @seekskyworld/ai-modeling@0.1.10 ai-modeling --version`; use the same full prefix for subsequent CLI or Skill installation commands. The MCP configuration below can use npx directly.
+Prefer no global install? Run a command with `npx --yes --package @seekskyworld/ai-modeling@0.1.5 ai-modeling --version`; use the same full prefix for subsequent CLI or Skill installation commands. The MCP configuration below can use npx directly.
 
 [Installation and login](docs/usage.md#quick-start-in-english) covers npm, [release archives](https://github.com/seekskyworld/ai-modeling/releases), platform requirements and recovery. Source contributors run `npm ci` and `npm run build`, then use `node dist/cli/main.js` in place of `ai-modeling`; building alone does not install a global command. Use `ai-modeling pricing status` to check price provenance and expiry before a paid workflow.
 
@@ -119,7 +119,7 @@ Both commands only validate and show the plan; they do not upload or generate. A
 
 The CLI is the underlying execution interface. MCP exposes its operations as tools for an agent: the agent calls MCP, and MCP invokes the CLI internally. Skills provide usage guidance, examples, and pipeline organization for the selected entry point. An agent using MCP stays with MCP tools rather than switching to shell commands. The Skill needs the runtime installed separately; no fixed business workflow is required.
 
-Version 0.1.10 uses the `@seekskyworld/ai-modeling` package, the `ai-modeling` command, `AI_MODELING_*` settings, `ai_modeling_*` tools, and `ai-modeling://auth/status`. Configure clients with these names and complete login through your selected entry point.
+Version 0.1.5 uses the `@seekskyworld/ai-modeling` package, the `ai-modeling` command, `AI_MODELING_*` settings, `ai_modeling_*` tools, and `ai-modeling://auth/status`. Configure clients with these names and complete login through your selected entry point.
 
 ### Use with a Skill
 
@@ -147,7 +147,7 @@ Add this version-pinned configuration to a client that supports `mcpServers`. It
     "ai-modeling": {
       "type": "stdio",
       "command": "npx",
-      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.10", "ai-modeling", "mcp"],
+      "args": ["--yes", "--package", "@seekskyworld/ai-modeling@0.1.5", "ai-modeling", "mcp"],
       "env": {"AI_MODELING_PROFILE": "default"}
     }
   }
